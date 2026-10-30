@@ -12,6 +12,8 @@ describe(CliService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(CliService));
+    // The third migration folder, server/src/schema/migrations-trips (trips PLAN §2.0).
+    mocks.storage.readdir.mockResolvedValue([]);
   });
 
   describe('schemaReport', () => {
@@ -136,7 +138,7 @@ describe(CliService.name, () => {
 
       const result = await sut.schemaReport();
 
-      expect(mocks.storage.readdir).toHaveBeenCalledTimes(2);
+      expect(mocks.storage.readdir).toHaveBeenCalledTimes(3);
       expect(result.migrations).toEqual(
         expect.arrayContaining([
           { name: 'gallery1', status: 'applied' },

@@ -280,15 +280,18 @@ export class DatabaseRepository {
 
   async getMigrations() {
     // schema-check can run before any split build has booted (or after its first boot rolled back).
-    const { rows } = await sql<{ exists: boolean }>`
-      SELECT to_regclass('gallery_migrations') IS NOT NULL AS "exists"
+    const { rows } = await sql<{ exists: boolean; trips: boolean }>`
+      SELECT to_regclass('gallery_migrations') IS NOT NULL AS "exists", to_regclass('trips_migrations') IS NOT NULL AS "trips"
     `.execute(this.db);
     let query = this.db
-      .withTables<{ gallery_migrations: DB['kysely_migrations'] }>()
+      .withTables<{ gallery_migrations: DB['kysely_migrations']; trips_migrations: DB['kysely_migrations'] }>()
       .selectFrom('kysely_migrations')
       .select(['name', 'timestamp']);
     if (rows[0].exists) {
       query = query.unionAll((eb) => eb.selectFrom('gallery_migrations').select(['name', 'timestamp']));
+    }
+    if (rows[0].trips) {
+      query = query.unionAll((eb) => eb.selectFrom('trips_migrations').select(['name', 'timestamp']));
     }
     return query.orderBy('name', 'asc').execute();
   }

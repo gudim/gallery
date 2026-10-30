@@ -25,6 +25,7 @@ export class CliService extends BaseService {
     const migrationFolders = [
       join(import.meta.dirname, '../schema/migrations'),
       join(import.meta.dirname, '../schema/migrations-gallery'),
+      join(import.meta.dirname, '../schema/migrations-trips'),
     ];
     const readdirResults = await Promise.all(migrationFolders.map((f) => this.storageRepository.readdir(f)));
     const allFiles = readdirResults.flat();
