@@ -1,0 +1,82 @@
+version: 1
+
+# Ownership manifest for the trips layer (github.com/gudim/gallery), read by
+# tools/upstream-preflight with `--manifest docs/fork/trips-ownership.yml`.
+# Gallery's own docs/fork/ownership.yml stays untouched: here "upstream" is
+# Noodle Gallery, and the fork range is only the trip commits on top of it.
+#
+# Refs: the tool resolves `<upstream_remote>/<upstream_branch>` and
+# `<fork_remote>/<fork_branch>` with `git rev-parse`, so full ref prefixes work
+# without creating any ref:
+#   - upstream = refs/tags/<Gallery release tag>; bump the tag to the target
+#     release before each rebase (`git fetch gallery --tags` first).
+#   - fork = refs/heads/<stage branch> (local branch, committed work only).
+# last_verified_fork_head must be a full SHA that is an ancestor of (or equal
+# to) the fork head. Set it to the release tag's commit on every rebase
+# (`git rev-parse <tag>^{commit}`): a rebase rewrites the trip SHAs, so an
+# older trip SHA would stop being an ancestor. `ready` then lists the trip
+# files changed since the tag as warnings, which is expected.
+metadata:
+  upstream_remote: refs/tags
+  upstream_branch: v5.9.0
+  fork_remote: refs/heads
+  fork_branch: trips-0
+  last_verified_fork_head: 40c585e20109a9d9acbba10d2dbab3594c465cc1
+
+coverage_ignore:
+  - specs/trips/**
+
+fork_surface:
+  preferred_namespaces:
+    server:
+      - server/src/trips/**
+    web:
+      - web/src/lib/trips/**
+    database:
+      - server/src/schema/migrations-trips/**
+    ci:
+      - .github/workflows/trips-*.yml
+    config:
+      - deployment/trips/**
+
+features:
+  trips:
+    title: Trips (routes, stops, stories, LLM texts, guest trip viewer)
+    risk: high
+    domains: [server, web, database, ci, docs, config]
+    owned_paths:
+      - server/src/trips/**
+      - web/src/lib/trips/**
+      - server/src/schema/migrations-trips/**
+      - deployment/trips/**
+      - .github/workflows/trips-*.yml
+      - docs/fork/trips-ownership.yml
+      - server/test/medium/specs/trips/**
+    # Gallery files that carry one trips hook each; keep every hunk minimal.
+    upstream_extension_paths:
+      - server/src/schema/gallery-migration-ledger.ts
+      - server/src/repositories/database.repository.ts
+      - server/src/services/cli.service.ts
+      - server/bin/sync-gallery-migrations.mjs
+      - scripts/revert-to-immich.sql
+      - server/src/controllers/index.ts
+      - server/src/repositories/index.ts
+      - server/src/services/index.ts
+      - server/src/services/cli.service.spec.ts
+      - server/test/medium/specs/services/database-migration.service.spec.ts
+      - AGENTS.md
+      # trip strings under the `trips_` prefix: en plus the nine maintained locales
+      - i18n/gallery/en.json
+      - i18n/gallery/de.json
+      - i18n/gallery/es.json
+      - i18n/gallery/fr.json
+      - i18n/gallery/it.json
+      - i18n/gallery/nl.json
+      - i18n/gallery/pl.json
+      - i18n/gallery/ru.json
+      - i18n/gallery/zh_Hans.json
+      - i18n/gallery/zh_Hant.json
+    database:
+      tables: [trips_migrations, trips_migrations_lock]
+      migration_globs:
+        - server/src/schema/migrations-trips/*.ts

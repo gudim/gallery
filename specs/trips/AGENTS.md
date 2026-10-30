@@ -54,6 +54,26 @@ outside git.
 
 ## Rebasing onto Gallery
 
-Rebase onto a Gallery release tag (`gallery` remote), never onto Gallery `main`. After the rebase:
-`tools/upstream-preflight`, the revert spec, the FK registry spec, `node i18n/gallery/merge.mjs
---check`, and the full test suites. Record the rebase in `PROGRESS.md`.
+Rebase onto a Gallery release tag (`gallery` remote), never onto Gallery `main`. Remotes: `origin`
+is this fork, `gallery` is `open-noodle/gallery`, `upstream` is Immich (Gallery's own tooling
+expects it). Node comes from `source ~/.nvm/nvm.sh && nvm use 24.22.1` when `mise` is absent.
+
+1. `git fetch gallery --tags` and pick the newest `vX.Y.Z` tag.
+2. Before the rebase, see what comes in: in `docs/fork/trips-ownership.yml` set
+   `upstream_branch` to the new tag and `fork_branch` to the stage branch, then run
+   `pnpm --filter @gallery/upstream-preflight run preflight --manifest docs/fork/trips-ownership.yml`
+   (no `--` before the flag: pnpm would pass it on and the tool would fall back to Gallery's
+   manifest). The report lands in `.git/upstream-preflight/`. Every incoming commit flagged
+   "Touches trips upstream extension path" touches a hook file; read it first.
+3. `git rebase --onto <new tag> <old tag> <stage branch>`. Conflicts are expected only in the hook
+   files the manifest lists under `upstream_extension_paths`; keep each hook to its one line.
+4. Set `last_verified_fork_head` to `git rev-parse <new tag>^{commit}` (a rebase rewrites the
+   trip SHAs), then run
+   `pnpm --filter @gallery/upstream-preflight run ready --manifest docs/fork/trips-ownership.yml`.
+   It must say READY.
+5. Gallery's own guards: the revert spec and the trips revert spec
+   (`server/src/schema/revert-to-immich.spec.ts`, `server/src/trips/revert-to-immich.trips.spec.ts`),
+   the FK registry spec, `node i18n/gallery/merge.mjs --check`, then the full server unit and
+   medium and web suites. A new Gallery or upstream migration must still sort below every trip
+   migration (the trips revert spec checks it).
+6. Record the rebase in `PROGRESS.md` (old tag, new tag, conflicts and how they were resolved).
