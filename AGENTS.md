@@ -311,3 +311,9 @@ doc that has gone stale loses nothing. A stale doc that stays costs every future
 - `CONTRIBUTING.md` and the README's Contributing section cover the dev-environment setup (`cp docker/example.env docker/.env`, `pnpm install`, `mise dev`).
 - User-facing docs live in `docs/docs/` and are deployed to `docs.opennoodle.de`. Run prettier on any markdown under `docs/` before committing; CI Docs Build is strict. `specs/` is outside `docs/` precisely so it is _not_ prettier-gated and does not trigger the Docs Build workflow.
 - Guides for switching to / from Gallery live under `docs/docs/guides/`; the switch-back-to-immich script is `scripts/revert-to-immich.sql`.
+
+## Trips layer (this fork)
+
+This fork adds trips (routes, stops, stories, LLM texts, a guest trip viewer) on top of Gallery.
+Before touching anything trip-related, read `specs/trips/AGENTS.md`; it points to the glossary,
+the ADRs and the plan.
