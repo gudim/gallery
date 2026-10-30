@@ -52,9 +52,11 @@ import { VersionService } from 'src/services/version.service.js';
 import { ViewService } from 'src/services/view.service.js';
 import { WorkflowExecutionService } from 'src/services/workflow-execution.service.js';
 import { WorkflowService } from 'src/services/workflow.service.js';
+import { tripServices } from 'src/trips/index.js';
 
 export const services = [
   ...galleryServices,
+  ...tripServices,
   ApiKeyService,
   ActivityService,
   AlbumService,
