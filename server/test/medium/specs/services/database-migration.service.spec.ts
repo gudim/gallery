@@ -14,6 +14,8 @@ import { getKyselyConfig } from 'src/utils/database.js';
 const upstreamFolder = join(__dirname, '../../../../src/schema/migrations');
 // eslint-disable-next-line unicorn/prefer-module
 const galleryFolder = join(__dirname, '../../../../src/schema/migrations-gallery');
+// eslint-disable-next-line unicorn/prefer-module
+const tripsFolder = join(__dirname, '../../../../src/schema/migrations-trips');
 
 // Helper: create a raw database (no migrations applied)
 const createRawDatabase = async (name: string): Promise<Kysely<DB>> => {
@@ -308,6 +310,10 @@ describe('Database Migration Scenarios', { timeout: 60_000 }, () => {
     withDatabase('migration_test_rollback', async (db) => {
       const repo = createRepo(db);
       await repo.runMigrations();
+      // The trips layer's migrations revert first (trips PLAN §2.0).
+      for (const _ of await fileNames(tripsFolder)) {
+        await repo.revertLastMigration();
+      }
       const upstreamBefore = await ledger(db, 'kysely_migrations');
       const galleryBefore = await ledgerNames(db, 'gallery_migrations');
 
@@ -326,7 +332,13 @@ describe('Database Migration Scenarios', { timeout: 60_000 }, () => {
 
       const migrations = await repo.getMigrations();
       const names = migrations.map((m) => m.name);
-      expect(names).toEqual([...(await fileNames(upstreamFolder)), ...(await fileNames(galleryFolder))].toSorted());
+      expect(names).toEqual(
+        [
+          ...(await fileNames(upstreamFolder)),
+          ...(await fileNames(galleryFolder)),
+          ...(await fileNames(tripsFolder)),
+        ].toSorted(),
+      );
 
       const storageIdx = names.findIndex((n) => n.includes('CreateStorageMigrationLogTable'));
       const opusIdx = names.findIndex((n) => n.includes('UpdateOpusCodecName'));

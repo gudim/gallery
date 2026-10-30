@@ -870,6 +870,30 @@ DROP TABLE IF EXISTS "gallery_migrations";
 DROP TABLE IF EXISTS "gallery_migrations_lock";
 
 -- -----------------------------------------------------------------------------
+-- 8t. Drop the trips layer (github.com/gudim/gallery, specs/trips/). Kept in one
+-- block so a rebase onto Gallery touches it only here. Every table a
+-- server/src/schema/migrations-trips/ migration creates is dropped and checked
+-- below (server/src/trips/revert-to-immich.trips.spec.ts).
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS "trips_migrations";
+DROP TABLE IF EXISTS "trips_migrations_lock";
+
+DO $$
+DECLARE
+  trip_tables_left integer;
+BEGIN
+  SELECT count(*) INTO trip_tables_left
+    FROM pg_tables
+   WHERE schemaname = current_schema()
+     AND tablename IN (
+       'trips_migrations', 'trips_migrations_lock'
+     );
+  IF trip_tables_left > 0 THEN
+    RAISE EXCEPTION 'revert-to-immich: % trip table(s) still present after cleanup, aborting.', trip_tables_left;
+  END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
 -- 9. Report what happened and commit.
 -- -----------------------------------------------------------------------------
 DO $$

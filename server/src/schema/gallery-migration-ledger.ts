@@ -4,6 +4,7 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { immichVersion, serverVersion } from 'src/constants.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
+import { createTripsMigrator } from 'src/trips/trips-migrator.js';
 
 // Fork migrations are recorded in their own ledger so `kysely_migrations` only ever holds upstream
 // names, which is what a stock Immich server expects to find there.
@@ -166,10 +167,11 @@ export const migrateGalleryToLatest = async (
     await db.transaction().execute(async (trx) => {
       const upstream = createUpstreamMigrator(trx);
       const gallery = createGalleryMigrator(trx);
+      const trips = createTripsMigrator(trx);
       ledger = await bootstrapGalleryLedger(trx, await migrationNames(gallery), await migrationNames(upstream));
 
       const owners = new Map<string, Migrator>();
-      for (const migrator of [upstream, gallery]) {
+      for (const migrator of [upstream, gallery, trips]) {
         for (const name of await pendingNames(migrator)) {
           owners.set(name, migrator);
         }
@@ -181,6 +183,7 @@ export const migrateGalleryToLatest = async (
       // Nothing is left to run; these keep kysely's check that every recorded migration still has a file.
       await collect(upstream.migrateToLatest());
       await collect(gallery.migrateToLatest());
+      await collect(trips.migrateToLatest());
     });
   } catch (error) {
     return { error, results };
@@ -197,7 +200,7 @@ export const migrateGalleryToLatest = async (
   return { results };
 };
 
-/** Reverts the newest fork migration, or the newest upstream one once no fork migration is left. */
+/** Reverts the newest trip migration, else the newest fork one, else the newest upstream one. */
 export const revertLastGalleryMigration = async (
   db: Kysely<any>,
   createUpstreamMigrator: (db: Kysely<any>) => Migrator,
@@ -208,5 +211,10 @@ export const revertLastGalleryMigration = async (
   await db.transaction().execute((trx) => bootstrapGalleryLedger(trx, galleryNames, upstreamNames));
   const migrations = await gallery.getMigrations();
   const hasForkMigrations = migrations.some(({ executedAt }) => executedAt);
+  const trips = createTripsMigrator(db);
+  const tripMigrations = await trips.getMigrations();
+  if (tripMigrations.some(({ executedAt }) => executedAt)) {
+    return trips.migrateDown();
+  }
   return (hasForkMigrations ? gallery : createUpstreamMigrator(db)).migrateDown();
 };

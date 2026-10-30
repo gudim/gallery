@@ -11,7 +11,7 @@ const compiledSuffixes = ['.js', '.js.map', '.d.ts'];
 // file it finds, so delete each one that has no source next to it in src/.
 export function syncGalleryMigrations({ logger = console, serverRoot = defaultServerRoot } = {}) {
   let removed = 0;
-  for (const folder of ['migrations', 'migrations-gallery']) {
+  for (const folder of ['migrations', 'migrations-gallery', 'migrations-trips']) {
     const srcMigrations = path.join(serverRoot, 'src/schema', folder);
     const distMigrations = path.join(serverRoot, 'dist/schema', folder);
     if (!existsSync(distMigrations)) {
