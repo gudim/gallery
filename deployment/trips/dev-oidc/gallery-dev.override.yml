@@ -1,0 +1,25 @@
+# Override for Gallery's dev stack: lets immich-server reach and trust the dev Authelia.
+#   docker compose -f docker/docker-compose.dev.yml -f deployment/trips/dev-oidc/gallery-dev.override.yml up
+# Start compose.yml in this folder first: the network and the Caddy volume below are its own.
+# No relative paths here on purpose: with several -f files they resolve against the first file's
+# folder (docker/), not this one.
+services:
+  immich-server:
+    networks:
+      - default
+      - oidc
+    volumes:
+      - caddy-ca:/oidc-caddy:ro
+    environment:
+      # Read once at process start; Caddy must have issued its CA before immich-server starts.
+      NODE_EXTRA_CA_CERTS: /oidc-caddy/caddy/pki/authorities/local/root.crt
+
+networks:
+  oidc:
+    name: gallery-dev-oidc
+    external: true
+
+volumes:
+  caddy-ca:
+    name: gallery-dev-oidc-caddy
+    external: true

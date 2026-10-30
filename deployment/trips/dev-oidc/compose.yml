@@ -1,0 +1,54 @@
+# Local Authelia behind Caddy as the OIDC provider for Gallery's dev stack.
+#   docker compose -f deployment/trips/dev-oidc/compose.yml up -d --wait
+# Issuer: https://auth.gallery.localhost:9444 (travel-album uses 9443). See README.md.
+name: gallery-dev-oidc
+
+services:
+  authelia-secrets:
+    image: authelia/authelia:4.39.28
+    entrypoint: ['/bin/sh', '/init-secrets.sh']
+    volumes:
+      - ./init-secrets.sh:/init-secrets.sh:ro
+      - authelia:/config
+
+  authelia:
+    image: authelia/authelia:4.39.28
+    user: '1000:1000'
+    command: ['--config', '/etc/authelia/configuration.yml']
+    depends_on:
+      authelia-secrets:
+        condition: service_completed_successfully
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+      AUTH_DOMAIN: auth.gallery.localhost
+      AUTH_URL: https://auth.gallery.localhost:9444
+    volumes:
+      - authelia:/config
+      - ./configuration.yml:/etc/authelia/configuration.yml:ro
+      - ./users.dev.yml:/config/users.yml:ro
+    networks: [oidc]
+
+  caddy:
+    image: caddy:2
+    depends_on: [authelia]
+    ports:
+      - '127.0.0.1:9444:9444'
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    networks:
+      oidc:
+        # immich-server joins this network (gallery-dev.override.yml) and reaches the issuer
+        # under the same name and port as the browser.
+        aliases: [auth.gallery.localhost]
+
+networks:
+  oidc:
+    name: gallery-dev-oidc
+
+volumes:
+  authelia:
+    name: gallery-dev-oidc-authelia
+  caddy:
+    # Fixed name: gallery-dev.override.yml mounts it into immich-server for Caddy's root CA.
+    name: gallery-dev-oidc-caddy

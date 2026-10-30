@@ -1,0 +1,73 @@
+# Dev Authelia as the OIDC provider for Gallery (Immich OAuth). No secrets here: they are files in
+# /config/secrets created once by init-secrets.sh; addresses come from env (template filter on).
+#   AUTH_DOMAIN  auth.gallery.localhost
+#   AUTH_URL     https://auth.gallery.localhost:9444 (browser and immich-server see the same URL)
+
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'info'
+
+theme: 'auto'
+
+authentication_backend:
+  password_reset:
+    disable: true
+  file:
+    path: '/config/users.yml'
+    watch: true
+    password:
+      algorithm: 'argon2'
+
+access_control:
+  default_policy: 'one_factor'
+
+session:
+  secret: '{{ secret "/config/secrets/session_secret" }}'
+  cookies:
+    - domain: '{{ env "AUTH_DOMAIN" }}'
+      authelia_url: '{{ env "AUTH_URL" }}'
+
+storage:
+  encryption_key: '{{ secret "/config/secrets/storage_key" }}'
+  local:
+    path: '/config/db.sqlite3'
+
+notifier:
+  filesystem:
+    filename: '/config/notification.txt'
+
+identity_providers:
+  oidc:
+    hmac_secret: '{{ secret "/config/secrets/oidc_hmac" }}'
+    jwks:
+      - key: {{ secret "/config/secrets/oidc_jwks.pem" | mindent 10 "|" | msquote }}
+    # Immich reads email/name from the id_token when it carries `email`, else calls userinfo.
+    claims_policies:
+      immich:
+        id_token: ['email', 'email_verified', 'name', 'preferred_username']
+    clients:
+      - client_id: 'immich'
+        client_name: 'Gallery (dev)'
+        client_secret: '{{ secret "/config/secrets/oidc_client_secret.digest" }}'
+        public: false
+        authorization_policy: 'one_factor'
+        consent_mode: 'pre-configured'
+        pre_configured_consent_duration: '1y'
+        # Immich sends S256 PKCE whenever discovery advertises it (oauth.repository.ts), and the
+        # mobile app brings its own challenge, so PKCE can be required.
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        claims_policy: 'immich'
+        redirect_uris:
+          - 'app.immich:///oauth-callback'
+          - 'http://localhost:2283/auth/login'
+          - 'http://localhost:2283/user-settings'
+          - 'http://localhost:3000/auth/login'
+          - 'http://localhost:3000/user-settings'
+        scopes: ['openid', 'profile', 'email']
+        response_types: ['code']
+        grant_types: ['authorization_code']
+        # Immich's default ("Token endpoint auth method" in admin OAuth settings).
+        token_endpoint_auth_method: 'client_secret_post'
