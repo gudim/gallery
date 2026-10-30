@@ -55,6 +55,7 @@ import { VideoStreamRepository } from 'src/repositories/video-stream.repository.
 import { ViewRepository } from 'src/repositories/view-repository.js';
 import { WebsocketRepository } from 'src/repositories/websocket.repository.js';
 import { WorkflowRepository } from 'src/repositories/workflow.repository.js';
+import { tripRepositories } from 'src/trips/index.js';
 
 export const repositories = [
   AccessRepository,
@@ -114,4 +115,5 @@ export const repositories = [
   WebsocketRepository,
   WorkflowRepository,
   ...galleryRepositories,
+  ...tripRepositories,
 ];

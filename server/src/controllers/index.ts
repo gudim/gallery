@@ -53,9 +53,11 @@ import { VideoStreamController } from 'src/controllers/video-stream.controller.j
 import { ViewController } from 'src/controllers/view.controller.js';
 import { WorkflowController } from 'src/controllers/workflow.controller.js';
 import { galleryControllers } from 'src/gallery/index.js';
+import { tripControllers } from 'src/trips/index.js';
 
 export const controllers = [
   ...galleryControllers,
+  ...tripControllers,
   ApiKeyController,
   ActivityController,
   AlbumController,
