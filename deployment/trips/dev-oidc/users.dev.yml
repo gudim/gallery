@@ -1,0 +1,13 @@
+# Dev users of the local Authelia (deployment/trips/dev-oidc). Password for both: gallery-dev
+# New hash: docker run --rm authelia/authelia:4.39.28 authelia crypto hash generate argon2 --password <pw>
+users:
+  owner:
+    displayname: 'Owner'
+    password: '$argon2id$v=19$m=65536,t=3,p=4$S6ttwsj3u6xNifAzBszzRg$KtuGzL+9+KpyLUnvYepLcu1gv4NLkignvNpESjFWTWw'
+    email: 'owner@gallery.localhost'
+    groups: []
+  anna:
+    displayname: 'Anna'
+    password: '$argon2id$v=19$m=65536,t=3,p=4$S6ttwsj3u6xNifAzBszzRg$KtuGzL+9+KpyLUnvYepLcu1gv4NLkignvNpESjFWTWw'
+    email: 'anna@gallery.localhost'
+    groups: []

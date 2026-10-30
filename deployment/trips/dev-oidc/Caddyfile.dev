@@ -1,0 +1,11 @@
+# Caddy for the dev Authelia: TLS from Caddy's local CA. It listens on 9444 inside the container
+# too, so the issuer URL https://auth.gallery.localhost:9444 is the same for the browser (published
+# port) and for immich-server (network alias on the gallery-dev-oidc network).
+{
+	auto_https disable_redirects
+}
+
+auth.gallery.localhost:9444 {
+	tls internal
+	reverse_proxy authelia:9091
+}
