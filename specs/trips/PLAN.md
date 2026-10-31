@@ -167,6 +167,8 @@ Done when:
   naming.
 - Places clustering, and place hints from Immich's CLIP embeddings.
 - The clock-offset wizard per camera (D9).
+- The Favorites trip mirrors its owner's stars: starring adds the asset to its album, unstarring
+  removes it (D15).
 - Port from travel-album's `atlas/geo/*`, `atlas/ingest/{clock,reclock,unanchored,cameras}.py`,
   `atlas/albums/{editor,transit,ends}.py`, `static/admin/editor.js`, and `PLAN §5.8, §5.10–5.13`.
 
