@@ -167,7 +167,7 @@
 {#snippet stopRow(stop: TripViewStop)}
   <button
     type="button"
-    class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-gray-100 dark:hover:bg-immich-dark-gray"
+    class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-subtle"
     data-testid="trip-stop-row"
     onclick={() => onOpen(stop)}
   >
@@ -249,13 +249,13 @@
     <div class="min-h-0 flex-1 overflow-y-auto py-1" data-testid="trip-list">
       {#if picked}
         <div class="flex items-center justify-between px-4 py-2">
-          <p class="text-xs font-medium text-gray-500 uppercase dark:text-gray-400">{$t('trips_several_stops')}</p>
+          <p class="text-sm font-medium">{$t('trips_several_stops')}</p>
           <CloseButton onclick={onClearPicked} />
         </div>
         {#each picked as item (item.id)}
           <button
             type="button"
-            class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-gray-100 dark:hover:bg-immich-dark-gray"
+            class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-subtle"
             onclick={() => onOpen(item)}
           >
             <span class="flex-1 text-sm">{itemTitle(item, view, $t, lang)}</span>
@@ -263,8 +263,8 @@
           </button>
         {/each}
       {:else if isPlaces}
-        <div class="flex items-center gap-2 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
-          <span class="flex-1 font-medium uppercase">{$t('trips_places_title')}</span>
+        <div class="flex items-center gap-2 px-4 py-2">
+          <span class="flex-1 text-sm font-medium">{$t('trips_places_title')}</span>
           <Button
             size="tiny"
             variant={placeSort === 'frames' ? 'filled' : 'ghost'}
@@ -284,7 +284,7 @@
         {#if view.unplaced}
           <button
             type="button"
-            class="flex w-full items-baseline gap-3 px-4 py-2 text-start italic hover:bg-gray-100 dark:hover:bg-immich-dark-gray"
+            class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-subtle"
             onclick={() => onOpen(view.unplaced!)}
           >
             <span class="flex-1 text-sm">{$t('trips_unplaced')}</span>
@@ -299,20 +299,22 @@
         {#each days as day (day.date)}
           {#if day.stops.length > 0}
             <div
-              class="sticky top-0 z-1 flex items-center gap-2 bg-immich-bg px-4 pt-3 pb-1 text-xs text-gray-500 uppercase dark:bg-immich-dark-bg dark:text-gray-400"
+              class="sticky top-0 z-1 flex items-center gap-2 bg-immich-bg px-4 pt-3 pb-1 text-sm dark:bg-immich-dark-bg"
               data-testid="trip-day"
             >
               <span class="size-2 shrink-0 rounded-full" style:background={day.color}></span>
               <span class="font-medium">{day.label}</span>
-              <span class="truncate normal-case">{day.regions.slice(0, 3).join(' · ')}</span>
-              <span class="ms-auto">{day.count}</span>
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400"
+                >{day.regions.slice(0, 3).join(' · ')}</span
+              >
+              <span class="ms-auto text-xs text-gray-500 dark:text-gray-400">{day.count}</span>
             </div>
             {#each day.stops as stop (stop.id)}
               {@render stopRow(stop)}
               {#each view.transit.filter(({ fromStopId }) => fromStopId === stop.id) as way (way.id)}
                 <button
                   type="button"
-                  class="flex w-full items-baseline gap-3 px-4 py-2 text-start italic hover:bg-gray-100 dark:hover:bg-immich-dark-gray"
+                  class="flex w-full items-baseline gap-3 px-4 py-2 text-start hover:bg-subtle"
                   onclick={() => onOpen(way)}
                 >
                   <span class="w-11 shrink-0 text-xs text-gray-500 tabular-nums">{way.t0}</span>
