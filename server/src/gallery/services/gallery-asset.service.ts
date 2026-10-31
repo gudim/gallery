@@ -14,7 +14,6 @@ import { AssetVideoTrimDto, AssetVideoTrimResponseDto } from 'src/gallery/dtos/v
 import { logCrossOwnerEdit } from 'src/gallery/utils/cross-owner-edit.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
-import { EventRepository } from 'src/repositories/event.repository.js';
 import { BaseService } from 'src/services/base.service.js';
 import { requireAccess } from 'src/utils/access.js';
 import { isPanorama } from 'src/utils/asset.util.js';
@@ -28,7 +27,6 @@ import { isPanorama } from 'src/utils/asset.util.js';
 export const updateAssetFavorites = async (
   accessRepository: AccessRepository,
   assetFavoriteRepository: AssetFavoriteRepository,
-  eventRepository: EventRepository,
   auth: AuthDto,
   dto: AssetFavoriteUpdateDto,
 ): Promise<void> => {
@@ -51,11 +49,6 @@ export const updateAssetFavorites = async (
   await (dto.isFavorite
     ? assetFavoriteRepository.addAll(auth.user.id, dto.ids)
     : assetFavoriteRepository.removeAll(auth.user.id, dto.ids));
-  await eventRepository.emit('AssetFavoritesUpdate', {
-    userId: auth.user.id,
-    assetIds: dto.ids,
-    isFavorite: dto.isFavorite,
-  });
 };
 
 // Fork asset endpoints served by GalleryAssetController: per-user favorites, the editable-subset query, video trim and
@@ -69,8 +62,9 @@ export class GalleryAssetService extends BaseService {
     return { editableAssetIds: [...editable] };
   }
 
-  updateFavorites(auth: AuthDto, dto: AssetFavoriteUpdateDto): Promise<void> {
-    return updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, this.eventRepository, auth, dto);
+  async updateFavorites(auth: AuthDto, dto: AssetFavoriteUpdateDto): Promise<void> {
+    await updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, auth, dto);
+    await this.eventRepository.emit('AssetFavoritesUpdate', { userId: auth.user.id, ...dto });
   }
 
   async getTrim(auth: AuthDto, id: string): Promise<AssetVideoTrimResponseDto> {
