@@ -75,7 +75,7 @@ export class TripFavoritesRepository {
       }
 
       await dropEmptiedPlaces(trx, albumId, leaving);
-      const filed = await fileTripAssets(trx, albumId, trip, { isUnplacedRefiled: false });
+      const filed = await fileTripAssets(trx, albumId, trip.kind, { isUnplacedRefiled: false });
       await touchAlbum(trx, albumId);
       await bumpContentVersion(trx, albumId);
       return { albumId, stops: filed.stops };
