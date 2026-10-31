@@ -98,6 +98,7 @@ import {
 import { WorkflowLogTable } from 'src/schema/tables/workflow-log.table.js';
 import { WorkflowStepTable } from 'src/schema/tables/workflow-step.table.js';
 import { WorkflowTable } from 'src/schema/tables/workflow.table.js';
+import { TripsDB, tripTables } from 'src/trips/schema/index.js';
 
 @Extensions(['uuid-ossp', 'unaccent', 'cube', 'earthdistance', 'pg_trgm', 'plpgsql'])
 @Database({ name: 'immich' })
@@ -169,6 +170,7 @@ export class ImmichDatabase {
     WorkflowTable,
     WorkflowStepTable,
     ...galleryTables,
+    ...tripTables,
   ];
 
   functions = [
@@ -209,7 +211,7 @@ export interface Migrations {
   timestamp: Int8;
 }
 
-export interface DB extends GalleryDB {
+export interface DB extends GalleryDB, TripsDB {
   kysely_migrations: { timestamp: string; name: string };
 
   activity: ActivityTable;

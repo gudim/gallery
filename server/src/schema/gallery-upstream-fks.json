@@ -1,6 +1,17 @@
 {
   "$comment": "Fork foreign keys onto upstream keys, grouped by the upstream key. Checked against the fork tables by src/schema/gallery-upstream-fks.spec.ts; read by tools/upstream-preflight to flag upstream migrations that drop or alter a listed key, table or column.",
   "keys": {
+    "album_asset_pkey": {
+      "table": "album_asset",
+      "columns": [
+        "albumId",
+        "assetId"
+      ],
+      "forkForeignKeys": [
+        "trip_asset_albumId_assetId_fkey",
+        "trip_like_albumId_assetId_fkey"
+      ]
+    },
     "album_pkey": {
       "table": "album",
       "columns": [
@@ -9,7 +20,8 @@
       "forkForeignKeys": [
         "album_space_asset_albumId_fkey",
         "shared_space_album_albumId_fkey",
-        "shared_space_album_user_albumId_fkey"
+        "shared_space_album_user_albumId_fkey",
+        "trip_albumId_fkey"
       ]
     },
     "asset_face_pkey": {
@@ -115,6 +127,7 @@
         "shared_space_library_addedById_fkey",
         "shared_space_member_userId_fkey",
         "shared_space_person_alias_userId_fkey",
+        "trip_like_userId_fkey",
         "user_group_createdById_fkey",
         "user_group_member_userId_fkey"
       ]

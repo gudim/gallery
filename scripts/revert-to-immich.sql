@@ -964,6 +964,17 @@ DROP TABLE IF EXISTS "gallery_migrations_lock";
 -- server/src/schema/migrations-trips/ migration creates is dropped and checked
 -- below (server/src/trips/revert-to-immich.trips.spec.ts).
 -- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS "trip_like" CASCADE;
+DROP TABLE IF EXISTS "trip_overlay" CASCADE;
+DROP TABLE IF EXISTS "trip_leg" CASCADE;
+DROP TABLE IF EXISTS "trip_asset" CASCADE;
+DROP TABLE IF EXISTS "trip_stop" CASCADE;
+DROP TABLE IF EXISTS "trip_place" CASCADE;
+DROP TABLE IF EXISTS "trip" CASCADE;
+DELETE FROM "migration_overrides" WHERE "name" IN (
+  'trigger_trip_updatedAt',
+  'index_trip_stop_albumId_role_idx'
+);
 DROP TABLE IF EXISTS "trips_migrations";
 DROP TABLE IF EXISTS "trips_migrations_lock";
 
@@ -975,7 +986,8 @@ BEGIN
     FROM pg_tables
    WHERE schemaname = current_schema()
      AND tablename IN (
-       'trips_migrations', 'trips_migrations_lock'
+       'trips_migrations', 'trips_migrations_lock',
+       'trip', 'trip_place', 'trip_stop', 'trip_asset', 'trip_leg', 'trip_overlay', 'trip_like'
      );
   IF trip_tables_left > 0 THEN
     RAISE EXCEPTION 'revert-to-immich: % trip table(s) still present after cleanup, aborting.', trip_tables_left;

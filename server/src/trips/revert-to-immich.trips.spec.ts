@@ -14,8 +14,12 @@ const migrations = (folder: string) =>
 const tripFiles = migrations('migrations-trips');
 
 const tripTables = new Set(['trips_migrations', 'trips_migrations_lock']);
+const tripOverrides = new Set<string>();
 for (const file of tripFiles) {
   const content = readFileSync(join(tripsDir, file), 'utf8');
+  for (const match of content.matchAll(/INSERT INTO "migration_overrides" \("name", "value"\) VALUES \('([^']+)'/g)) {
+    tripOverrides.add(match[1]);
+  }
   for (const match of content.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? "?([a-z_]+)"?/g)) {
     tripTables.add(match[1]);
   }
@@ -47,6 +51,11 @@ describe('revert-to-immich.sql, trips layer', () => {
 
   it('lists every trip table in the trips guard', () => {
     const missing = [...tripTables].filter((table) => !guardBlock.includes(`'${table}'`));
+    expect(missing).toEqual([]);
+  });
+
+  it('deletes every migration_overrides row a trip migration inserts', () => {
+    const missing = [...tripOverrides].filter((name) => !tripsBlock.includes(`'${name}'`));
     expect(missing).toEqual([]);
   });
 

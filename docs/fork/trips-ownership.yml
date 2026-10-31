@@ -20,7 +20,7 @@ metadata:
   upstream_remote: refs/tags
   upstream_branch: v5.9.0
   fork_remote: refs/heads
-  fork_branch: trips-0
+  fork_branch: trips-1
   last_verified_fork_head: 40c585e20109a9d9acbba10d2dbab3594c465cc1
 
 coverage_ignore:
@@ -59,6 +59,9 @@ features:
       - server/src/services/cli.service.ts
       - server/bin/sync-gallery-migrations.mjs
       - scripts/revert-to-immich.sql
+      - server/src/schema/index.ts
+      - server/src/schema/gallery-upstream-fks.json
+      - server/src/schema/gallery-upstream-fks.spec.ts
       - server/src/controllers/index.ts
       - server/src/repositories/index.ts
       - server/src/services/index.ts
@@ -77,6 +80,6 @@ features:
       - i18n/gallery/zh_Hans.json
       - i18n/gallery/zh_Hant.json
     database:
-      tables: [trips_migrations, trips_migrations_lock]
+      tables: [trips_migrations, trips_migrations_lock, trip, trip_place, trip_stop, trip_asset, trip_leg, trip_overlay, trip_like]
       migration_globs:
         - server/src/schema/migrations-trips/*.ts
