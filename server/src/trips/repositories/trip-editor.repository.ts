@@ -18,7 +18,7 @@ import {
 } from 'src/trips/repositories/trip.repository.js';
 import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
 import { type LatLng, haversineM, pointOf } from 'src/trips/utils/geo.js';
-import { inferPlacePoints, inferRoutePoints, speedKmh } from 'src/trips/utils/layout.js';
+import { inferPlacePoints, inferRoutePoints, speedKmh } from 'src/trips/utils/grouping.js';
 import { asUuid } from 'src/utils/database.js';
 
 // The stop editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the

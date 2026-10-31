@@ -1,6 +1,5 @@
 import { TripKind, TripLegMode } from 'src/trips/enum.js';
 import { type LatLng, type Located, haversineM, pointOf, round6 } from 'src/trips/utils/geo.js';
-import { routeLegs } from 'src/trips/utils/lay-out.js';
 import {
   GAP_MS,
   RADIUS_M,
@@ -8,7 +7,8 @@ import {
   inferPlacePoints,
   inferRoutePoints,
   placeGroups,
-} from 'src/trips/utils/layout.js';
+} from 'src/trips/utils/grouping.js';
+import { routeLegs } from 'src/trips/utils/lay-out.js';
 
 // Filing assets the trip has not seen yet into its stops (trips PLAN D12; travel-album's assign and sync_legs). The
 // owner's stops keep their texts, pins they moved and legs they set; a stop only grows to take new assets. Pure: the

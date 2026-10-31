@@ -1,6 +1,6 @@
 import { TripKind } from 'src/trips/enum.js';
 import { pointOf } from 'src/trips/utils/geo.js';
-import { type TimedPoint, routeGroups } from 'src/trips/utils/layout.js';
+import { type TimedPoint, routeGroups } from 'src/trips/utils/grouping.js';
 
 // The clock-offset wizard (trips PLAN D9, travel-album `ingest/clock.py` and `ingest/cameras.py`). A camera is EXIF
 // make and model, videos a camera of their own (trips DECISIONS-LOG 2026-10-31, owner); a reference camera has GPS on
