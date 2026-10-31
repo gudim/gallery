@@ -129,8 +129,7 @@ where
 begin
 select
   "trip"."albumId",
-  "trip"."kind",
-  "trip"."isFavorites"
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -251,8 +250,7 @@ order by
 begin
 select
   "trip"."albumId",
-  "trip"."kind",
-  "trip"."isFavorites"
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -293,8 +291,7 @@ where
 begin
 select
   "trip"."albumId",
-  "trip"."kind",
-  "trip"."isFavorites"
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"

@@ -403,7 +403,7 @@ export class TripRepository {
       if (!trip) {
         return { assets: 0, stops: 0 };
       }
-      const { assets, stops } = await fileTripAssets(trx, albumId, trip, { isUnplacedRefiled: false });
+      const { assets, stops } = await fileTripAssets(trx, albumId, trip.kind, { isUnplacedRefiled: false });
       if (assets > 0) {
         await bumpContentVersion(trx, albumId);
       }
@@ -816,7 +816,7 @@ export const lockTrip = (trx: Transaction<DB>, albumId: string) =>
   trx
     .selectFrom('trip')
     .innerJoin('album', 'album.id', 'trip.albumId')
-    .select(['trip.albumId', 'trip.kind', 'trip.isFavorites'])
+    .select(['trip.albumId', 'trip.kind'])
     .where('trip.albumId', '=', asUuid(albumId))
     .where('album.deletedAt', 'is', null)
     .forUpdate('trip')
@@ -850,7 +850,7 @@ export const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
 export const fileTripAssets = async (
   trx: Transaction<DB>,
   albumId: string,
-  { kind, isFavorites }: { kind: TripKind; isFavorites: boolean },
+  kind: TripKind,
   { isUnplacedRefiled }: { isUnplacedRefiled: boolean },
 ): Promise<TripFileResult & { stopIds: string[] }> => {
   const id = asUuid(albumId);
@@ -909,7 +909,7 @@ export const fileTripAssets = async (
     .where('trip_stop.albumId', '=', id)
     .execute();
 
-  const borrowed = isFavorites ? await getOtherTripPoints(trx, albumId, assets) : new Map<string, LatLng>();
+  const borrowed = await getOtherTripPoints(trx, albumId, kind, assets);
   const start = stops.find(({ role }) => role === TripStopRole.Start);
   const filing = fileAssets(
     kind,
@@ -980,15 +980,16 @@ export const fileTripAssets = async (
 /**
  * For a Favorites trip, the point of each new asset without GPS: the centre of its stop in another trip of the same
  * owner, the oldest album first (travel-album `favorites._coords`: an inferred point is not GPS, and its stop stands
- * there anyway). A start, a finish and Unplaced do not count.
+ * there anyway). A start, a finish and Unplaced do not count. Any other trip borrows nothing.
  */
 const getOtherTripPoints = async (
   trx: Transaction<DB>,
   albumId: string,
+  kind: TripKind,
   assets: Array<{ id: string; isNew: boolean; latitude: number | null; longitude: number | null }>,
 ): Promise<Map<string, LatLng>> => {
   const assetIds = assets.filter((asset) => asset.isNew && !pointOf(asset)).map(({ id }) => id);
-  if (assetIds.length === 0) {
+  if (kind !== TripKind.Places || assetIds.length === 0 || !(await isFavoritesTrip(trx, albumId))) {
     return new Map();
   }
   const rows = await trx
@@ -1054,6 +1055,15 @@ export const syncRouteLegs = async (trx: Transaction<DB>, albumId: string) => {
       .values(added.map((leg) => ({ ...leg, albumId })))
       .execute();
   }
+};
+
+const isFavoritesTrip = async (trx: Transaction<DB>, albumId: string) => {
+  const row = await trx
+    .selectFrom('trip')
+    .select('isFavorites')
+    .where('albumId', '=', asUuid(albumId))
+    .executeTakeFirst();
+  return !!row?.isFavorites;
 };
 
 // Serialises the writes that create an owner's trips: imports, and the Favorites trip made by a star.

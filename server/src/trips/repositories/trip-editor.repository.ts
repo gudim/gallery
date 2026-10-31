@@ -307,7 +307,7 @@ export class TripEditorRepository {
       // Assets without GPS lean on the start: their points move with it, and those left Unplaced for want of a point
       // are filed (travel-album `locate` and `assign`).
       await relocate(trx, albumId, kind, touch);
-      const filed = await fileTripAssets(trx, albumId, { kind, isFavorites: false }, { isUnplacedRefiled: true });
+      const filed = await fileTripAssets(trx, albumId, kind, { isUnplacedRefiled: true });
       touch(...filed.stopIds);
     });
   }
