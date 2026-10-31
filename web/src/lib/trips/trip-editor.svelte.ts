@@ -6,6 +6,8 @@ import { handleError } from '$lib/utils/handle-error';
 const POLL_MS = 4000;
 /** Polls per edit while naming may still be running: a naming that failed leaves the title blank for good. */
 const NAMING_POLLS = 30;
+/** Polls after a clock shift, while the assets' metadata is read again: about two minutes. */
+const FOLLOW_POLLS = 30;
 
 /** A stop with a point and no name yet, which the naming job will fill. */
 const isUnnamed = (trip: TripResponseDto) =>
@@ -26,6 +28,7 @@ export class TripEditor {
   readonly assets: AssetResponseDto[];
   #timer: ReturnType<typeof setTimeout> | undefined;
   #namingPolls = NAMING_POLLS;
+  #followPolls = 0;
 
   constructor(trip: TripResponseDto, assets: AssetResponseDto[]) {
     this.assets = assets;
@@ -51,6 +54,12 @@ export class TripEditor {
     }
   }
 
+  /** Reads the trip again for a while after a change it learns of later, such as the dates a clock shift moved. */
+  follow() {
+    this.#followPolls = FOLLOW_POLLS;
+    this.#schedule();
+  }
+
   destroy() {
     clearTimeout(this.#timer);
   }
@@ -66,7 +75,7 @@ export class TripEditor {
     const trip = this.trip!;
     const isRouting = trip.legs.some(({ status }) => status === TripLegStatus.Pending);
     const isNaming = this.#namingPolls > 0 && isUnnamed(trip);
-    if (!isRouting && !isNaming) {
+    if (!isRouting && !isNaming && this.#followPolls === 0) {
       return;
     }
     this.#timer = setTimeout(() => void this.#poll(), POLL_MS);
@@ -74,6 +83,7 @@ export class TripEditor {
 
   async #poll() {
     this.#namingPolls = Math.max(0, this.#namingPolls - 1);
+    this.#followPolls = Math.max(0, this.#followPolls - 1);
     try {
       const trip = await getTrip({ id: this.albumId, ...authManager.params });
       // An edit that answered meanwhile is newer than this read.

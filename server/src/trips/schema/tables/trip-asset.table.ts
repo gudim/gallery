@@ -1,4 +1,4 @@
-import { Check, Column, ForeignKeyColumn, ForeignKeyConstraint, Table } from '@immich/sql-tools';
+import { Check, Column, ForeignKeyColumn, ForeignKeyConstraint, Table, Timestamp } from '@immich/sql-tools';
 import { AlbumAssetTable } from 'src/schema/tables/album-asset.table.js';
 import { TripPointSource } from 'src/trips/enum.js';
 import { TripStopTable } from 'src/trips/schema/tables/trip-stop.table.js';
@@ -39,4 +39,9 @@ export class TripAssetTable {
 
   @Column({ type: 'text', nullable: true })
   pointSource!: TripPointSource | null;
+
+  // The asset's local time when the trip last placed it; filing follows a time changed since (trips PLAN D9). Null
+  // until filing first reads it.
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  localDateTime!: Timestamp | null;
 }

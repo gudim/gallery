@@ -26368,6 +26368,63 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/cameras": {
+      "get": {
+        "description": "Lists the cameras of a trip’s album (EXIF make and model, videos apart) with their GPS share, and for a camera without GPS a shift of its clock that puts its assets in the stops of the cameras with GPS, where one is worth it; a Places trip gets none. The shift is applied through the bulk asset update, to the caller’s own assets only. The album owner and editors only.",
+        "operationId": "getTripCameras",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripCamerasDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Get the cameras of a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/finish": {
       "delete": {
         "description": "Removes the finish of a Route trip with its leg. The album owner and editors edit the trip. Returns the whole trip.",
@@ -50462,6 +50519,99 @@
         "required": [
           "assetIds",
           "stopId"
+        ],
+        "type": "object"
+      },
+      "TripCameraDto": {
+        "properties": {
+          "assetCount": {
+            "description": "Assets of the camera in the album",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "gpsCount": {
+            "description": "Of them, assets with their own GPS",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "isReference": {
+            "description": "At least half of its assets have GPS; its stops time the other cameras",
+            "type": "boolean"
+          },
+          "isVideo": {
+            "description": "Videos are a camera of their own",
+            "type": "boolean"
+          },
+          "make": {
+            "description": "EXIF make",
+            "nullable": true,
+            "type": "string"
+          },
+          "model": {
+            "description": "EXIF model",
+            "nullable": true,
+            "type": "string"
+          },
+          "ownAssetIds": {
+            "description": "The caller’s assets of the camera, the only ones they may shift",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "suggestion": {
+            "description": "A shift worth applying, or null",
+            "nullable": true,
+            "properties": {
+              "best": {
+                "description": "Share of its assets in a reference stop after the shift",
+                "type": "number"
+              },
+              "current": {
+                "description": "Share of its assets in a reference stop as they are",
+                "type": "number"
+              },
+              "offsetMinutes": {
+                "description": "Minutes to add to the camera’s times",
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "offsetMinutes",
+              "current",
+              "best"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "assetCount",
+          "gpsCount",
+          "isReference",
+          "isVideo",
+          "make",
+          "model",
+          "ownAssetIds",
+          "suggestion"
+        ],
+        "type": "object"
+      },
+      "TripCamerasDto": {
+        "properties": {
+          "cameras": {
+            "description": "Cameras of the album, most assets first",
+            "items": {
+              "$ref": "#/components/schemas/TripCameraDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cameras"
         ],
         "type": "object"
       },

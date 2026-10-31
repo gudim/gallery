@@ -11,6 +11,7 @@ import {
   fileTripAssets,
   lockTrip,
   noStations,
+  recordLocalTimes,
   stopOrder,
   syncRouteLegs,
   unbuilt,
@@ -507,6 +508,38 @@ export class TripEditorRepository {
   }
 
   /**
+   * Follows the assets whose local time changed since the trip placed them, by the clock-offset wizard or any date
+   * edit (trips PLAN D9, travel-album `reclock.set_offset`): their new times are recorded, the points of assets
+   * without GPS are inferred again, and their stops' times and centres follow, with a route's legs. Stops are not
+   * laid out again. `Unchanged` when no time changed, and then nothing is written.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  retime(albumId: string): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind, touch) => {
+      const id = asUuid(albumId);
+      const changed = await trx
+        .selectFrom('trip_asset')
+        .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+        .select(['trip_asset.assetId', 'trip_asset.stopId'])
+        .where('trip_asset.albumId', '=', id)
+        .where('trip_asset.localDateTime', 'is not', null)
+        .where(sql<boolean>`"trip_asset"."localDateTime" IS DISTINCT FROM "asset"."localDateTime"`)
+        .execute();
+      if (changed.length === 0) {
+        return TripEditResult.Unchanged;
+      }
+      await sql`
+        UPDATE "trip_asset" SET "localDateTime" = "asset"."localDateTime"
+        FROM "asset"
+        WHERE "asset"."id" = "trip_asset"."assetId" AND "trip_asset"."albumId" = ${id}
+          AND "trip_asset"."assetId" IN (${sql.join(changed.map(({ assetId }) => assetId))})
+      `.execute(trx);
+      touch(...changed.flatMap(({ stopId }) => (stopId ? [stopId] : [])));
+      await relocate(trx, albumId, kind, touch);
+    });
+  }
+
+  /**
    * Runs one stop edit in a transaction that holds the trip row, then does what travel-album's `editor.edited` did:
    * the times and centres of the stops it touched follow their assets, a route's legs follow its stop order, legs of
    * a stop that moved are built again without their stations, and `contentVersion` goes up. A refused edit is rolled
@@ -758,6 +791,7 @@ const moveAssets = async (
     .values(ids.map((assetId) => ({ albumId, assetId, stopId })))
     .onConflict((oc) => oc.columns(['albumId', 'assetId']).doUpdateSet({ stopId }))
     .execute();
+  await recordLocalTimes(trx, albumId);
   touch(stopId, ...leaving.keys());
 };
 

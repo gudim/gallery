@@ -4976,6 +4976,35 @@ export type TripAssetPointDto = {
     /** Longitude */
     longitude: number;
 };
+export type TripCameraDto = {
+    /** Assets of the camera in the album */
+    assetCount: number;
+    /** Of them, assets with their own GPS */
+    gpsCount: number;
+    /** At least half of its assets have GPS; its stops time the other cameras */
+    isReference: boolean;
+    /** Videos are a camera of their own */
+    isVideo: boolean;
+    /** EXIF make */
+    make: string | null;
+    /** EXIF model */
+    model: string | null;
+    /** The caller’s assets of the camera, the only ones they may shift */
+    ownAssetIds: string[];
+    /** A shift worth applying, or null */
+    suggestion: {
+        /** Share of its assets in a reference stop after the shift */
+        best: number;
+        /** Share of its assets in a reference stop as they are */
+        current: number;
+        /** Minutes to add to the camera’s times */
+        offsetMinutes: number;
+    } | null;
+};
+export type TripCamerasDto = {
+    /** Cameras of the album, most assets first */
+    cameras: TripCameraDto[];
+};
 export type TripFinishUpdateDto = {
     /** The route ends where it began, and the finish follows the start */
     isFinishAtStart?: boolean;
@@ -11884,6 +11913,19 @@ export function setAssetPoint({ assetId, id, tripAssetPointDto }: {
         method: "PUT",
         body: tripAssetPointDto
     })));
+}
+/**
+ * Get the cameras of a trip
+ */
+export function getTripCameras({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripCamerasDto;
+    }>(`/trips/${encodeURIComponent(id)}/cameras`, {
+        ...opts
+    }));
 }
 /**
  * Remove the finish of a trip

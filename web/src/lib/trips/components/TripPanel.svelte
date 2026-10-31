@@ -1,5 +1,6 @@
 <script lang="ts">
   import Timeline from '$lib/components/timeline/Timeline.svelte';
+  import TripClockModal from '$lib/trips/components/TripClockModal.svelte';
   import TripLegEdit from '$lib/trips/components/TripLegEdit.svelte';
   import TripPlaceHints from '$lib/trips/components/TripPlaceHints.svelte';
   import TripPointModal from '$lib/trips/components/TripPointModal.svelte';
@@ -30,6 +31,7 @@
     mdiBike,
     mdiBus,
     mdiCar,
+    mdiClockEditOutline,
     mdiFerry,
     mdiFlagCheckered,
     mdiHiking,
@@ -379,9 +381,9 @@
     <div class="border-b border-gray-200 px-4 py-3 dark:border-immich-dark-gray">
       <p class="text-sm" data-testid="trip-range">{rangeLine(view, $t, lang)}</p>
       <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="trip-stats">{statsLine.join(' · ')}</p>
-      {#if editor && isRoute}
+      {#if editor}
         <div class="mt-3 flex flex-wrap gap-2" data-testid="trip-route-actions">
-          {#if !hasStart}
+          {#if isRoute && !hasStart}
             <Button
               size="small"
               shape="round"
@@ -391,7 +393,7 @@
               onclick={() => onEnd(TripStopRole.Start)}>{$t('trips_set_start')}</Button
             >
           {/if}
-          {#if !hasFinish}
+          {#if isRoute && !hasFinish}
             <Button
               size="small"
               shape="round"
@@ -401,13 +403,24 @@
               onclick={() => onEnd(TripStopRole.Finish)}>{$t('trips_set_finish')}</Button
             >
           {/if}
+          {#if isRoute}
+            <Button
+              size="small"
+              shape="round"
+              color="secondary"
+              variant="outline"
+              leadingIcon={mdiMapMarkerPlusOutline}
+              onclick={onAddPoint}>{$t('trips_add_point')}</Button
+            >
+          {/if}
           <Button
             size="small"
             shape="round"
             color="secondary"
             variant="outline"
-            leadingIcon={mdiMapMarkerPlusOutline}
-            onclick={onAddPoint}>{$t('trips_add_point')}</Button
+            leadingIcon={mdiClockEditOutline}
+            onclick={() => modalManager.show(TripClockModal, { editor })}
+            data-testid="trip-clock">{$t('trips_clock')}</Button
           >
           {#if attentionCount > 0}
             <Button
