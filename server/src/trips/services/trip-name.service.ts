@@ -16,6 +16,7 @@ import {
   parseNominatimReverse,
   resolveTripNamingLanguages,
   stopTitle,
+  tripNamingLanguages,
 } from 'src/trips/utils/naming.js';
 
 // Names stops through Nominatim (trips PLAN D13), as travel-album's geocode_stops and geocode_langs jobs did.
@@ -47,7 +48,7 @@ export class TripNameService {
       return JobStatus.Skipped;
     }
 
-    const [language, ...otherLanguages] = this.languages;
+    const { language, otherLanguages } = tripNamingLanguages(trip.language, this.languages);
     const byDistrict = namesByDistrict(trip.kind);
     const finishes = trip.stops.filter((stop) => followsStart(stop) && isUntitled(stop));
     const names: TripStopName[] = [];
@@ -81,7 +82,9 @@ export class TripNameService {
     }
 
     const named = await this.tripRepository.nameStops(id, names);
-    this.logger.debug(`Named ${named} of ${names.length} stops of trip ${id} in ${this.languages.join(', ')}`);
+    this.logger.debug(
+      `Named ${named} of ${names.length} stops of trip ${id} in ${[language, ...otherLanguages].join(', ')}`,
+    );
     return status;
   }
 

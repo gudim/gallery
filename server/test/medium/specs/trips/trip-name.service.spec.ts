@@ -36,9 +36,9 @@ const newPoints = (count: number): Point[] => {
   return Array.from({ length: count }, (_, index) => ({ latitude: latitude + index, longitude: 25.28 }));
 };
 
-// A Nominatim that knows the given points in Russian and English and nothing elsewhere, and is down at `down`.
+// A Nominatim that knows the given points in the given languages and nothing elsewhere, and is down at `down`.
 const stubNominatim = (
-  places: Array<[Point, { ru: Place; en: Place }]>,
+  places: Array<[Point, Record<string, Place>]>,
   { onRequest, down }: { onRequest?: () => Promise<void>; down?: Point } = {},
 ) => {
   const known = new Map(places.map(([point, names]) => [point.latitude.toFixed(6), names]));
@@ -49,7 +49,7 @@ const stubNominatim = (
       return new Response('busy', { status: 503 });
     }
     const names = known.get(url.searchParams.get('lat')!);
-    const place = names?.[url.searchParams.get('accept-language') as 'ru' | 'en'];
+    const place = names?.[url.searchParams.get('accept-language')!];
     if (!place) {
       return Response.json({ error: 'Unable to geocode' });
     }
@@ -136,6 +136,34 @@ describe(TripNameService.name, () => {
       .where('request', 'like', `%accept-language=en%lat=${a.latitude.toFixed(6)}%`)
       .executeTakeFirstOrThrow();
     expect(english.response).toMatchObject({ address: { city: 'Kaunas', country: 'Lithuania' } });
+  });
+
+  it('names a trip made in German in German, and a trip without a language in the instance default', async () => {
+    const { sut, trips, auth, newTrip } = await setup();
+    const [a, b] = newPoints(2);
+    const MUNICH = {
+      de: { city: 'München', country: 'Deutschland' },
+      ru: { city: 'Мюнхен', country: 'Германия' },
+      en: { city: 'Munich', country: 'Germany' },
+    };
+    const fetchMock = stubNominatim([
+      [a, MUNICH],
+      [b, MUNICH],
+    ]);
+    const germanId = await newTrip('route', [a], { language: 'de' });
+    const defaultId = await newTrip('route', [b]);
+
+    await sut.handleName({ id: germanId });
+    await sut.handleName({ id: defaultId });
+
+    const german = await trips.get(auth, germanId);
+    expect(german).toMatchObject({ language: 'de' });
+    expect(german.stops[0]).toMatchObject({ title: 'München', region: 'München', country: 'Deutschland' });
+    const byDefault = await trips.get(auth, defaultId);
+    expect(byDefault).toMatchObject({ language: null });
+    expect(byDefault.stops[0]).toMatchObject({ title: 'Мюнхен', country: 'Германия' });
+    // every instance language but the trip's own, for search
+    expect(fetchMock.mock.calls.map((call) => languageOf(call))).toEqual(['de', 'ru', 'en', 'ru', 'en']);
   });
 
   it('names a place by city and district', async () => {

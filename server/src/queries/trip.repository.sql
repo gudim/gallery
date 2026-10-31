@@ -284,7 +284,8 @@ commit
 
 -- TripRepository.getStopsToName
 select
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."language"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"

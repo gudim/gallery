@@ -49208,6 +49208,12 @@
           "kind": {
             "$ref": "#/components/schemas/TripKind"
           },
+          "language": {
+            "description": "Language the trip’s stops are named in; null names them in the server’s default",
+            "example": "de",
+            "nullable": true,
+            "type": "string"
+          },
           "start": {
             "allOf": [
               {
@@ -49324,6 +49330,12 @@
           },
           "kind": {
             "$ref": "#/components/schemas/TripKind"
+          },
+          "language": {
+            "description": "Language the trip’s stops are named in; null names them in the server’s default",
+            "example": "de",
+            "nullable": true,
+            "type": "string"
           },
           "legs": {
             "default": [],
@@ -50003,6 +50015,11 @@
           "kind": {
             "$ref": "#/components/schemas/TripKind"
           },
+          "language": {
+            "description": "Language the trip’s stops are named in; null is the server’s default",
+            "nullable": true,
+            "type": "string"
+          },
           "legs": {
             "items": {
               "$ref": "#/components/schemas/TripLegDto"
@@ -50044,6 +50061,7 @@
           "isFeatured",
           "isShowcased",
           "kind",
+          "language",
           "legs",
           "likes",
           "overlays",

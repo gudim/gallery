@@ -70,6 +70,7 @@ const fixture = ([a1, a2, a3]: string[]) => ({
   kind: 'route',
   isFavorites: false,
   isShowcased: true,
+  language: 'ru',
   places: [{ key: 'vilnius', title: 'Vilnius', article: 'An article.', articleSource: 'llm' }],
   stops: [
     stop('home', { role: 'start', latitude: 54.68, longitude: 25.27 }),
@@ -155,6 +156,7 @@ const asDocument = async (trip: TripResponseDto, stopKeys: string[]) => {
     kind: trip.kind,
     isFavorites: trip.isFavorites,
     isShowcased: trip.isShowcased,
+    language: trip.language,
     places: trip.places.map(({ id: _, ...place }) => place),
     stops: trip.stops.map(({ id, placeId, ...rest }) => ({
       key: keyOf.get(id),

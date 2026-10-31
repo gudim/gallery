@@ -9,26 +9,58 @@ export const TRIP_TITLE_SOURCE_GEOCODED = 'geocoded';
 
 export const TRIPS_GEO_LANGS_VARIABLE = 'TRIPS_GEO_LANGS';
 
-// travel-album's ATLAS_GEO_LANG (`ru`) and its other interface language (`en`). Immich keeps no user locale on the
-// server, so the languages are the instance's, not the owner's (trips DECISIONS-LOG 2026-10-31).
+// travel-album's ATLAS_GEO_LANG (`ru`) and its other interface language (`en`).
 const DEFAULT_LANGS = ['ru', 'en'];
 
+const LANGUAGE_TAG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+
 /**
- * The languages stops are named in: the first names them, the rest are asked for too and kept in the geo cache, where
- * search finds a place by its name in another language (travel-album PLAN §5.15). `TRIPS_GEO_LANGS` is a comma
- * separated list of Nominatim `accept-language` codes.
+ * A language tag as Nominatim's `accept-language` takes it, or null when it is not one: `_` becomes `-` (Gallery's web
+ * locales are `zh_Hans`, `pt_BR`), the language is lower case, a script title case and a region upper case.
+ */
+export const normalizeTripLanguage = (value: string): string | null => {
+  const [language, ...subtags] = value.trim().replaceAll('_', '-').split('-');
+  const tag = [
+    language.toLowerCase(),
+    ...subtags.map((subtag) =>
+      /^[a-z]{4}$/i.test(subtag)
+        ? subtag[0].toUpperCase() + subtag.slice(1).toLowerCase()
+        : /^[a-z]{2}$/i.test(subtag)
+          ? subtag.toUpperCase()
+          : subtag,
+    ),
+  ].join('-');
+  return LANGUAGE_TAG.test(tag) ? tag : null;
+};
+
+/**
+ * The instance's naming languages (`TRIPS_GEO_LANGS`, comma separated): the first names the stops of a trip that has
+ * no language of its own, the rest are asked for too and kept in the geo cache, where search finds a place by its name
+ * in another language (travel-album PLAN §5.15).
  */
 export const resolveTripNamingLanguages = (env: NodeJS.ProcessEnv = process.env): string[] => {
   const value = env[TRIPS_GEO_LANGS_VARIABLE]?.trim();
   if (!value) {
     return DEFAULT_LANGS;
   }
-  const langs = [...new Set(value.split(',').map((lang) => lang.trim()))].filter(Boolean);
-  const invalid = langs.find((lang) => !/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(lang));
-  if (langs.length === 0 || invalid !== undefined) {
+  const langs = value
+    .split(',')
+    .filter((lang) => lang.trim())
+    .map((lang) => normalizeTripLanguage(lang));
+  if (langs.length === 0 || langs.includes(null)) {
     throw new Error(`${TRIPS_GEO_LANGS_VARIABLE} is not a comma separated list of language codes: ${value}`);
   }
-  return langs;
+  return [...new Set(langs as string[])];
+};
+
+/**
+ * The language a trip's stops are named in, the trip's own (the owner's locale when it was made) or else the
+ * instance's first, and every instance language but that one, asked for search (trips DECISIONS-LOG 2026-10-31,
+ * owner).
+ */
+export const tripNamingLanguages = (tripLanguage: string | null, instance: string[]) => {
+  const language = tripLanguage ?? instance[0];
+  return { language, otherLanguages: instance.filter((other) => other !== language) };
 };
 
 /**
