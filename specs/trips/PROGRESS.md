@@ -1,5 +1,16 @@
 # Trips: progress
 
+## Stage 2.3: guest trip viewer (branch `trips-3`, from `trips-all`): open
+
+The viewer is in `web/src/lib/trips/`; the shared-link page opens it for an album with a trip, signed-in users at `/trips/{albumId}`. Likes: `PUT`/`DELETE /trips/{id}/likes/{assetId}`. Checked against the dev Gallery of stage 2.2 running the server built from `trips-3` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`, the way travel-album's reference test measures.
+
+- [x] On migrated `birzhay-2026`, the reference numbers match (`tests/e2e/reference/birzhay-2026.json`), in both themes:
+  - 1440 px: 10 stop markers, 9 lines, 3 mode avatars, stats 79 · 3 · 8 · 1 · 487, range "8 августа — 8 августа 2026 · 1 день в дороге", the same ten stops in the list, 1 day.
+  - 390 px: 8 stations, 1 day badge, "1 день·8 остановок·79 кадров·487 км", road 2845 px high.
+- [ ] The owner has seen 390 and 1440 px screenshots, in both themes, next to travel-album's.
+
+Also checked: the lightbox pages the whole trip and keeps the opened stop when it closes; a like counts once per browser and goes back on unlike; Grid shows 79 assets, Photos 8 sections; `?album` opens Gallery's album view; Places and Plain trips (made on the dev Gallery from birzhay's assets) render on both widths. Web unit suite green (415 files, 6690 tests).
+
 ## Stage 2.2: migration from travel-album (branch `trips-2`, from `trips-all`): closed 2026-10-31
 
 The script is `python -m atlas.to_gallery` in travel-album, branch `to-gallery` (`b895076` code, `26bc77f` docs), not pushed. Checked on a dev Gallery: the fork's `ghcr.io/gudim/gallery-server:v5.9.1` with stock `gallery-ml:v5.9.0`, travel-album's server dump of 2026-10-03 and the store of albums 1 and 2. Counts were read back from Gallery's API, not from the script's report.
