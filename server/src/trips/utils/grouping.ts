@@ -1,4 +1,4 @@
-import { TripStopRole } from 'src/trips/enum.js';
+import { TripKind, TripStopRole } from 'src/trips/enum.js';
 import { type LatLng, haversineM } from 'src/trips/utils/geo.js';
 
 // How a trip's assets fall into stops, ported from travel-album's atlas/geo/{cluster,interp}.py and
@@ -105,6 +105,21 @@ export const inferPlacePoints = (shots: Shot[]): Array<LatLng | null> => {
         null,
     );
   });
+};
+
+// The point of every shot as the trip's kind infers it; a Plain trip has no map, so no shot has a point.
+export const inferPoints = (kind: TripKind, shots: Shot[], start: LatLng | null = null): Array<LatLng | null> => {
+  switch (kind) {
+    case TripKind.Route: {
+      return inferRoutePoints(shots, start);
+    }
+    case TripKind.Places: {
+      return inferPlacePoints(shots);
+    }
+    case TripKind.Plain: {
+      return shots.map(() => null);
+    }
+  }
 };
 
 // An existing place of a Places trip; `isFixed` when the owner moved its pin, so its centre stays.
