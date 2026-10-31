@@ -40,6 +40,7 @@ describe('TripImportDto', () => {
       kind: 'plain',
       isFavorites: false,
       isShowcased: false,
+      language: null,
       places: [],
       stops: [],
       assets: [],
@@ -146,22 +147,40 @@ describe('TripImportDto', () => {
   });
 });
 
-describe('TripCreateDto', () => {
-  const albumId = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
-  const start = { latitude: 54.68, longitude: 25.28, title: ' ' };
-  const createIssues = (dto: object) => {
-    const result = TripCreateDto.schema.safeParse({ albumId, ...dto });
-    return result.success ? [] : result.error.issues.map(({ message }) => message);
-  };
+const albumId = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
+const createdLanguage = (value: string) =>
+  TripCreateDto.schema.parse({ albumId, kind: 'route', language: value }).language;
+const createIssues = (dto: object) => {
+  const result = TripCreateDto.schema.safeParse({ albumId, ...dto });
+  return result.success ? [] : result.error.issues.map(({ message }) => message);
+};
 
-  it('takes a route with a start and a finish at it, and names a blank title by coordinates later', () => {
+describe('TripCreateDto', () => {
+  const start = { latitude: 54.68, longitude: 25.28, title: ' ' };
+
+  it('takes a route with a start and a finish at it, and leaves a blank title to naming', () => {
     expect(TripCreateDto.schema.parse({ albumId, kind: 'route', start, isFinishAtStart: true })).toEqual({
       albumId,
       kind: 'route',
       start: { latitude: 54.68, longitude: 25.28, title: null },
       finish: null,
       isFinishAtStart: true,
+      language: null,
     });
+  });
+
+  it('takes the client’s locale as the naming language, as Nominatim’s accept-language takes it', () => {
+    expect(createdLanguage('de')).toBe('de');
+    expect(createdLanguage(' DE ')).toBe('de');
+    expect(createdLanguage('pt_BR')).toBe('pt-BR');
+    expect(createdLanguage('zh_hans')).toBe('zh-Hans');
+    expect(TripImportDto.schema.parse({ kind: 'plain', language: 'sr_Latn' }).language).toBe('sr-Latn');
+  });
+
+  it('refuses a language that is not a language tag', () => {
+    for (const language of ['', 'deutsch', 'de;en', 'de-', 'd']) {
+      expect(createIssues({ kind: 'route', language })).toEqual([`Not a language tag: ${language}`]);
+    }
   });
 
   it('gives a start and a finish only to a route', () => {

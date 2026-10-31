@@ -792,14 +792,14 @@ export class TripRepository {
     });
   }
 
-  /** The trip's kind and its stops with a point, in trip order, for naming; nothing for a trip in the trash. */
+  /** The trip's kind, language and stops with a point, in trip order, for naming; nothing for a trip in the trash. */
   @GenerateSql({ params: [DummyValue.UUID] })
   async getStopsToName(albumId: string) {
     const id = asUuid(albumId);
     const trip = await this.db
       .selectFrom('trip')
       .innerJoin('album', 'album.id', 'trip.albumId')
-      .select('trip.kind')
+      .select(['trip.kind', 'trip.language'])
       .where('trip.albumId', '=', id)
       .where('album.deletedAt', 'is', null)
       .executeTakeFirst();
@@ -825,7 +825,7 @@ export class TripRepository {
       .orderBy(stopOrder('trip_stop'))
       .$narrowType<{ latitude: NotNull; longitude: NotNull }>()
       .execute();
-    return { kind: trip.kind, stops };
+    return { ...trip, stops };
   }
 
   /**

@@ -4381,6 +4381,8 @@ export type TripCreateDto = {
     /** The route ends where it began */
     isFinishAtStart?: boolean;
     kind: TripKind;
+    /** Language the trip’s stops are named in; null names them in the server’s default */
+    language?: string | null;
     /** Where a route begins */
     start?: (TripEndDto) | null;
 };
@@ -4509,6 +4511,8 @@ export type TripResponseDto = {
     /** Marked for the owner’s showcase */
     isShowcased: boolean;
     kind: TripKind;
+    /** Language the trip’s stops are named in; null is the server’s default */
+    language: string | null;
     legs: TripLegDto[];
     /** Like counts of liked assets */
     likes: TripLikeDto[];
@@ -4536,6 +4540,8 @@ export type TripImportDto = {
     /** Marked for the owner’s showcase */
     isShowcased?: boolean;
     kind: TripKind;
+    /** Language the trip’s stops are named in; null names them in the server’s default */
+    language?: string | null;
     legs?: {
         /** Train arrival latitude */
         arrivalLatitude: number | null;

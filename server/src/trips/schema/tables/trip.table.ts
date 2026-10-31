@@ -34,6 +34,11 @@ export class TripTable {
   @Column({ type: 'boolean', default: false })
   isFeatured!: Generated<boolean>;
 
+  // The language its stops are named in (trips PLAN D13): the owner's locale when the trip was made. Null: the
+  // instance's first naming language.
+  @Column({ type: 'text', nullable: true })
+  language!: string | null;
+
   // Bumped by every change a guest can see, so viewers can cache by it.
   @Column({ type: 'integer', default: 0 })
   contentVersion!: Generated<number>;

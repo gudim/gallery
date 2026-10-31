@@ -179,7 +179,14 @@ export class TripService {
     const placeIds = new Map(dto.places.map(({ key }) => [key, randomUUID()]));
     const stopIds = new Map(dto.stops.map(({ key }) => [key, randomUUID()]));
     const result = await this.tripRepository.create(auth.user.id, {
-      trip: { albumId, kind: dto.kind, isFavorites: dto.isFavorites, isShowcased: dto.isShowcased, contentVersion: 1 },
+      trip: {
+        albumId,
+        kind: dto.kind,
+        isFavorites: dto.isFavorites,
+        isShowcased: dto.isShowcased,
+        language: dto.language,
+        contentVersion: 1,
+      },
       places: dto.places.map((place) => ({ ...place, id: placeIds.get(place.key)!, albumId })),
       stops: dto.stops.map(({ key, placeKey, ...stop }) => ({
         ...stop,
@@ -220,7 +227,7 @@ export class TripService {
    * §2.5). A route also gets its start and finish and pending legs between consecutive stops. Owner only.
    */
   async create(auth: AuthDto, dto: TripCreateDto): Promise<TripResponseDto> {
-    const { albumId, kind, start, finish, isFinishAtStart } = dto;
+    const { albumId, kind, start, finish, isFinishAtStart, language } = dto;
     await this.requireOwner(auth, albumId, 'Only the album owner can make a trip');
     const assets = await this.tripRepository.getLayoutAssets(albumId);
     const layout = layOutTrip(kind, assets, start);
@@ -242,7 +249,7 @@ export class TripService {
         ? routeLegs(route).map(({ from, to, mode }) => ({ albumId, fromStopId: from.id, toStopId: to.id, mode }))
         : [];
     const result = await this.tripRepository.create(auth.user.id, {
-      trip: { albumId, kind, contentVersion: 1 },
+      trip: { albumId, kind, language, contentVersion: 1 },
       places: [],
       stops: route,
       assets: layout.assets.map(({ assetId, stopIndex, point }) => ({
@@ -523,6 +530,7 @@ const mapTrip = (
   isFavorites: trip.isFavorites,
   isShowcased: trip.isShowcased,
   isFeatured: trip.isFeatured,
+  language: trip.language,
   contentVersion: trip.contentVersion,
   places: places.map((row) => withoutAlbumId(row)),
   stops: stops

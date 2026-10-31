@@ -9,6 +9,7 @@ import {
   TripStationSide,
   TripStopRole,
 } from 'src/trips/enum.js';
+import { normalizeTripLanguage } from 'src/trips/utils/naming.js';
 import { latitudeSchema, longitudeSchema } from 'src/validation.js';
 
 // The trip document (trips PLAN §2.1): what an import takes and, with server ids in place of document keys, what a
@@ -23,6 +24,22 @@ const TripPointSourceSchema = z
 const TripLegModeSchema = z.enum(TripLegMode).describe('Leg mode').meta({ id: 'TripLegMode' });
 const TripLegStatusSchema = z.enum(TripLegStatus).describe('Leg status').meta({ id: 'TripLegStatus' });
 const TripOverlayKindSchema = z.enum(TripOverlayKind).describe('Overlay kind').meta({ id: 'TripOverlayKind' });
+
+// A language tag such as `de`, `pt-BR` or Gallery's `zh_Hans`, normalised as Nominatim's `accept-language` takes it.
+const TripLanguageSchema = z
+  .string()
+  .transform((value, ctx) => {
+    const language = normalizeTripLanguage(value);
+    if (language === null) {
+      ctx.addIssue({ code: 'custom', message: `Not a language tag: ${value}` });
+      return z.NEVER;
+    }
+    return language;
+  })
+  .nullable()
+  .default(null)
+  .describe('Language the trip’s stops are named in; null names them in the server’s default')
+  .meta({ example: 'de' });
 
 const text = (description: string) => z.string().nullable().describe(description);
 const double = (description: string) => z.number().meta({ format: 'double' }).nullable().describe(description);
@@ -105,6 +122,7 @@ const TripImportSchema = z
     kind: TripKindSchema,
     isFavorites: z.boolean().default(false).describe('The owner’s Favorites trip; Places only'),
     isShowcased: z.boolean().default(false).describe('Marked for the owner’s showcase'),
+    language: TripLanguageSchema,
     places: z.array(z.object(placeFields)).default([]),
     stops: z
       .array(
@@ -223,6 +241,7 @@ const TripResponseSchema = z
     isFavorites: z.boolean().describe('The owner’s Favorites trip'),
     isShowcased: z.boolean().describe('Marked for the owner’s showcase'),
     isFeatured: z.boolean().describe('Picked by an admin for the home page'),
+    language: z.string().nullable().describe('Language the trip’s stops are named in; null is the server’s default'),
     contentVersion: z.int32().describe('Bumped by every change a guest can see'),
     places: z.array(z.object({ id: z.string().describe('Place ID'), ...placeFields }).meta({ id: 'TripPlaceDto' })),
     stops: z
@@ -299,6 +318,7 @@ const TripCreateSchema = z
     start: TripEndSchema.nullable().default(null).describe('Where a route begins'),
     finish: TripEndSchema.nullable().default(null).describe('Where a route ends'),
     isFinishAtStart: z.boolean().default(false).describe('The route ends where it began'),
+    language: TripLanguageSchema,
   })
   .superRefine((trip, ctx) => {
     const issue = (message: string) => ctx.addIssue({ code: 'custom', message });

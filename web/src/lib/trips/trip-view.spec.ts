@@ -64,6 +64,7 @@ const trip = (): TripResponseDto => ({
   isFavorites: false,
   isShowcased: false,
   isFeatured: false,
+  language: null,
   contentVersion: 1,
   places: [{ id: 'p', key: 'p', title: null, article: 'An article', articleSource: null }],
   stops: [

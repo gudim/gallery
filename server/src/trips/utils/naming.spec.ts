@@ -7,9 +7,11 @@ import {
   isUntitled,
   namesByDistrict,
   nominatimReverseRequest,
+  normalizeTripLanguage,
   parseNominatimReverse,
   resolveTripNamingLanguages,
   stopTitle,
+  tripNamingLanguages,
 } from 'src/trips/utils/naming.js';
 
 describe('resolveTripNamingLanguages', () => {
@@ -20,12 +22,38 @@ describe('resolveTripNamingLanguages', () => {
 
   it('takes the languages from TRIPS_GEO_LANGS, the first naming', () => {
     expect(resolveTripNamingLanguages({ TRIPS_GEO_LANGS: 'en, de,en' })).toEqual(['en', 'de']);
-    expect(resolveTripNamingLanguages({ TRIPS_GEO_LANGS: 'zh-Hans' })).toEqual(['zh-Hans']);
+    expect(resolveTripNamingLanguages({ TRIPS_GEO_LANGS: 'zh_hans' })).toEqual(['zh-Hans']);
   });
 
   it('refuses something that is not a list of language codes', () => {
     expect(() => resolveTripNamingLanguages({ TRIPS_GEO_LANGS: ',' })).toThrow('TRIPS_GEO_LANGS');
     expect(() => resolveTripNamingLanguages({ TRIPS_GEO_LANGS: 'ru;en' })).toThrow('TRIPS_GEO_LANGS');
+  });
+});
+
+describe('normalizeTripLanguage', () => {
+  it('writes a tag as accept-language takes it', () => {
+    expect(normalizeTripLanguage('RU')).toBe('ru');
+    expect(normalizeTripLanguage('en_us')).toBe('en-US');
+    expect(normalizeTripLanguage('zh-hant-tw')).toBe('zh-Hant-TW');
+    expect(normalizeTripLanguage('es-419')).toBe('es-419');
+  });
+
+  it('answers null for something else', () => {
+    expect(normalizeTripLanguage('english')).toBeNull();
+    expect(normalizeTripLanguage('ru,en')).toBeNull();
+    expect(normalizeTripLanguage('')).toBeNull();
+  });
+});
+
+describe('tripNamingLanguages', () => {
+  it('names in the trip’s language and asks for every instance language but it', () => {
+    expect(tripNamingLanguages('de', ['ru', 'en'])).toEqual({ language: 'de', otherLanguages: ['ru', 'en'] });
+    expect(tripNamingLanguages('en', ['ru', 'en'])).toEqual({ language: 'en', otherLanguages: ['ru'] });
+  });
+
+  it('names a trip without a language in the instance’s first', () => {
+    expect(tripNamingLanguages(null, ['ru', 'en'])).toEqual({ language: 'ru', otherLanguages: ['en'] });
   });
 });
 
