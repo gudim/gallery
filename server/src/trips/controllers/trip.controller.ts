@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Duration } from 'luxon';
 import { randomBytes } from 'node:crypto';
@@ -8,7 +8,13 @@ import type { LoginDetails } from 'src/services/auth.service.js';
 import { Endpoint, HistoryBuilder } from 'src/decorators.js';
 import { Permission } from 'src/enum.js';
 import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.js';
-import { TripImportDto, TripLikeDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
+import {
+  TripImportDto,
+  TripLikeDto,
+  TripResponseDto,
+  TripStopParamDto,
+  TripStopUpdateDto,
+} from 'src/trips/dtos/trip.dto.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { UUIDAssetIDParamDto, UUIDParamDto } from 'src/validation.js';
 
@@ -97,5 +103,21 @@ export class TripController {
     @Body() dto: TripImportDto,
   ): Promise<TripResponseDto> {
     return this.service.import(auth, id, dto);
+  }
+
+  @Patch(':id/stops/:stopId')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Update a trip stop',
+    description:
+      'Sets a stop’s title, story or place. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared. The place must belong to the same trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  updateStop(
+    @Auth() auth: AuthDto,
+    @Param() { id, stopId }: TripStopParamDto,
+    @Body() dto: TripStopUpdateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.updateStop(auth, id, stopId, dto);
   }
 }

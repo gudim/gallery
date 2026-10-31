@@ -25451,6 +25451,83 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/stops/{stopId}": {
+      "patch": {
+        "description": "Sets a stop’s title, story or place. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared. The place must belong to the same trip. Returns the whole trip.",
+        "operationId": "updateStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripStopUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Update a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/user-groups": {
       "get": {
         "description": "Retrieve all user groups created by the current user.",
@@ -47586,6 +47663,28 @@
           "finish"
         ],
         "type": "string"
+      },
+      "TripStopUpdateDto": {
+        "properties": {
+          "placeId": {
+            "description": "Place of the stop, in the same trip; null for none",
+            "format": "uuid",
+            "nullable": true,
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "story": {
+            "description": "Stop story; blank clears it",
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "description": "Stop title; blank clears it",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
       },
       "UpdateAlbumDto": {
         "properties": {

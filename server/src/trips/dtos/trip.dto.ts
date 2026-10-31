@@ -265,6 +265,31 @@ const TripResponseSchema = z
   })
   .meta({ id: 'TripResponseDto' });
 
+// An editor's text: blank clears it, so naming fills the title again (travel-album `editor.update_stop`).
+const editedText = (description: string) =>
+  z
+    .string()
+    .nullable()
+    .transform((value) => value?.trim() || null)
+    .optional()
+    .describe(description);
+
+const TripStopUpdateSchema = z
+  .object({
+    title: editedText('Stop title; blank clears it'),
+    story: editedText('Stop story; blank clears it'),
+    placeId: z.uuidv4().nullable().optional().describe('Place of the stop, in the same trip; null for none'),
+  })
+  .refine((dto) => Object.values(dto).some((value) => value !== undefined), { error: 'Nothing to change' })
+  .meta({ id: 'TripStopUpdateDto' });
+
+const TripStopParamSchema = z.object({
+  id: z.uuidv4(),
+  stopId: z.uuidv4(),
+});
+
 export class TripImportDto extends createZodDto(TripImportSchema) {}
+export class TripStopUpdateDto extends createZodDto(TripStopUpdateSchema) {}
+export class TripStopParamDto extends createZodDto(TripStopParamSchema) {}
 export class TripResponseDto extends createZodDto(TripResponseSchema) {}
 export class TripLikeDto extends createZodDto(TripLikeSchema) {}

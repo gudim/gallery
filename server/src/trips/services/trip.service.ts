@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
 import { Permission } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
-import { TripImportDto, TripLikeDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
-import { TripCreateResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
+import { TripImportDto, TripLikeDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
+import { TripCreateResult, TripEditResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
@@ -112,6 +112,38 @@ export class TripService {
       case TripCreateResult.Created: {
         return this.read(auth, albumId);
       }
+    }
+  }
+
+  /** Sets a stop's title, story or place. The album's owner and editors edit (trips PLAN D7). */
+  async updateStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopUpdateDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    switch (await this.tripRepository.updateStop(albumId, stopId, dto)) {
+      case TripEditResult.TripMissing: {
+        throw new NotFoundException('Trip not found');
+      }
+      case TripEditResult.StopMissing: {
+        throw new NotFoundException('Stop not found in the trip');
+      }
+      case TripEditResult.PlaceForeign: {
+        throw new BadRequestException('The place is not in the trip');
+      }
+      case TripEditResult.Updated: {
+        return this.read(auth, albumId);
+      }
+    }
+  }
+
+  // A reader who cannot edit (a viewer, a shared link) gets 403; anyone else 404, as for a missing album.
+  private async requireEdit(auth: AuthDto, albumId: string) {
+    await this.requireRead(auth, albumId);
+    const allowed = await checkAccess(this.accessRepository, {
+      auth,
+      permission: Permission.AlbumUpdate,
+      ids: [albumId],
+    });
+    if (!allowed.has(albumId)) {
+      throw new ForbiddenException('Only the album owner and editors edit the trip');
     }
   }
 

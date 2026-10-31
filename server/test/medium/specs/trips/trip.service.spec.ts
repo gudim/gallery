@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AlbumUserRole, SharedLinkType } from 'src/enum.js';
@@ -7,7 +7,7 @@ import { AlbumRepository } from 'src/repositories/album.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
-import { TripImportDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
+import { TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { newMediumService } from 'test/medium.factory.js';
@@ -200,6 +200,8 @@ const setup = async () => {
   return { ctx, sut, owner, album, assetIds, document, importTrip };
 };
 
+const changes = (dto: Record<string, unknown>) => TripStopUpdateDto.schema.parse(dto);
+
 describe(TripService.name, () => {
   describe('import', () => {
     it('round-trips a trip document through the read API', async () => {
@@ -262,6 +264,119 @@ describe(TripService.name, () => {
       await expect(sut.import(factory.auth({ user: owner }), second.id, favorites)).rejects.toBeInstanceOf(
         ConflictException,
       );
+    });
+  });
+
+  describe('edit a stop', () => {
+    it('lets the owner and an editor set texts and the place, written as manual', async () => {
+      const { ctx, sut, owner, album, importTrip } = await setup();
+      const trip = await importTrip();
+      const { user: editor } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: editor.id, role: AlbumUserRole.Editor });
+      const [, oldTown, road] = trip.stops;
+
+      await sut.updateStop(factory.auth({ user: owner }), album.id, road.id, changes({ title: ' Road ' }));
+      const edited = await sut.updateStop(
+        factory.auth({ user: editor }),
+        album.id,
+        road.id,
+        changes({ story: 'Rain.', placeId: trip.places[0].id }),
+      );
+
+      expect(edited.contentVersion).toBe(3);
+      expect(edited.stops[2]).toMatchObject({
+        title: 'Road',
+        titleSource: 'manual',
+        story: 'Rain.',
+        storySource: 'manual',
+        placeId: trip.places[0].id,
+      });
+      expect(edited.stops[1]).toEqual(oldTown);
+    });
+
+    it('clears a blank text with its source, and the place with null', async () => {
+      const { sut, owner, album, importTrip } = await setup();
+      const trip = await importTrip();
+      const oldTown = trip.stops[1];
+
+      const edited = await sut.updateStop(
+        factory.auth({ user: owner }),
+        album.id,
+        oldTown.id,
+        changes({ title: '  ', story: null, placeId: null }),
+      );
+
+      expect(edited.stops[1]).toMatchObject({
+        title: null,
+        titleSource: null,
+        story: null,
+        storySource: null,
+        placeId: null,
+      });
+    });
+
+    it('gives the start’s title to a finish at the start', async () => {
+      const { sut, owner, album, importTrip } = await setup();
+      const trip = await importTrip();
+
+      const edited = await sut.updateStop(
+        factory.auth({ user: owner }),
+        album.id,
+        trip.stops[0].id,
+        changes({ title: 'Home' }),
+      );
+
+      expect(edited.stops.at(-1)).toMatchObject({ role: 'finish', title: 'Home', titleSource: 'manual' });
+    });
+
+    it('answers 403 to a viewer and the album shared link, 404 to anyone else', async () => {
+      const { ctx, sut, owner, album, importTrip } = await setup();
+      const trip = await importTrip();
+      const { user: viewer } = await ctx.newUser();
+      const { user: stranger } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: viewer.id, role: AlbumUserRole.Viewer });
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: album.id,
+      });
+      const update = (auth: ReturnType<typeof factory.auth>) =>
+        sut.updateStop(auth, album.id, trip.stops[1].id, changes({ title: 'X' }));
+
+      await expect(update(factory.auth({ user: viewer }))).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(update(guest(sharedLink.id, owner))).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(update(factory.auth({ user: stranger }))).rejects.toBeInstanceOf(NotFoundException);
+      await expect(sut.get(factory.auth({ user: owner }), album.id)).resolves.toMatchObject({ contentVersion: 1 });
+    });
+
+    it('refuses a stop or a place of another trip', async () => {
+      const { ctx, sut, owner, album, assetIds, document, importTrip } = await setup();
+      const trip = await importTrip();
+      const { album: other } = await ctx.newAlbum({ ownerId: owner.id }, assetIds);
+      const otherTrip = await sut.import(factory.auth({ user: owner }), other.id, TripImportDto.schema.parse(document));
+      const auth = factory.auth({ user: owner });
+
+      await expect(
+        sut.updateStop(auth, album.id, otherTrip.stops[1].id, changes({ title: 'X' })),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        sut.updateStop(auth, album.id, trip.stops[1].id, changes({ placeId: otherTrip.places[0].id })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(sut.get(auth, album.id)).resolves.toEqual(trip);
+    });
+
+    it('answers 404 for a trip whose album is in the trash', async () => {
+      const { sut, owner, album, importTrip } = await setup();
+      const trip = await importTrip();
+      await db.updateTable('album').set({ deletedAt: new Date() }).where('id', '=', album.id).execute();
+
+      await expect(
+        sut.updateStop(factory.auth({ user: owner }), album.id, trip.stops[1].id, changes({ title: 'X' })),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('refuses an update with nothing to change', () => {
+      expect(TripStopUpdateDto.schema.safeParse({}).success).toBe(false);
     });
   });
 
