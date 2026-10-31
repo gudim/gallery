@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import AlbumMap from '$lib/components/album-page/AlbumMap.svelte';
   import type { FilterState } from '$lib/components/filter-panel/filter-panel';
   import { authManager } from '$lib/managers/auth-manager.svelte';
+  import { isAlbumOwner } from '$lib/services/album.service';
+  import TripCreateModal from '$lib/trips/components/TripCreateModal.svelte';
   import { getTrip, type AlbumResponseDto } from '@immich/sdk';
-  import { IconButton } from '@immich/ui';
-  import { mdiMapOutline } from '@mdi/js';
+  import { IconButton, modalManager } from '@immich/ui';
+  import { mdiMapMarkerPath, mdiMapOutline } from '@mdi/js';
   import { t } from 'svelte-i18n';
 
-  // The album's map button (trips PLAN §2.3): an album with a trip opens the trip; any other album gets Gallery's map.
+  // The album's map button (trips PLAN §2.3): an album with a trip opens the trip; any other album gets Gallery's map,
+  // and its owner a button that makes a trip of it (§2.5).
 
   interface Props {
     album: AlbumResponseDto;
@@ -38,6 +42,14 @@
   const tripUrl = $derived(
     authManager.isSharedLink ? `${page.url.pathname.replace(/\/photos\/[^/]+$/, '')}/trip` : `/trips/${album.id}`,
   );
+
+  const canCreate = $derived(!authManager.isSharedLink && album.assetCount > 0 && isAlbumOwner(album));
+
+  const onCreate = async () => {
+    if (await modalManager.show(TripCreateModal, { albumId: album.id })) {
+      await goto(`/trips/${album.id}`);
+    }
+  };
 </script>
 
 {#if hasTrip}
@@ -50,6 +62,20 @@
     icon={mdiMapOutline}
     data-testid="trip-map-button"
   />
-{:else if hasTrip === false && showAlbumMap}
-  <AlbumMap {album} {filters} />
+{:else if hasTrip === false}
+  {#if showAlbumMap}
+    <AlbumMap {album} {filters} />
+  {/if}
+  {#if canCreate}
+    <IconButton
+      shape="round"
+      variant="ghost"
+      color="secondary"
+      aria-label={$t('trips_create_title')}
+      title={$t('trips_create_title')}
+      icon={mdiMapMarkerPath}
+      onclick={onCreate}
+      data-testid="trip-create-button"
+    />
+  {/if}
 {/if}

@@ -11400,7 +11400,7 @@ export function setFinish({ id, tripFinishUpdateDto }: {
 /**
  * Name a point for a trip
  */
-export function reversePlace({ id, latitude, longitude }: {
+export function reverseTripPlace({ id, latitude, longitude }: {
     id: string;
     latitude: number;
     longitude: number;
@@ -11418,7 +11418,7 @@ export function reversePlace({ id, latitude, longitude }: {
 /**
  * Search places for a trip
  */
-export function searchPlaces2({ id, query }: {
+export function searchTripPlaces({ id, query }: {
     id: string;
     query: string;
 }, opts?: Oazapfts.RequestOpts) {

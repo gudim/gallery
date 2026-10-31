@@ -375,7 +375,7 @@ export class TripController {
       'Finds up to five places by address or name through Nominatim, named in the trip’s language, for picking a point. Responds 502 when the search does not answer. The album owner and editors only.',
     history: new HistoryBuilder().added('v1').beta('v1'),
   })
-  searchPlaces(
+  searchTripPlaces(
     @Auth() auth: AuthDto,
     @Param() { id }: UUIDParamDto,
     @Query() dto: TripGeoSearchDto,
@@ -391,7 +391,7 @@ export class TripController {
       'Names a point on the map through Nominatim in the trip’s language: one place, or none where Nominatim knows none. Responds 502 when the service does not answer. The album owner and editors only.',
     history: new HistoryBuilder().added('v1').beta('v1'),
   })
-  reversePlace(
+  reverseTripPlace(
     @Auth() auth: AuthDto,
     @Param() { id }: UUIDParamDto,
     @Query() dto: TripGeoReverseQueryDto,

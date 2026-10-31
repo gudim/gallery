@@ -1,6 +1,6 @@
 import { AssetOrder, getTrip, isHttpError, searchAssets, type AssetResponseDto } from '@immich/sdk';
 import { authManager } from '$lib/managers/auth-manager.svelte';
-import { buildTripView, type TripView } from '$lib/trips/trip-view';
+import { TripEditor } from '$lib/trips/trip-editor.svelte';
 
 const PAGE_SIZE = 1000;
 
@@ -19,7 +19,7 @@ const loadAlbumAssets = async (albumId: string) => {
 };
 
 /** The album's trip, ready for the viewer, or `null` when the album has none. */
-export const loadTripView = async (albumId: string): Promise<TripView | null> => {
+export const loadTrip = async (albumId: string): Promise<TripEditor | null> => {
   let trip;
   try {
     trip = await getTrip({ id: albumId, ...authManager.params });
@@ -30,5 +30,5 @@ export const loadTripView = async (albumId: string): Promise<TripView | null> =>
     throw error;
   }
   // Only a trip album pays for loading every asset.
-  return buildTripView(trip, await loadAlbumAssets(albumId));
+  return new TripEditor(trip, await loadAlbumAssets(albumId));
 };

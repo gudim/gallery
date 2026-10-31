@@ -25744,7 +25744,7 @@
     "/trips/{id}/geo/reverse": {
       "get": {
         "description": "Names a point on the map through Nominatim in the trip’s language: one place, or none where Nominatim knows none. Responds 502 when the service does not answer. The album owner and editors only.",
-        "operationId": "reversePlace",
+        "operationId": "reverseTripPlace",
         "parameters": [
           {
             "name": "id",
@@ -25819,7 +25819,7 @@
     "/trips/{id}/geo/search": {
       "get": {
         "description": "Finds up to five places by address or name through Nominatim, named in the trip’s language, for picking a point. Responds 502 when the search does not answer. The album owner and editors only.",
-        "operationId": "searchPlaces",
+        "operationId": "searchTripPlaces",
         "parameters": [
           {
             "name": "id",
