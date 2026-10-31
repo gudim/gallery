@@ -1059,7 +1059,7 @@ const isFavoritesTrip = async (trx: Transaction<DB>, albumId: string) => {
 
 // Serialises the writes that create an owner's trips: imports, and the Favorites trip made by a star.
 export const lockOwner = (trx: Transaction<DB>, ownerId: string) =>
-  sql`SELECT pg_advisory_xact_lock(hashtext(${'trip-import:' + ownerId}))`.execute(trx);
+  sql`SELECT pg_advisory_xact_lock(hashtext(${'trip-owner:' + ownerId}))`.execute(trx);
 
 /** The album of the user's Favorites trip, outside the trash (trips PLAN D15: one per album owner). */
 export const getFavoritesAlbumId = async (trx: Transaction<DB>, ownerId: string) => {

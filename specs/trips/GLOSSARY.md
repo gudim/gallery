@@ -18,7 +18,7 @@ How a trip arranges its stops. **Route**: stops follow each other in time, joine
 ## Favorites trip
 
 A user's Places trip whose assets are exactly the assets that user starred as favorites.
-Starring an asset anywhere adds it; unstarring removes it, and hiding it in the trip unstars it.
+Starring an asset the user could put in an album themselves (their own, or a partner's) adds it; unstarring removes it, and hiding it in the trip unstars it.
 
 ## Showcase
 

@@ -1061,7 +1061,8 @@ export enum JobName {
   AssetClassifyQueueAll = 'AssetClassifyQueueAll',
   AssetClassify = 'AssetClassify',
 
-  // Trips: filing new album assets into stops (trips PLAN D12) and routing legs (PLAN §2.5)
+  // Trips: filing new album assets into stops (trips PLAN D12), routing legs and naming stops (PLAN §2.5), and
+  // mirroring stars into the Favorites trip (D15)
   TripFile = 'TripFile',
   TripFileSweep = 'TripFileSweep',
   TripRouteLegs = 'TripRouteLegs',
