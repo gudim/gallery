@@ -1,11 +1,11 @@
 # Trips: progress
 
-## Stage 2.3: guest trip viewer (branch `trips-3`, from `trips-all`): open
+## Stage 2.3: guest trip viewer (branch `trips-3`, from `trips-all`): closed 2026-10-31
 
 Revised by the owner on 2026-10-31 (PLAN §2.3): the trip is built into Gallery's map and design. The album's map button opens the trip page: Gallery's map with the route and the stops as Gallery's markers, a panel of stops with the legs between them, a stop's assets in Gallery's timeline; on a phone also the road. Likes: `PUT`/`DELETE /trips/{id}/likes/{assetId}`. Checked against the dev Gallery of stage 2.2 running the server built from `trips-3` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`.
 
 - [x] On migrated `birzhay-2026`, the reference data match, in both themes: 10 stop markers (8 stops with assets as Gallery markers, the start and finish as circles), 9 lines, "79 кадров · 3 видео · 8 остановок · 1 день · 487 км", "8 августа — 8 августа 2026 · 1 день в дороге", the same ten stops in order, 1 day; the road has 8 stations and one day badge.
-- [ ] The owner has seen 390 and 1440 px screenshots, in both themes, next to Gallery's own map and album pages.
+- [x] The owner has seen 390 and 1440 px screenshots, in both themes, next to Gallery's own map and album pages, and approved them on 2026-10-31 after the stop panel and the road took the type of Gallery's filter panel (no capitals or italics, `hover:bg-subtle`).
 
 Also checked: a guest gets the map button on the shared album and the trip through `/s/birzhay-2026/trip`; a stop opens its assets in the timeline and the lightbox; a like counts once per browser; Places and Plain trips (made on the dev Gallery from birzhay's assets) render. Web unit suite green (415 files, 6690 tests).
 
