@@ -1514,6 +1514,8 @@
   "trips_empty_stop": "En esta parada no hay fotos — marca la ruta.",
   "trips_finish": "Llegada",
   "trips_finish_at_start": "Llegada en la salida",
+  "trips_hints_like_none": "No se parecen a ningún lugar",
+  "trips_hints_title": "Se parecen a fotos de estos lugares",
   "trips_kind": "Tipo de viaje",
   "trips_kind_places": "Lugares",
   "trips_kind_places_hint": "Cada parada es un lugar; las visitas de años distintos caen en el mismo lugar.",

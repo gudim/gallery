@@ -1517,6 +1517,8 @@
   "trips_empty_stop": "Na tym przystanku nie ma zdjęć — oznacza trasę.",
   "trips_finish": "Meta",
   "trips_finish_at_start": "Meta na starcie",
+  "trips_hints_like_none": "Niepodobne do żadnego miejsca",
+  "trips_hints_title": "Podobne do zdjęć z tych miejsc",
   "trips_kind": "Rodzaj podróży",
   "trips_kind_places": "Miejsca",
   "trips_kind_places_hint": "Przystanek to miejsce; wizyty z różnych lat trafiają do tego samego miejsca.",

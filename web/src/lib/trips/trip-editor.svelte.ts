@@ -22,12 +22,13 @@ export class TripEditor {
   view = $state<TripView>();
   isBusy = $state(false);
 
-  #assets: AssetResponseDto[];
+  /** The album's assets, as loaded */
+  readonly assets: AssetResponseDto[];
   #timer: ReturnType<typeof setTimeout> | undefined;
   #namingPolls = NAMING_POLLS;
 
   constructor(trip: TripResponseDto, assets: AssetResponseDto[]) {
-    this.#assets = assets;
+    this.assets = assets;
     this.#show(trip);
   }
 
@@ -56,7 +57,7 @@ export class TripEditor {
 
   #show(trip: TripResponseDto) {
     this.trip = trip;
-    this.view = buildTripView(trip, this.#assets);
+    this.view = buildTripView(trip, this.assets);
     this.#schedule();
   }
 

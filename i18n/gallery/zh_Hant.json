@@ -1529,6 +1529,8 @@
   "trips_empty_stop": "這一站沒有相片 — 它標記著路線。",
   "trips_finish": "終點",
   "trips_finish_at_start": "終點即起點",
+  "trips_hints_like_none": "與任何地點都不相似",
+  "trips_hints_title": "與這些地點的相片相似",
   "trips_kind": "旅行類型",
   "trips_kind_places": "地點",
   "trips_kind_places_hint": "每一站是一個地點；不同年份的造訪歸入同一地點。",

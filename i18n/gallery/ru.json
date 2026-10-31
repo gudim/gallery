@@ -1514,6 +1514,8 @@
   "trips_empty_stop": "На этой остановке кадров нет — она отмечена по маршруту.",
   "trips_finish": "Финиш",
   "trips_finish_at_start": "Финиш на старте",
+  "trips_hints_like_none": "Не похожи ни на одно место",
+  "trips_hints_title": "Похожи на кадры этих мест",
   "trips_kind": "Тип поездки",
   "trips_kind_places": "Места",
   "trips_kind_places_hint": "Остановка — это место; визиты разных лет попадают в одно место.",
