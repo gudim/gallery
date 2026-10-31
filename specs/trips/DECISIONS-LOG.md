@@ -16,3 +16,12 @@ One line per choice the plan does not dictate. Newest last. `(owner)` marks a ch
 - 2026-10-31 `ghcr.io/gudim/gallery-server` is public (anonymous pull works), so the home server pulls without a registry login.
 - 2026-10-31 (owner) "Test suites are green" means no failure that clean Gallery at the base tag does not also have, run back to back on the same machine; a test that differs must pass when run alone on both.
 - 2026-10-31 (owner) Accepted: the trips registry is one spread in each of upstream's three registries, not a single hook line.
+- 2026-10-31 `trips-1` grows from `trips-0` as it is (PLAN §2: `trips-N` grows from `trips-(N−1)` until that is merged); `v5.9.0` is still the newest Gallery tag, so there is nothing to rebase onto.
+- 2026-10-31 (owner) A stop's time window is local wall-clock time, stored the way Immich stores `asset.localDateTime` (wall clock as if UTC), so filing and plain day sections compare like with like.
+- 2026-10-31 (owner) An asset in the Immich trash keeps its stop but is left out of every trip read; restored, it is back in its stop. Removing it from the album or deleting it for good drops its filing through a cascade on `album_asset`.
+- 2026-10-31 (owner) Likes are one row per like (trip, asset, and a user or a browser key), unique per liker, as in travel-album. An imported count N becomes N rows with synthetic browser keys.
+- 2026-10-31 (owner) The trip model carries the start and finish stops (П20), the stop `transit` flag, and overlays (trail lines, country mask; П2, П3). Hidden stops (П5) are not carried.
+- 2026-10-31 (owner) The Favorites trip is a Places trip with an `isFavorites` flag, one per album owner, checked by the service. Mirroring stars into its album comes in §2.5, next to auto-filing.
+- 2026-10-31 Trip tables are declared with `@immich/sql-tools` decorators like Gallery's, so the server's startup schema-drift check covers them. Hooks: `...tripTables` and `TripsDB` in `src/schema/index.ts` beside Gallery's, and the trip tables join Gallery's in the FK registry spec.
+- 2026-10-31 Trip services do not extend `BaseService`: they take `AccessRepository` and their own repositories in the constructor, so no upstream or Gallery constructor grows. Album access goes through `checkAccess` (`src/utils/access.ts`), which includes Gallery's grants; a trip the caller cannot read answers 404.
+- 2026-10-31 A trip's id is its album's id. The import document names stops by document-local keys; the read API returns server ids.

@@ -31,6 +31,25 @@ A place on a trip's route that assets belong to: a point, a time of stay, its ow
 trip asset is in at most one stop. When an asset is added to the album, the trip files it into a
 stop by itself, by time and place; the owner's stops and texts stay as they were.
 
+## Start and finish
+
+Stops without assets where a Route trip begins and ends (home, usually). The finish may be the
+same place as the start.
+
+## Transit stop
+
+A stop made of assets shot on the way between two places, not at a place.
+
+## Leg
+
+The way between two consecutive stops of a Route trip: a mode (on foot, by car, by train...) and
+the line drawn on the map.
+
+## Overlay
+
+A fixed drawing on a trip's map that is not a leg: a trail line, or the mask around the visited
+countries.
+
 ## Unplaced
 
 Trip assets that could not be filed into any stop. They wait to be moved by hand.
@@ -61,6 +80,11 @@ assets that are in a trip but not visible to its guests.
 
 A shared link of the trip's album: key or slug, password, expiry. Through it a guest sees the
 trip in the trip viewer. There is no separate "trip visibility".
+
+## Like
+
+A guest's or user's heart on an asset in a trip. One per liker per asset; a guest is known by a
+browser key, not by name.
 
 ## Caption
 
