@@ -15,10 +15,15 @@ import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import {
+  TripAssetPointDto,
+  TripAssetsCenterDto,
   TripAssetsMoveDto,
   TripCreateDto,
   TripEndDto,
   TripFinishUpdateDto,
+  TripGeoPlacesDto,
+  TripGeoReverseQueryDto,
+  TripGeoSearchDto,
   TripImportDto,
   TripLegModeUpdateDto,
   TripLegStationUpdateDto,
@@ -51,7 +56,14 @@ import {
 } from 'src/trips/repositories/trip.repository.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
-import { resolveTripNamingLanguages, tripNamingLanguages } from 'src/trips/utils/naming.js';
+import {
+  nominatimReverseRequest,
+  nominatimSearchRequest,
+  parseNominatimPlace,
+  parseNominatimSearch,
+  resolveTripNamingLanguages,
+  tripNamingLanguages,
+} from 'src/trips/utils/naming.js';
 import { type LegRouter, type RoutingLeg, buildLeg } from 'src/trips/utils/route-leg.js';
 import {
   type StationCandidate,
@@ -384,6 +396,65 @@ export class TripService {
     );
   }
 
+  /** Sets the owner's point of an asset in the trip; null removes it. Assets without GPS are placed again. */
+  async setAssetPoint(
+    auth: AuthDto,
+    albumId: string,
+    assetId: string,
+    dto: TripAssetPointDto | null,
+  ): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.setAssetPoint(
+        albumId,
+        assetId,
+        dto && { latitude: dto.latitude, longitude: dto.longitude },
+      ),
+    );
+  }
+
+  /** Files Unplaced assets of a Places trip to its centre stop, made at `centre` the first time. */
+  async toCenter(auth: AuthDto, albumId: string, dto: TripAssetsCenterDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.toCenter(albumId, dto.assetIds, dto.centre && pointOfEnd(dto.centre)),
+    );
+  }
+
+  /**
+   * Up to five places by address or name, in the trip's language, for picking a point (travel-album `geo/search`).
+   * Editors only: it asks Nominatim on their behalf.
+   */
+  async searchPlaces(auth: AuthDto, albumId: string, { query }: TripGeoSearchDto): Promise<TripGeoPlacesDto> {
+    await this.requireEdit(auth, albumId);
+    const request = nominatimSearchRequest(query, await this.languageOf(albumId));
+    return { places: await this.geocode(() => this.tripGeoRepository.fetchJson(request, parseNominatimSearch)) };
+  }
+
+  /** The place at a point, in the trip's language; none where Nominatim knows no place (travel-album `geo/reverse`). */
+  async reversePlace(auth: AuthDto, albumId: string, point: TripGeoReverseQueryDto): Promise<TripGeoPlacesDto> {
+    await this.requireEdit(auth, albumId);
+    const request = nominatimReverseRequest(point, await this.languageOf(albumId));
+    const place = await this.geocode(() => this.tripGeoRepository.fetchJson(request, parseNominatimPlace));
+    return { places: place ? [place] : [] };
+  }
+
+  // A geo service that does not answer is 502, as in travel-album.
+  private async geocode<T>(ask: () => Promise<T>): Promise<T> {
+    try {
+      return await ask();
+    } catch (error) {
+      if (error instanceof TripGeoError) {
+        throw new BadGatewayException('The place search did not answer; try again later');
+      }
+      throw error;
+    }
+  }
+
   // After a stop edit, as travel-album's `editor.edited`: pending legs are routed and untitled stops named.
   private async stopsEdited(auth: AuthDto, albumId: string, edited: TripEdited): Promise<TripResponseDto> {
     if (edited.result !== TripEditResult.Updated) {
@@ -622,6 +693,18 @@ const refusal = (result: Exclude<TripEditResult, TripEditResult.Updated>) => {
     }
     case TripEditResult.MoveEmpties: {
       return new BadRequestException('A stop would be left without assets; merge it instead');
+    }
+    case TripEditResult.AssetMissing: {
+      return new NotFoundException('Asset not found in the trip');
+    }
+    case TripEditResult.AssetPlaced: {
+      return new BadRequestException('Only Unplaced assets go to the centre');
+    }
+    case TripEditResult.NotPlaces: {
+      return new BadRequestException('Only a Places trip has a centre');
+    }
+    case TripEditResult.NoCenter: {
+      return new BadRequestException('The trip has no centre yet; give one');
     }
     case TripEditResult.PlaceForeign: {
       return new BadRequestException('The place is not in the trip');

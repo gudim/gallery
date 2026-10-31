@@ -1,6 +1,6 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AlbumUserRole, JobName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
@@ -8,10 +8,14 @@ import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import {
+  TripAssetPointDto,
+  TripAssetsCenterDto,
   TripAssetsMoveDto,
   TripCreateDto,
   TripEndDto,
   TripFinishUpdateDto,
+  TripGeoReverseQueryDto,
+  TripGeoSearchDto,
   TripPointCreateDto,
   TripPointOrderDto,
   TripResponseDto,
@@ -37,6 +41,10 @@ beforeAll(async () => {
   db = await getKyselyDB();
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 const HOME = { latitude: 54.6, longitude: 25.2 };
 const A = { latitude: 54.68, longitude: 25.28 };
 const B = { latitude: 54.9, longitude: 25.3 };
@@ -54,18 +62,14 @@ const SHOTS: Shot[] = [
   ['15:00', C],
 ];
 
-const setup = async (shots: Shot[] = SHOTS, kind = 'route') => {
+const setup = async (shots: Shot[] = SHOTS, kind = 'route', { withStart = true } = {}) => {
   const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository, JobRepository] });
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
-  const sut = new TripService(
-    new AccessRepository(db),
-    job,
-    new TripRepository(db),
-    new TripGeoRepository(db, LoggingRepository.create()),
-    new TripEditorRepository(db),
-  );
+  const geo = new TripGeoRepository(db, LoggingRepository.create());
+  vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
+  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db), geo, new TripEditorRepository(db));
   const { user: owner } = await ctx.newUser();
   const newAlbum = async () => {
     const assetIds = [];
@@ -87,7 +91,7 @@ const setup = async (shots: Shot[] = SHOTS, kind = 'route') => {
     const { album, assetIds } = await newAlbum();
     const trip = await sut.create(
       auth,
-      TripCreateDto.schema.parse({ albumId: album.id, kind, ...(kind === 'route' && { start: HOME }) }),
+      TripCreateDto.schema.parse({ albumId: album.id, kind, ...(kind === 'route' && withStart && { start: HOME }) }),
     );
     return { album, assetIds, trip };
   };
@@ -110,6 +114,27 @@ const filed = (trip: TripResponseDto, stopId: string) =>
   trip.assets.filter((asset) => asset.stopId === stopId).map(({ assetId }) => assetId);
 const legPairs = (trip: TripResponseDto) =>
   trip.legs.map(({ fromStopId, toStopId, status }) => [fromStopId, toStopId, status]);
+
+// A Nominatim answer of one place in Vilnius.
+const nominatimPlace = (name: string) => ({
+  name,
+  lat: '54.68',
+  lon: '25.28',
+  address: { city: 'Vilnius', country: 'Lithuania' },
+});
+
+const fakeNominatim = (respond: (url: URL) => Response) => {
+  const urls: URL[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>((input) => {
+      const url = new URL(String(input));
+      urls.push(url);
+      return Promise.resolve(respond(url));
+    }),
+  );
+  return urls;
+};
 
 describe('stop editor', () => {
   describe('pin', () => {
@@ -540,6 +565,169 @@ describe('stop editor', () => {
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
       await expect(read(sut, auth, album.id)).resolves.toMatchObject({ contentVersion: trip.contentVersion });
+    });
+  });
+
+  describe('asset point', () => {
+    // A, an asset without GPS between, and B: the one between is placed on the way and makes a stop of its own.
+    const BETWEEN: Shot[] = [
+      ['10:00', A],
+      ['10:10', A],
+      ['11:05', null],
+      ['12:00', B],
+    ];
+    const X = { latitude: 54.7, longitude: 25.4 };
+
+    it('sets a point by hand: the stop centre follows, and assets without GPS are placed again', async () => {
+      const { sut, auth, album, assetIds, trip } = await setup(BETWEEN);
+      const [, a, middle] = trip.stops;
+      const before = trip.assets[2];
+
+      const edited = await sut.setAssetPoint(auth, album.id, assetIds[1], TripAssetPointDto.schema.parse(X));
+
+      expect(edited.assets[1]).toMatchObject({ ...X, pointSource: 'manual', stopId: a.id });
+      expect(edited.stops[1].latitude).toBeCloseTo((A.latitude + X.latitude) / 2, 6);
+      expect(edited.assets[2].pointSource).toBe('inferred');
+      expect(edited.assets[2].longitude).not.toBeCloseTo(before.longitude!, 6);
+      expect(edited.stops[2]).toMatchObject({ id: middle.id, longitude: edited.assets[2].longitude });
+      expect(edited.legs.map(({ status }) => status)).toEqual(['pending', 'pending', 'pending']);
+
+      const back = await sut.setAssetPoint(auth, album.id, assetIds[1], null);
+      expect(back.assets[1]).toMatchObject({ latitude: null, longitude: null, pointSource: null });
+      expect(back.assets[2]).toEqual(before);
+      expect(back.stops[1]).toMatchObject(A);
+    });
+
+    it('refuses an asset of another trip or in the trash, and a Plain trip', async () => {
+      const { sut, auth, album, assetIds, newTrip } = await setup(BETWEEN);
+      const other = await newTrip();
+      const plain = await setup(BETWEEN, 'plain');
+      await db.updateTable('asset').set({ deletedAt: new Date() }).where('id', '=', assetIds[0]).execute();
+      const point = TripAssetPointDto.schema.parse(X);
+
+      await expect(sut.setAssetPoint(auth, album.id, other.assetIds[1], point)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(sut.setAssetPoint(auth, album.id, assetIds[0], point)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        plain.sut.setAssetPoint(plain.auth, plain.album.id, plain.assetIds[1], point),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('places assets without GPS at a new start and files the Unplaced ones', async () => {
+      const blind: Shot[] = [
+        ['10:00', null],
+        ['10:30', null],
+      ];
+      const { sut, auth, album, trip } = await setup(blind, 'route', { withStart: false });
+      expect(trip.stops).toEqual([]);
+
+      const edited = await sut.setStart(auth, album.id, TripEndDto.schema.parse(HOME));
+
+      const [start, stop] = edited.stops;
+      expect(stop).toMatchObject({ ...HOME, role: null, localStart: '2026-05-01T10:00:00.000Z' });
+      expect(edited.assets.map(({ stopId, pointSource }) => [stopId, pointSource])).toEqual([
+        [stop.id, 'inferred'],
+        [stop.id, 'inferred'],
+      ]);
+      expect(legPairs(edited)).toEqual([[start.id, stop.id, 'pending']]);
+    });
+  });
+
+  describe('to the centre', () => {
+    // A, then two assets without GPS in walks of their own: a Places trip leaves them Unplaced.
+    const LOOSE: Shot[] = [
+      ['10:00', A],
+      ['15:00', null],
+      ['20:00', null],
+    ];
+    const CENTRE = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
+
+    it('makes the centre stop at the point given, and files later assets into it', async () => {
+      const { sut, auth, album, assetIds, trip } = await setup(LOOSE, 'places');
+      expect(trip.assets.map(({ stopId }) => stopId)).toEqual([trip.stops[0].id, null, null]);
+
+      const first = await sut.toCenter(
+        auth,
+        album.id,
+        TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[1]], centre: CENTRE }),
+      );
+      const centre = first.stops.find(({ isAtCenter }) => isAtCenter)!;
+      expect(centre).toMatchObject({ ...CENTRE, titleSource: 'manual', isPositionManual: true });
+
+      const second = await sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[2]] }));
+      expect(filed(second, centre.id)).toEqual([assetIds[1], assetIds[2]]);
+      expect(second.stops.find(({ id }) => id === centre.id)).toMatchObject({
+        ...CENTRE,
+        localStart: '2026-05-01T15:00:00.000Z',
+        localEnd: '2026-05-01T20:00:00.000Z',
+      });
+    });
+
+    it('refuses a filed asset, a first call without a centre, and a trip that is not Places', async () => {
+      const { sut, auth, album, assetIds } = await setup(LOOSE, 'places');
+      const route = await setup(LOOSE);
+      const center = (ids: string[], centre: typeof CENTRE | null = CENTRE) =>
+        sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: ids, centre }));
+
+      await expect(center([assetIds[0]])).rejects.toBeInstanceOf(BadRequestException);
+      await expect(center([assetIds[1]], null)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        route.sut.toCenter(
+          route.auth,
+          route.album.id,
+          TripAssetsCenterDto.schema.parse({ assetIds: [route.assetIds[1]], centre: CENTRE }),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('geo search', () => {
+    it('searches and names places in the trip’s language', async () => {
+      const { sut, auth, album } = await setup();
+      await db.updateTable('trip').set({ language: 'de' }).where('albumId', '=', album.id).execute();
+      const urls = fakeNominatim((url) =>
+        url.pathname === '/search'
+          ? Response.json([nominatimPlace('Rathaus')])
+          : Response.json(nominatimPlace('Markt')),
+      );
+
+      const found = await sut.searchPlaces(
+        auth,
+        album.id,
+        TripGeoSearchDto.schema.parse({ query: `Rathaus ${album.id}` }),
+      );
+      const named = await sut.reversePlace(
+        auth,
+        album.id,
+        TripGeoReverseQueryDto.schema.parse({ latitude: '54.123', longitude: '25.456' }),
+      );
+
+      expect(found.places).toEqual([
+        {
+          label: 'Rathaus',
+          region: 'Vilnius',
+          district: null,
+          country: 'Lithuania',
+          latitude: 54.68,
+          longitude: 25.28,
+        },
+      ]);
+      expect(named.places).toEqual([expect.objectContaining({ label: 'Markt' })]);
+      expect(urls.map((url) => url.searchParams.get('accept-language'))).toEqual(['de', 'de']);
+    });
+
+    it('answers 502 when Nominatim does not, and 403 to a viewer', async () => {
+      const { ctx, sut, auth, album } = await setup();
+      const { user: viewer } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: viewer.id, role: AlbumUserRole.Viewer });
+      fakeNominatim(() => new Response('busy', { status: 503 }));
+      const dto = TripGeoSearchDto.schema.parse({ query: `nowhere ${album.id}` });
+
+      await expect(sut.searchPlaces(auth, album.id, dto)).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(sut.searchPlaces(factory.auth({ user: viewer }), album.id, dto)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
   });
 

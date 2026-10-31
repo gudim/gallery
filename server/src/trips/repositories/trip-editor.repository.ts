@@ -4,10 +4,11 @@ import { InjectKysely } from 'nestjs-kysely';
 import { randomUUID } from 'node:crypto';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { DB } from 'src/schema/index.js';
-import { TripKind, TripLegMode, TripLegStatus, TripStopRole } from 'src/trips/enum.js';
+import { TripKind, TripLegMode, TripLegStatus, TripPointSource, TripStopRole } from 'src/trips/enum.js';
 import {
   TripEditResult,
   bumpContentVersion,
+  fileTripAssets,
   lockTrip,
   noStations,
   stopOrder,
@@ -16,7 +17,7 @@ import {
 } from 'src/trips/repositories/trip.repository.js';
 import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
 import { type LatLng, haversineM, pointOf } from 'src/trips/utils/geo.js';
-import { speedKmh } from 'src/trips/utils/layout.js';
+import { inferPlacePoints, inferRoutePoints, speedKmh } from 'src/trips/utils/layout.js';
 import { asUuid } from 'src/utils/database.js';
 
 // The stop editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the
@@ -286,11 +287,11 @@ export class TripEditorRepository {
 
   /**
    * Sets, moves or removes the start of a route (travel-album `ends.set_origin`); a finish at the start follows it, and
-   * goes with it.
+   * goes with it. Assets without GPS of their own are placed again from it.
    */
   @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }] })
   setStart(albumId: string, point: TripPoint | null): Promise<TripEdited> {
-    return this.edit(albumId, async (trx, kind) => {
+    return this.edit(albumId, async (trx, kind, touch) => {
       if (kind !== TripKind.Route) {
         return TripEditResult.NotRoute;
       }
@@ -299,6 +300,11 @@ export class TripEditorRepository {
       if (finish?.isFinishAtStart) {
         await putEnd(trx, albumId, TripStopRole.Finish, point, true);
       }
+      // Assets without GPS lean on the start: their points move with it, and those left Unplaced for want of a point
+      // are filed (travel-album `locate` and `assign`).
+      await relocate(trx, albumId, kind, touch);
+      const filed = await fileTripAssets(trx, albumId, kind, { isUnplacedRefiled: true });
+      touch(...filed.stopIds);
     });
   }
 
@@ -406,6 +412,97 @@ export class TripEditorRepository {
       const stopId = randomUUID();
       await trx.insertInto('trip_stop').values({ id: stopId, albumId }).execute();
       return moveAssets(trx, albumId, assetIds, stopId, touch);
+    });
+  }
+
+  /**
+   * Sets the owner's point of an asset in the trip, or removes it for null (travel-album `update_media` with a point).
+   * The point stays in the trip, never in the asset (trips PLAN D10). The other assets without GPS are placed again
+   * around it, and the centres of their stops follow.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { latitude: 54.68, longitude: 25.28 }] })
+  setAssetPoint(albumId: string, assetId: string, point: LatLng | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind, touch) => {
+      const asset = await trx
+        .selectFrom('trip_asset')
+        .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+        .select('trip_asset.stopId')
+        .where('trip_asset.albumId', '=', asUuid(albumId))
+        .where('trip_asset.assetId', '=', asUuid(assetId))
+        .where('asset.deletedAt', 'is', null)
+        .executeTakeFirst();
+      if (!asset) {
+        return TripEditResult.AssetMissing;
+      }
+      if (kind === TripKind.Plain) {
+        return TripEditResult.NoMap;
+      }
+      await trx
+        .updateTable('trip_asset')
+        .set({
+          latitude: point?.latitude ?? null,
+          longitude: point?.longitude ?? null,
+          pointSource: point && TripPointSource.Manual,
+        })
+        .where('albumId', '=', asUuid(albumId))
+        .where('assetId', '=', asUuid(assetId))
+        .execute();
+      if (asset.stopId) {
+        touch(asset.stopId);
+      }
+      await relocate(trx, albumId, kind, touch);
+    });
+  }
+
+  /**
+   * Files Unplaced assets of a Places trip to its centre (travel-album `to_center`): into the stop "<centre>, no exact
+   * place", which the first call makes at `centre` with a pin by hand (trips DECISIONS-LOG 2026-10-31, owner); later
+   * calls file into it and leave out `centre`.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], null] })
+  toCenter(albumId: string, assetIds: string[], centre: TripPoint | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind, touch) => {
+      if (kind !== TripKind.Places) {
+        return TripEditResult.NotPlaces;
+      }
+      const ids = [...new Set(assetIds)];
+      const assets = await trx
+        .selectFrom('trip_asset')
+        .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+        .select(['trip_asset.assetId', 'trip_asset.stopId'])
+        .where('trip_asset.albumId', '=', asUuid(albumId))
+        .where('trip_asset.assetId', 'in', ids)
+        .where('asset.deletedAt', 'is', null)
+        .execute();
+      if (assets.length !== ids.length) {
+        return TripEditResult.AssetForeign;
+      }
+      if (assets.some(({ stopId }) => stopId !== null)) {
+        return TripEditResult.AssetPlaced;
+      }
+      let stop = await trx
+        .selectFrom('trip_stop')
+        .select('id')
+        .where('albumId', '=', asUuid(albumId))
+        .where('isAtCenter', '=', true)
+        .executeTakeFirst();
+      if (!stop) {
+        if (!centre) {
+          return TripEditResult.NoCenter;
+        }
+        stop = { id: randomUUID() };
+        await trx
+          .insertInto('trip_stop')
+          .values({ id: stop.id, albumId, ...pointValues(centre), isAtCenter: true, isPositionManual: true })
+          .execute();
+      }
+      await trx
+        .updateTable('trip_asset')
+        .set({ stopId: stop.id })
+        .where('albumId', '=', asUuid(albumId))
+        .where('assetId', 'in', ids)
+        .execute();
+      touch(stop.id);
     });
   }
 
@@ -531,6 +628,73 @@ const putEnd = async (
         .insertInto('trip_stop')
         .values({ id: randomUUID(), albumId, role, isAddedByHand: true, ...values })
         .execute());
+};
+
+/**
+ * Infers again the point of every asset of the trip without one of its own, GPS or the owner's (travel-album
+ * `locate`): along the route between its neighbours in time, or at a Places trip's nearest anchor in its walk. The
+ * stops of assets whose point changed are touched, so their centres follow.
+ */
+const relocate = async (
+  trx: Transaction<DB>,
+  albumId: string,
+  kind: TripKind,
+  touch: (...stopIds: string[]) => void,
+) => {
+  if (kind === TripKind.Plain) {
+    return;
+  }
+  const id = asUuid(albumId);
+  const [assets, start] = await Promise.all([
+    trx
+      .selectFrom('trip_asset')
+      .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+      .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
+      .select([
+        'trip_asset.assetId',
+        'trip_asset.stopId',
+        'trip_asset.latitude',
+        'trip_asset.longitude',
+        'trip_asset.pointSource',
+        'asset.localDateTime as time',
+        'asset_exif.latitude as gpsLatitude',
+        'asset_exif.longitude as gpsLongitude',
+      ])
+      .where('trip_asset.albumId', '=', id)
+      .where('asset.deletedAt', 'is', null)
+      .orderBy('asset.localDateTime')
+      .orderBy('asset.id')
+      .execute(),
+    getEnd(trx, albumId, TripStopRole.Start),
+  ]);
+  const shots = assets.map((asset) => ({
+    time: asset.time,
+    anchor:
+      asset.pointSource === TripPointSource.Manual
+        ? pointOf(asset)
+        : pointOf({ latitude: asset.gpsLatitude, longitude: asset.gpsLongitude }),
+  }));
+  const points =
+    kind === TripKind.Route ? inferRoutePoints(shots, start ? pointOf(start) : null) : inferPlacePoints(shots);
+  for (const [i, asset] of assets.entries()) {
+    if (asset.pointSource === TripPointSource.Manual) {
+      continue;
+    }
+    const point = shots[i].anchor ? null : points[i];
+    const [latitude, longitude] = [point?.latitude ?? null, point?.longitude ?? null];
+    if (latitude === asset.latitude && longitude === asset.longitude) {
+      continue;
+    }
+    await trx
+      .updateTable('trip_asset')
+      .set({ latitude, longitude, pointSource: point && TripPointSource.Inferred })
+      .where('albumId', '=', id)
+      .where('assetId', '=', asset.assetId)
+      .execute();
+    if (asset.stopId) {
+      touch(asset.stopId);
+    }
+  }
 };
 
 const getStop = (trx: Transaction<DB>, albumId: string, stopId: string) =>

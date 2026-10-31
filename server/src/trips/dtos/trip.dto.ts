@@ -376,6 +376,47 @@ const TripTransitUpdateSchema = z
   })
   .meta({ id: 'TripTransitUpdateDto' });
 
+const TripAssetPointSchema = z
+  .object({ latitude: latitudeSchema.describe('Latitude'), longitude: longitudeSchema.describe('Longitude') })
+  .meta({ id: 'TripAssetPointDto' });
+
+const TripAssetsCenterSchema = z
+  .object({
+    assetIds: assetIdsSchema,
+    centre: TripEndSchema.nullable()
+      .default(null)
+      .describe(
+        'Where the centre stop is made, when the trip has none yet; its title, such as “Kraków, no exact place”',
+      ),
+  })
+  .meta({ id: 'TripAssetsCenterDto' });
+
+const TripGeoSearchSchema = z
+  .object({ query: z.string().trim().min(1).max(300).describe('Address or name of a place') })
+  .meta({ id: 'TripGeoSearchDto' });
+
+const TripGeoReverseSchema = z
+  .object({
+    latitude: z.coerce.number().pipe(latitudeSchema).describe('Latitude'),
+    longitude: z.coerce.number().pipe(longitudeSchema).describe('Longitude'),
+  })
+  .meta({ id: 'TripGeoReverseQueryDto' });
+
+const TripGeoPlaceSchema = z
+  .object({
+    label: z.string().describe('Name of the place'),
+    region: text('City, town, village or county'),
+    district: text('Part of the city, when it is not the city itself'),
+    country: text('Country'),
+    latitude: z.number().meta({ format: 'double' }).describe('Latitude'),
+    longitude: z.number().meta({ format: 'double' }).describe('Longitude'),
+  })
+  .meta({ id: 'TripGeoPlaceDto' });
+
+const TripGeoPlacesSchema = z
+  .object({ places: z.array(TripGeoPlaceSchema).describe('Places found, at most five') })
+  .meta({ id: 'TripGeoPlacesDto' });
+
 const TripCreateSchema = z
   .object({
     albumId: z.uuidv4().describe('Album ID; the trip takes it'),
@@ -447,6 +488,11 @@ export class TripPointCreateDto extends createZodDto(TripPointCreateSchema) {}
 export class TripPointOrderDto extends createZodDto(TripPointOrderSchema) {}
 export class TripFinishUpdateDto extends createZodDto(TripFinishUpdateSchema) {}
 export class TripTransitUpdateDto extends createZodDto(TripTransitUpdateSchema) {}
+export class TripAssetPointDto extends createZodDto(TripAssetPointSchema) {}
+export class TripAssetsCenterDto extends createZodDto(TripAssetsCenterSchema) {}
+export class TripGeoSearchDto extends createZodDto(TripGeoSearchSchema) {}
+export class TripGeoReverseQueryDto extends createZodDto(TripGeoReverseSchema) {}
+export class TripGeoPlacesDto extends createZodDto(TripGeoPlacesSchema) {}
 export class TripStopSplitDto extends createZodDto(TripStopSplitSchema) {}
 export class TripStopCreateDto extends createZodDto(TripStopCreateSchema) {}
 export class TripAssetsMoveDto extends createZodDto(TripAssetsMoveSchema) {}

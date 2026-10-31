@@ -7,8 +7,11 @@ import {
   isUntitled,
   namesByDistrict,
   nominatimReverseRequest,
+  nominatimSearchRequest,
   normalizeTripLanguage,
+  parseNominatimPlace,
   parseNominatimReverse,
+  parseNominatimSearch,
   resolveTripNamingLanguages,
   stopTitle,
   tripNamingLanguages,
@@ -165,5 +168,55 @@ describe('which stops naming touches', () => {
     expect(followsStart({ role: TripStopRole.Finish, isFinishAtStart: true })).toBe(true);
     expect(followsStart({ role: TripStopRole.Finish, isFinishAtStart: false })).toBe(false);
     expect(followsStart({ role: null, isFinishAtStart: false })).toBe(false);
+  });
+});
+
+describe('nominatimSearchRequest', () => {
+  it('asks for five places in one language, the query folded so a repeat hits the cache', () => {
+    const config = resolveTripGeoConfig({});
+    const http = buildTripGeoRequest(nominatimSearchRequest('  Old   Town ', 'de'), config);
+
+    expect(http.method).toBe('GET');
+    expect(new URL(http.url).searchParams.get('q')).toBe('old town');
+    expect(new URL(http.url).searchParams.get('limit')).toBe('5');
+    expect(new URL(http.url).searchParams.get('accept-language')).toBe('de');
+    expect(buildTripGeoRequest(nominatimSearchRequest('old town', 'de'), config).key).toBe(http.key);
+  });
+});
+
+const searchPlace = (name: string) => ({
+  name,
+  lat: '54.68',
+  lon: '25.28',
+  address: { city: 'Vilnius', country: 'Lithuania' },
+});
+
+describe('parseNominatimSearch', () => {
+  it('gives each place its names and point, at most five', () => {
+    const places = parseNominatimSearch(Array.from({ length: 7 }, (_, i) => searchPlace(`P${i}`)));
+
+    expect(places).toHaveLength(5);
+    expect(places[0]).toEqual({
+      label: 'P0',
+      region: 'Vilnius',
+      district: null,
+      country: 'Lithuania',
+      latitude: 54.68,
+      longitude: 25.28,
+    });
+  });
+
+  it('refuses an answer that is not a list', () => {
+    expect(() => parseNominatimSearch({ error: 'x' })).toThrow();
+  });
+});
+
+describe('parseNominatimPlace', () => {
+  it('is null where Nominatim knows no place', () => {
+    expect(parseNominatimPlace({ error: 'Unable to geocode' })).toBeNull();
+    expect(parseNominatimPlace({ name: 'x', lat: '1', lon: '2', address: {} })).toMatchObject({
+      latitude: 1,
+      longitude: 2,
+    });
   });
 });

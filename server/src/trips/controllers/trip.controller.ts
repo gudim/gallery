@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Duration } from 'luxon';
 import { randomBytes } from 'node:crypto';
@@ -9,10 +9,15 @@ import { Endpoint, HistoryBuilder } from 'src/decorators.js';
 import { Permission } from 'src/enum.js';
 import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.js';
 import {
+  TripAssetPointDto,
+  TripAssetsCenterDto,
   TripAssetsMoveDto,
   TripCreateDto,
   TripEndDto,
   TripFinishUpdateDto,
+  TripGeoPlacesDto,
+  TripGeoReverseQueryDto,
+  TripGeoSearchDto,
   TripImportDto,
   TripLegModeUpdateDto,
   TripLegParamDto,
@@ -316,6 +321,82 @@ export class TripController {
     @Body() dto: TripAssetsMoveDto,
   ): Promise<TripResponseDto> {
     return this.service.moveAssets(auth, id, dto);
+  }
+
+  @Put(':id/assets/center')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'File assets to the centre of a trip',
+    description:
+      'Files Unplaced assets of a Places trip into its centre stop, “<centre>, no exact place”. The first call makes that stop at the centre it gives; later ones leave it out. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  toCenter(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripAssetsCenterDto,
+  ): Promise<TripResponseDto> {
+    return this.service.toCenter(auth, id, dto);
+  }
+
+  @Put(':id/assets/:assetId/point')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Set the point of an asset in a trip',
+    description:
+      'Sets where an asset was taken, for this trip only: the asset itself keeps its coordinates. Assets without GPS are placed again around it. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setAssetPoint(
+    @Auth() auth: AuthDto,
+    @Param() { id, assetId }: UUIDAssetIDParamDto,
+    @Body() dto: TripAssetPointDto,
+  ): Promise<TripResponseDto> {
+    return this.service.setAssetPoint(auth, id, assetId, dto);
+  }
+
+  @Delete(':id/assets/:assetId/point')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Remove the point of an asset in a trip',
+    description:
+      'Removes the point set by hand for an asset in a trip, which goes back to its own GPS or a point inferred from its neighbours. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  removeAssetPoint(@Auth() auth: AuthDto, @Param() { id, assetId }: UUIDAssetIDParamDto): Promise<TripResponseDto> {
+    return this.service.setAssetPoint(auth, id, assetId, null);
+  }
+
+  @Get(':id/geo/search')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Search places for a trip',
+    description:
+      'Finds up to five places by address or name through Nominatim, named in the trip’s language, for picking a point. Responds 502 when the search does not answer. The album owner and editors only.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  searchPlaces(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Query() dto: TripGeoSearchDto,
+  ): Promise<TripGeoPlacesDto> {
+    return this.service.searchPlaces(auth, id, dto);
+  }
+
+  @Get(':id/geo/reverse')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Name a point for a trip',
+    description:
+      'Names a point on the map through Nominatim in the trip’s language: one place, or none where Nominatim knows none. Responds 502 when the service does not answer. The album owner and editors only.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  reversePlace(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Query() dto: TripGeoReverseQueryDto,
+  ): Promise<TripGeoPlacesDto> {
+    return this.service.reversePlace(auth, id, dto);
   }
 
   @Put(':id/legs/:legId/mode')

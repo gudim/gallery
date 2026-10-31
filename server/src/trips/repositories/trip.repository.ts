@@ -74,6 +74,10 @@ export enum TripEditResult {
   MergeLast = 'merge-last',
   SplitFirst = 'split-first',
   AssetForeign = 'asset-foreign',
+  AssetMissing = 'asset-missing',
+  AssetPlaced = 'asset-placed',
+  NotPlaces = 'not-places',
+  NoCenter = 'no-center',
   MoveEmpties = 'move-empties',
   PlaceForeign = 'place-foreign',
   LegMissing = 'leg-missing',
@@ -367,140 +371,16 @@ export class TripRepository {
    */
   @GenerateSql({ params: [DummyValue.UUID] })
   fileNewAssets(albumId: string): Promise<TripFileResult> {
-    const id = asUuid(albumId);
     return this.db.transaction().execute(async (trx) => {
-      const trip = await trx
-        .selectFrom('trip')
-        .innerJoin('album', 'album.id', 'trip.albumId')
-        .select('trip.kind')
-        .where('trip.albumId', '=', id)
-        .where('album.deletedAt', 'is', null)
-        .forUpdate('trip')
-        .executeTakeFirst();
+      const trip = await lockTrip(trx, albumId);
       if (!trip) {
         return { assets: 0, stops: 0 };
       }
-      const assets = await trx
-        .selectFrom('album_asset')
-        .innerJoin('asset', 'asset.id', 'album_asset.assetId')
-        .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
-        .leftJoin('asset_job_status', 'asset_job_status.assetId', 'asset.id')
-        .leftJoin('trip_asset', (join) =>
-          join.onRef('trip_asset.albumId', '=', 'album_asset.albumId').onRef('trip_asset.assetId', '=', 'asset.id'),
-        )
-        .select([
-          'asset.id',
-          'asset.localDateTime as time',
-          'asset_exif.latitude',
-          'asset_exif.longitude',
-          'trip_asset.pointSource',
-          'trip_asset.latitude as pointLatitude',
-          'trip_asset.longitude as pointLongitude',
-          sql<boolean>`"trip_asset"."assetId" IS NULL`.as('isNew'),
-        ])
-        .where('album_asset.albumId', '=', id)
-        .where('asset.deletedAt', 'is', null)
-        // An asset whose metadata is not extracted yet has no time or GPS to file by; extraction queues filing again.
-        .where((eb) =>
-          eb.or([eb('trip_asset.assetId', 'is not', null), eb('asset_job_status.metadataExtractedAt', 'is not', null)]),
-        )
-        .orderBy('asset.localDateTime')
-        .orderBy('asset.id')
-        .execute();
-      if (assets.every(({ isNew }) => !isNew)) {
-        return { assets: 0, stops: 0 };
+      const { assets, stops } = await fileTripAssets(trx, albumId, trip.kind, { isUnplacedRefiled: false });
+      if (assets > 0) {
+        await bumpContentVersion(trx, albumId);
       }
-      const stops = await trx
-        .selectFrom('trip_stop')
-        .select([
-          'trip_stop.id',
-          'trip_stop.role',
-          'trip_stop.latitude',
-          'trip_stop.longitude',
-          'trip_stop.localStart as start',
-          'trip_stop.localEnd as end',
-          'trip_stop.isPositionManual',
-          'trip_stop.isAddedByHand',
-          'trip_stop.isAtCenter',
-          (eb) =>
-            eb
-              .selectFrom('trip_asset')
-              .select(sql<number>`count(*)::int`.as('count'))
-              .whereRef('trip_asset.stopId', '=', 'trip_stop.id')
-              .as('count'),
-        ])
-        .where('trip_stop.albumId', '=', id)
-        .execute();
-
-      const start = stops.find(({ role }) => role === TripStopRole.Start);
-      const filing = fileAssets(
-        trip.kind,
-        stops
-          .filter(({ role, isAddedByHand, isAtCenter }) => role === null && !isAddedByHand && !isAtCenter)
-          .map((stop) => ({ ...stop, count: stop.count ?? 0 })),
-        assets.map((asset) => ({
-          id: asset.id,
-          time: asset.time,
-          anchor:
-            asset.pointSource === TripPointSource.Manual
-              ? pointOf({ latitude: asset.pointLatitude, longitude: asset.pointLongitude })
-              : pointOf(asset),
-          isNew: asset.isNew,
-        })),
-        { start: start ? pointOf(start) : null, newId: () => randomUUID() },
-      );
-
-      const created = filing.stops.filter(({ isNew }) => isNew);
-      if (created.length > 0) {
-        await trx
-          .insertInto('trip_stop')
-          .values(
-            created.map(({ id, latitude, longitude, start, end }) => ({
-              id,
-              albumId,
-              latitude,
-              longitude,
-              localStart: start,
-              localEnd: end,
-            })),
-          )
-          .execute();
-      }
-      for (const { id, isNew, latitude, longitude, start, end } of filing.stops) {
-        if (isNew) {
-          continue;
-        }
-        await trx
-          .updateTable('trip_stop')
-          .set({ latitude, longitude, localStart: start, localEnd: end })
-          .where('id', '=', id)
-          .execute();
-      }
-      await trx
-        .insertInto('trip_asset')
-        .values(
-          filing.assets.map(({ assetId, stopId, point }) => ({
-            albumId,
-            assetId,
-            stopId,
-            latitude: point?.latitude ?? null,
-            longitude: point?.longitude ?? null,
-            pointSource: point && TripPointSource.Inferred,
-          })),
-        )
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-
-      if (trip.kind === TripKind.Route && created.length > 0) {
-        await syncRouteLegs(trx, albumId);
-      }
-
-      await trx
-        .updateTable('trip')
-        .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
-        .where('albumId', '=', id)
-        .execute();
-      return { assets: filing.assets.length, stops: created.length };
+      return { assets, stops };
     });
   }
 
@@ -931,6 +811,140 @@ const editTrip = (
     await bumpContentVersion(trx, albumId);
     return TripEditResult.Updated;
   });
+
+/**
+ * Files the album assets the trip has not seen yet into its stops (`fileAssets`), and with `isUnplacedRefiled` the
+ * Unplaced ones too, as travel-album's `assign` after a new start: an asset outside the trash whose metadata is
+ * extracted. Every one gets a row, Unplaced when it fits no stop. The caller holds the trip row. Returns how many
+ * assets were filed, how many stops were opened, and every stop that grew or opened.
+ */
+export const fileTripAssets = async (
+  trx: Transaction<DB>,
+  albumId: string,
+  kind: TripKind,
+  { isUnplacedRefiled }: { isUnplacedRefiled: boolean },
+): Promise<TripFileResult & { stopIds: string[] }> => {
+  const id = asUuid(albumId);
+  const assets = await trx
+    .selectFrom('album_asset')
+    .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+    .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
+    .leftJoin('asset_job_status', 'asset_job_status.assetId', 'asset.id')
+    .leftJoin('trip_asset', (join) =>
+      join.onRef('trip_asset.albumId', '=', 'album_asset.albumId').onRef('trip_asset.assetId', '=', 'asset.id'),
+    )
+    .select([
+      'asset.id',
+      'asset.localDateTime as time',
+      'asset_exif.latitude',
+      'asset_exif.longitude',
+      'trip_asset.pointSource',
+      'trip_asset.latitude as pointLatitude',
+      'trip_asset.longitude as pointLongitude',
+      (isUnplacedRefiled
+        ? sql<boolean>`"trip_asset"."stopId" IS NULL`
+        : sql<boolean>`"trip_asset"."assetId" IS NULL`
+      ).as('isNew'),
+    ])
+    .where('album_asset.albumId', '=', id)
+    .where('asset.deletedAt', 'is', null)
+    // An asset whose metadata is not extracted yet has no time or GPS to file by; extraction queues filing again.
+    .where((eb) =>
+      eb.or([eb('trip_asset.assetId', 'is not', null), eb('asset_job_status.metadataExtractedAt', 'is not', null)]),
+    )
+    .orderBy('asset.localDateTime')
+    .orderBy('asset.id')
+    .execute();
+  if (assets.every(({ isNew }) => !isNew)) {
+    return { assets: 0, stops: 0, stopIds: [] };
+  }
+  const stops = await trx
+    .selectFrom('trip_stop')
+    .select([
+      'trip_stop.id',
+      'trip_stop.role',
+      'trip_stop.latitude',
+      'trip_stop.longitude',
+      'trip_stop.localStart as start',
+      'trip_stop.localEnd as end',
+      'trip_stop.isPositionManual',
+      'trip_stop.isAddedByHand',
+      'trip_stop.isAtCenter',
+      (eb) =>
+        eb
+          .selectFrom('trip_asset')
+          .select(sql<number>`count(*)::int`.as('count'))
+          .whereRef('trip_asset.stopId', '=', 'trip_stop.id')
+          .as('count'),
+    ])
+    .where('trip_stop.albumId', '=', id)
+    .execute();
+
+  const start = stops.find(({ role }) => role === TripStopRole.Start);
+  const filing = fileAssets(
+    kind,
+    stops
+      .filter(({ role, isAddedByHand, isAtCenter }) => role === null && !isAddedByHand && !isAtCenter)
+      .map((stop) => ({ ...stop, count: stop.count ?? 0 })),
+    assets.map((asset) => ({
+      id: asset.id,
+      time: asset.time,
+      anchor:
+        asset.pointSource === TripPointSource.Manual
+          ? pointOf({ latitude: asset.pointLatitude, longitude: asset.pointLongitude })
+          : pointOf(asset),
+      isNew: asset.isNew,
+    })),
+    { start: start ? pointOf(start) : null, newId: () => randomUUID() },
+  );
+
+  const created = filing.stops.filter(({ isNew }) => isNew);
+  if (created.length > 0) {
+    await trx
+      .insertInto('trip_stop')
+      .values(
+        created.map(({ id, latitude, longitude, start, end }) => ({
+          id,
+          albumId,
+          latitude,
+          longitude,
+          localStart: start,
+          localEnd: end,
+        })),
+      )
+      .execute();
+  }
+  for (const { id, isNew, latitude, longitude, start, end } of filing.stops) {
+    if (isNew) {
+      continue;
+    }
+    await trx
+      .updateTable('trip_stop')
+      .set({ latitude, longitude, localStart: start, localEnd: end })
+      .where('id', '=', id)
+      .execute();
+  }
+  await trx
+    .insertInto('trip_asset')
+    .values(
+      filing.assets.map(({ assetId, stopId, point }) => ({
+        albumId,
+        assetId,
+        stopId,
+        latitude: point?.latitude ?? null,
+        longitude: point?.longitude ?? null,
+        pointSource: point && TripPointSource.Inferred,
+      })),
+    )
+    // An Unplaced asset filed again keeps its point, which the caller has inferred already.
+    .onConflict((oc) => oc.columns(['albumId', 'assetId']).doUpdateSet((eb) => ({ stopId: eb.ref('excluded.stopId') })))
+    .execute();
+
+  if (kind === TripKind.Route && created.length > 0) {
+    await syncRouteLegs(trx, albumId);
+  }
+  return { assets: filing.assets.length, stops: created.length, stopIds: filing.stops.map((stop) => stop.id) };
+};
 
 /**
  * Legs between consecutive stops of a route in trip order (`syncLegs`): legs between stops that are no longer
