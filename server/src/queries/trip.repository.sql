@@ -74,20 +74,6 @@ where
   "albumId" = $2::uuid
   and "assetId" = $3::uuid
 
--- TripRepository.updateStop
-begin
-select
-  "trip"."albumId"
-from
-  "trip"
-  inner join "album" on "album"."id" = "trip"."albumId"
-where
-  "trip"."albumId" = $1::uuid
-  and "album"."deletedAt" is null
-for update of
-  "trip"
-commit
-
 -- TripRepository.getTripAlbumIds
 select
   "trip"."albumId"
@@ -208,7 +194,8 @@ order by
 -- TripRepository.writeRoutedLegs
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -237,7 +224,8 @@ where
 -- TripRepository.setLegMode
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -251,7 +239,8 @@ commit
 -- TripRepository.setLegStation
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -265,7 +254,8 @@ commit
 -- TripRepository.retryLeg
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -279,7 +269,8 @@ commit
 -- TripRepository.retryLegs
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -304,7 +295,8 @@ where
 -- TripRepository.nameStops
 begin
 select
-  "trip"."albumId"
+  "trip"."albumId",
+  "trip"."kind"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"

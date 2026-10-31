@@ -25343,6 +25343,73 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/assets/stop": {
+      "put": {
+        "description": "Files the chosen album assets into a stop of the same trip. A stop the move would leave without assets is refused: merge it instead. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "moveAssets",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripAssetsMoveDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Move assets to a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/legs/retry": {
       "post": {
         "description": "Routes every leg of the trip that needs attention again. The album owner and editors edit the trip. Returns the whole trip.",
@@ -25852,9 +25919,141 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/stops": {
+      "post": {
+        "description": "Makes a new stop of the chosen album assets; it takes its place in the trip by their times. A stop the move would leave without assets is refused. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "createStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripStopCreateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Create a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/stops/{stopId}": {
+      "delete": {
+        "description": "Deletes a stop without assets, such as a point added by hand; its neighbours get one leg. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "deleteStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Delete a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      },
       "patch": {
-        "description": "Sets a stop’s title, story or place. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared. The place must belong to the same trip. Returns the whole trip.",
+        "description": "Sets a stop’s title, story, place or pin, or puts the pin back at the mean of its assets. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared and the title named again. The place must belong to the same trip. A moved pin routes its legs again. Returns the whole trip.",
         "operationId": "updateStop",
         "parameters": [
           {
@@ -25912,6 +26111,150 @@
           }
         ],
         "summary": "Update a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/stops/{stopId}/merge-next": {
+      "post": {
+        "description": "Merges a stop with the next one in trip order: the assets join the first, which keeps its texts and takes the second’s where its own are empty. Not for the start, the finish or a point added by hand. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "mergeNextStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Merge a trip stop with the next",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/stops/{stopId}/split": {
+      "post": {
+        "description": "Moves one of a stop’s assets and every later one into a new stop. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "splitStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripStopSplitDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Split a trip stop",
         "tags": [
           "Trips"
         ],
@@ -47205,6 +47548,31 @@
         ],
         "type": "object"
       },
+      "TripAssetsMoveDto": {
+        "properties": {
+          "assetIds": {
+            "description": "Album asset IDs, outside the trash",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "stopId": {
+            "description": "Stop of the same trip the assets go to",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetIds",
+          "stopId"
+        ],
+        "type": "object"
+      },
       "TripCreateDto": {
         "properties": {
           "albumId": {
@@ -48135,6 +48503,24 @@
         ],
         "type": "string"
       },
+      "TripStopCreateDto": {
+        "properties": {
+          "assetIds": {
+            "description": "Album asset IDs, outside the trash",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "assetIds"
+        ],
+        "type": "object"
+      },
       "TripStopDto": {
         "properties": {
           "country": {
@@ -48271,8 +48657,43 @@
         ],
         "type": "string"
       },
+      "TripStopSplitDto": {
+        "properties": {
+          "assetId": {
+            "description": "The stop’s asset that begins the new stop, with every later one",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId"
+        ],
+        "type": "object"
+      },
       "TripStopUpdateDto": {
         "properties": {
+          "isPositionManual": {
+            "description": "false puts the pin back at the mean of the stop’s assets",
+            "enum": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "latitude": {
+            "description": "Where the owner puts the pin; kept until given back to the assets",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Where the owner puts the pin; kept until given back to the assets",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
           "placeId": {
             "description": "Place of the stop, in the same trip; null for none",
             "format": "uuid",

@@ -8,6 +8,7 @@ import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripGeoService } from 'src/trips/enum.js';
+import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripNameService } from 'src/trips/services/trip-name.service.js';
@@ -80,7 +81,7 @@ const setup = async () => {
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   // The rate limit has its own test; here every request goes at once.
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
-  const trips = new TripService(new AccessRepository(db), job, tripRepository, geo);
+  const trips = new TripService(new AccessRepository(db), job, tripRepository, geo, new TripEditorRepository(db));
   const sut = new TripNameService(LoggingRepository.create(), tripRepository, geo);
   const { user: owner } = await ctx.newUser();
   const auth = factory.auth({ user: owner });
