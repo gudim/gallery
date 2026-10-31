@@ -176,7 +176,7 @@
       {#if dayStarts.has(index) && view.days[item.day]}
         <div class="absolute inset-x-0 text-center" style:top="{(ys[index] ?? 0) - 104}px" data-testid="trip-daymark">
           <span
-            class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-immich-bg px-4 py-1.5 text-sm font-medium text-gray-600 uppercase dark:border-gray-700 dark:bg-immich-dark-bg dark:text-gray-300"
+            class="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-immich-bg px-4 py-1.5 text-sm font-medium text-gray-600 dark:border-gray-700 dark:bg-immich-dark-bg dark:text-gray-300"
           >
             <span class="size-2.5 rounded-full" style:background={view.days[item.day].color}></span>
             {dayLabel(view.days[item.day].date, lang)} · {frames(view.days[item.day].count)}
@@ -207,7 +207,7 @@
           onclick={() => onOpen(item)}
         >
           {#if item.type === 'transit'}
-            <span class="text-sm text-gray-500 italic dark:text-gray-400"
+            <span class="text-sm text-gray-500 dark:text-gray-400"
               >{$t('trips_on_the_way')} · {frames(item.photos.length)}</span
             >
           {:else if item.type === 'stop'}
