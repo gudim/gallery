@@ -43,6 +43,7 @@ import {
 } from 'src/trips/repositories/trip.repository.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
+import { resolveTripNamingLanguages, tripNamingLanguages } from 'src/trips/utils/naming.js';
 import { type LegRouter, type RoutingLeg, buildLeg } from 'src/trips/utils/route-leg.js';
 import {
   type StationCandidate,
@@ -69,11 +70,21 @@ export class TripService {
     private tripGeoRepository: TripGeoRepository,
   ) {}
 
-  private readonly router: LegRouter = {
-    valhalla: (costing, a, b) => this.tripGeoRepository.fetchJson(valhallaRequest(costing, a, b), parseValhalla),
-    brouter: (profile, a, b) => this.tripGeoRepository.fetchJson(brouterRequest(profile, a, b), parseBRouter),
-    stations: (point) => this.tripGeoRepository.fetchJson(stationsRequest(point), parseStations(point)),
-  };
+  private readonly languages = resolveTripNamingLanguages();
+
+  // Stations are named in the trip's language, as its stops are (trips DECISIONS-LOG 2026-10-31, owner).
+  private routerFor(language: string): LegRouter {
+    return {
+      valhalla: (costing, a, b) => this.tripGeoRepository.fetchJson(valhallaRequest(costing, a, b), parseValhalla),
+      brouter: (profile, a, b) => this.tripGeoRepository.fetchJson(brouterRequest(profile, a, b), parseBRouter),
+      stations: (point) => this.tripGeoRepository.fetchJson(stationsRequest(point), parseStations(point, language)),
+    };
+  }
+
+  // The trip's own language, else the instance's first.
+  private async languageOf(albumId: string): Promise<string> {
+    return tripNamingLanguages(await this.tripRepository.getLanguage(albumId), this.languages).language;
+  }
 
   // Assets added to a trip's album, by anyone and from any client, are filed into stops (trips PLAN D12).
   @OnEvent({ name: 'AlbumUpdate' })
@@ -114,9 +125,10 @@ export class TripService {
     if (legs.length === 0) {
       return JobStatus.Skipped;
     }
+    const router = this.routerFor(await this.languageOf(id));
     const built = [];
     for (const read of legs) {
-      built.push({ read, built: await buildLeg(routingLeg(read), this.router) });
+      built.push({ read, built: await buildLeg(routingLeg(read), router) });
     }
     await this.tripRepository.writeRoutedLegs(id, built);
     return JobStatus.Success;
@@ -299,9 +311,13 @@ export class TripService {
   async getLegStations(auth: AuthDto, albumId: string, legId: string): Promise<TripLegStationsDto> {
     await this.requireEdit(auth, albumId);
     const leg = await this.requireLeg(albumId, legId);
+    const language = await this.languageOf(albumId);
     return {
-      departure: await this.stationsNear(pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude })),
-      arrival: await this.stationsNear(pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude })),
+      departure: await this.stationsNear(
+        pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude }),
+        language,
+      ),
+      arrival: await this.stationsNear(pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude }), language),
     };
   }
 
@@ -324,7 +340,7 @@ export class TripService {
       side === TripStationSide.Departure
         ? { latitude: leg.fromLatitude, longitude: leg.fromLongitude }
         : { latitude: leg.toLatitude, longitude: leg.toLongitude };
-    if (!isOffered(station, await this.stationsNear(pointOf(end)))) {
+    if (!isOffered(station, await this.stationsNear(pointOf(end), await this.languageOf(albumId)))) {
       throw new BadRequestException('The station is not one offered at that end of the leg');
     }
     return this.legEdited(auth, albumId, await this.tripRepository.setLegStation(albumId, legId, side, station));
@@ -359,12 +375,12 @@ export class TripService {
   }
 
   // A stop without a point has no stations near it. A service that does not answer is 502, as in travel-album.
-  private async stationsNear(point: LatLng | null): Promise<StationCandidate[]> {
+  private async stationsNear(point: LatLng | null, language: string): Promise<StationCandidate[]> {
     if (!point) {
       return [];
     }
     try {
-      return await this.router.stations(point);
+      return await this.routerFor(language).stations(point);
     } catch (error) {
       if (error instanceof TripGeoError) {
         throw new BadGatewayException('The station search did not answer; try again later');

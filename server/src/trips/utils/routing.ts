@@ -96,9 +96,12 @@ export const stationsRequest = ({ latitude, longitude }: LatLng): TripGeoRequest
   },
 });
 
-/** The answer's stations nearest `point` first, at most STATION_LIMIT. An empty answer is an answer: none nearby. */
+/**
+ * The answer's stations nearest `point` first, at most STATION_LIMIT. An empty answer is an answer: none nearby. A
+ * station is named in `language` when OpenStreetMap has that name (`name:<language>`), else by its own `name`.
+ */
 export const parseStations =
-  (point: LatLng) =>
+  (point: LatLng, language: string) =>
   (data: unknown): StationCandidate[] => {
     const elements = isRecord(data) ? data.elements : undefined;
     if (!Array.isArray(elements)) {
@@ -109,9 +112,10 @@ export const parseStations =
         if (!isRecord(element) || element.type !== 'node' || !isNumber(element.lat) || !isNumber(element.lon)) {
           return [];
         }
-        // The station's own name, as Overpass has it (trips DECISIONS-LOG 2026-10-31).
-        const name = isRecord(element.tags) && typeof element.tags.name === 'string' ? element.tags.name : '';
-        const station = { name, latitude: element.lat, longitude: element.lon };
+        // The trip's language first, as travel-album preferred its GEO_LANG (trips DECISIONS-LOG 2026-10-31).
+        const tags = isRecord(element.tags) ? element.tags : {};
+        const name = [tags[`name:${language}`], tags.name].find((value) => typeof value === 'string' && value.trim());
+        const station = { name: (name as string | undefined) ?? '', latitude: element.lat, longitude: element.lon };
         return [{ ...station, distance: Math.round(haversineM(point, station)) }];
       })
       .toSorted((a, b) => a.distance - b.distance)

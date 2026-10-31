@@ -559,6 +559,17 @@ export class TripRepository {
     });
   }
 
+  /** The language the trip's stops and stations are named in; null for the instance's, or for no trip. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async getLanguage(albumId: string): Promise<string | null> {
+    const row = await this.db
+      .selectFrom('trip')
+      .select('language')
+      .where('albumId', '=', asUuid(albumId))
+      .executeTakeFirst();
+    return row?.language ?? null;
+  }
+
   /** Whether the trip has legs waiting for their line. */
   @GenerateSql({ params: [DummyValue.UUID] })
   async hasPendingLegs(albumId: string): Promise<boolean> {
