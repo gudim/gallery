@@ -539,6 +539,35 @@ describe(TripService.name, () => {
       ]);
       expect(job.queueAll.mock.calls[1][0]).not.toContainEqual({ name: JobName.TripFile, data: { id: plainAlbum.id } });
     });
+
+    it('sweeps a trip whose asset time changed since filing, so a missed metadata event is caught up', async () => {
+      const { job, sut, album, add } = await routeTrip();
+      const assetId = await add('11:00', P);
+      await sut.handleFile({ id: album.id });
+      job.queueAll.mockClear();
+
+      await sut.handleFileSweep();
+      expect(job.queueAll.mock.calls[0]?.[0] ?? []).not.toContainEqual({
+        name: JobName.TripFile,
+        data: { id: album.id },
+      });
+
+      await db
+        .updateTable('asset')
+        .set({ localDateTime: new Date('2026-05-01T12:00:00.000Z') })
+        .where('id', '=', assetId)
+        .execute();
+      await sut.handleFileSweep();
+      expect(job.queueAll.mock.calls.at(-1)?.[0]).toContainEqual({ name: JobName.TripFile, data: { id: album.id } });
+
+      await sut.handleFile({ id: album.id });
+      job.queueAll.mockClear();
+      await sut.handleFileSweep();
+      expect(job.queueAll.mock.calls[0]?.[0] ?? []).not.toContainEqual({
+        name: JobName.TripFile,
+        data: { id: album.id },
+      });
+    });
   });
 
   describe('edit a stop', () => {
