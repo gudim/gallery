@@ -320,88 +320,67 @@ export class TripService {
    * again.
    */
   async updateStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopUpdateDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.updateStop(albumId, stopId, dto));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.updateStop(albumId, stopId, dto));
   }
 
   /** Merges a stop with the next one in trip order; the first keeps its texts. */
   async mergeNextStop(auth: AuthDto, albumId: string, stopId: string): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.mergeNext(albumId, stopId));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.mergeNext(albumId, stopId));
   }
 
   /** Splits a stop: the asset and every later one go to a new stop. */
   async splitStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopSplitDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.split(albumId, stopId, dto.assetId));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.split(albumId, stopId, dto.assetId));
   }
 
   /** Deletes a stop without assets. */
   async deleteStop(auth: AuthDto, albumId: string, stopId: string): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.deleteStop(albumId, stopId));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.deleteStop(albumId, stopId));
   }
 
   /** Makes a new stop of the chosen assets. */
   async createStop(auth: AuthDto, albumId: string, dto: TripStopCreateDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.newStop(albumId, dto.assetIds));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.newStop(albumId, dto.assetIds));
   }
 
   /** Moves the chosen assets into a stop. */
   async moveAssets(auth: AuthDto, albumId: string, dto: TripAssetsMoveDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.moveAssets(albumId, dto.assetIds, dto.stopId),
-    );
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.moveAssets(albumId, dto.assetIds, dto.stopId));
   }
 
   /** Adds a point by hand to a route, right after a stop or the start. */
   async addPoint(auth: AuthDto, albumId: string, dto: TripPointCreateDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
     const { afterStopId, ...point } = dto;
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.addPoint(albumId, pointOfEnd(point), afterStopId),
+    return this.editStops(auth, albumId, () =>
+      this.tripEditorRepository.addPoint(albumId, pointOfEnd(point), afterStopId),
     );
   }
 
   /** Puts a point added by hand right after another stop, or the start. */
   async movePoint(auth: AuthDto, albumId: string, stopId: string, dto: TripPointOrderDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.movePoint(albumId, stopId, dto.afterStopId));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.movePoint(albumId, stopId, dto.afterStopId));
   }
 
   /** Sets or moves the start of a route; null removes it. A finish at the start follows. */
   async setStart(auth: AuthDto, albumId: string, dto: TripEndDto | null): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.setStart(albumId, dto && pointOfEnd(dto)));
+    return this.editStops(auth, albumId, () => this.tripEditorRepository.setStart(albumId, dto && pointOfEnd(dto)));
   }
 
   /** Sets or moves the finish of a route, or puts it at the start; null removes it. */
   async setFinish(auth: AuthDto, albumId: string, dto: TripFinishUpdateDto | null): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
     const point =
       dto && !dto.isFinishAtStart
         ? pointOfEnd({ latitude: dto.latitude!, longitude: dto.longitude!, title: dto.title })
         : null;
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.setFinish(albumId, point, dto?.isFinishAtStart ?? false),
+    return this.editStops(auth, albumId, () =>
+      this.tripEditorRepository.setFinish(albumId, point, dto?.isFinishAtStart ?? false),
     );
   }
 
   /** Marks stops of a route as shot on the way, not, or undecided. */
   async setTransit(auth: AuthDto, albumId: string, dto: TripTransitUpdateDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.setTransit(albumId, dto.stopIds, dto.isTransit),
+    return this.editStops(auth, albumId, () =>
+      this.tripEditorRepository.setTransit(albumId, dto.stopIds, dto.isTransit),
     );
   }
 
@@ -412,11 +391,8 @@ export class TripService {
     assetId: string,
     dto: TripAssetPointDto | null,
   ): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.setAssetPoint(
+    return this.editStops(auth, albumId, () =>
+      this.tripEditorRepository.setAssetPoint(
         albumId,
         assetId,
         dto && { latitude: dto.latitude, longitude: dto.longitude },
@@ -426,11 +402,8 @@ export class TripService {
 
   /** Files Unplaced assets of a Places trip to its centre stop, made at `centre` the first time. */
   async toCenter(auth: AuthDto, albumId: string, dto: TripAssetsCenterDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.stopsEdited(
-      auth,
-      albumId,
-      await this.tripEditorRepository.toCenter(albumId, dto.assetIds, dto.centre && pointOfEnd(dto.centre)),
+    return this.editStops(auth, albumId, () =>
+      this.tripEditorRepository.toCenter(albumId, dto.assetIds, dto.centre && pointOfEnd(dto.centre)),
     );
   }
 
@@ -488,8 +461,11 @@ export class TripService {
     }
   }
 
-  // After a stop edit, as travel-album's `editor.edited`: pending legs are routed and untitled stops named.
-  private async stopsEdited(auth: AuthDto, albumId: string, edited: TripEdited): Promise<TripResponseDto> {
+  // A stop edit by the album's owner or an editor, then as travel-album's `editor.edited`: pending legs are routed and
+  // untitled stops named.
+  private async editStops(auth: AuthDto, albumId: string, edit: () => Promise<TripEdited>): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    const edited = await edit();
     if (edited.result !== TripEditResult.Updated) {
       throw refusal(edited.result);
     }
@@ -507,8 +483,7 @@ export class TripService {
    * stations forgotten. The album's owner and editors edit.
    */
   async setLegMode(auth: AuthDto, albumId: string, legId: string, dto: TripLegModeUpdateDto): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.legEdited(auth, albumId, await this.tripRepository.setLegMode(albumId, legId, dto.mode));
+    return this.editLeg(auth, albumId, () => this.tripRepository.setLegMode(albumId, legId, dto.mode));
   }
 
   /** Up to five stations near each end of a leg, nearest first (travel-album `leg_stations`). Editors only. */
@@ -517,11 +492,8 @@ export class TripService {
     const leg = await this.requireLeg(albumId, legId);
     const language = await this.languageOf(albumId);
     return {
-      departure: await this.stationsNear(
-        pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude }),
-        language,
-      ),
-      arrival: await this.stationsNear(pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude }), language),
+      departure: await this.stationsNear(leg.from, language),
+      arrival: await this.stationsNear(leg.to, language),
     };
   }
 
@@ -535,34 +507,33 @@ export class TripService {
     legId: string,
     { side, ...station }: TripLegStationUpdateDto,
   ): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    const leg = await this.requireLeg(albumId, legId);
-    if (leg.mode !== TripLegMode.Train) {
-      throw refusal(TripEditResult.LegNotTrain);
-    }
-    const end =
-      side === TripStationSide.Departure
-        ? { latitude: leg.fromLatitude, longitude: leg.fromLongitude }
-        : { latitude: leg.toLatitude, longitude: leg.toLongitude };
-    if (!isOffered(station, await this.stationsNear(pointOf(end), await this.languageOf(albumId)))) {
-      throw new BadRequestException('The station is not one offered at that end of the leg');
-    }
-    return this.legEdited(auth, albumId, await this.tripRepository.setLegStation(albumId, legId, side, station));
+    return this.editLeg(auth, albumId, async () => {
+      const leg = await this.requireLeg(albumId, legId);
+      if (leg.mode !== TripLegMode.Train) {
+        throw refusal(TripEditResult.LegNotTrain);
+      }
+      const end = side === TripStationSide.Departure ? leg.from : leg.to;
+      if (!isOffered(station, await this.stationsNear(end, await this.languageOf(albumId)))) {
+        throw new BadRequestException('The station is not one offered at that end of the leg');
+      }
+      return this.tripRepository.setLegStation(albumId, legId, side, station);
+    });
   }
 
   /** Sends a leg that needs attention back to routing, mode unchanged. */
   async retryLeg(auth: AuthDto, albumId: string, legId: string): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.legEdited(auth, albumId, await this.tripRepository.retryLeg(albumId, legId));
+    return this.editLeg(auth, albumId, () => this.tripRepository.retryLeg(albumId, legId));
   }
 
   /** Sends every leg of the trip that needs attention back to routing. */
   async retryLegs(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
-    return this.legEdited(auth, albumId, await this.tripRepository.retryLegs(albumId));
+    return this.editLeg(auth, albumId, () => this.tripRepository.retryLegs(albumId));
   }
 
-  private async legEdited(auth: AuthDto, albumId: string, result: TripEditResult): Promise<TripResponseDto> {
+  // A leg edit by the album's owner or an editor; the leg is routed again.
+  private async editLeg(auth: AuthDto, albumId: string, edit: () => Promise<TripEditResult>): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    const result = await edit();
     if (result !== TripEditResult.Updated) {
       throw refusal(result);
     }
@@ -575,7 +546,11 @@ export class TripService {
     if (!leg) {
       throw refusal(TripEditResult.LegMissing);
     }
-    return leg;
+    return {
+      mode: leg.mode,
+      from: pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude }),
+      to: pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude }),
+    };
   }
 
   // A stop without a point has no stations near it. A service that does not answer is 502, as in travel-album.
