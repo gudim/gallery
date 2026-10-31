@@ -52,6 +52,7 @@ features:
       - .github/workflows/trips-*.yml
       - docs/fork/trips-ownership.yml
       - server/test/medium/specs/trips/**
+      - server/src/queries/trip*.sql
     # Gallery files that carry one trips hook each; keep every hunk minimal.
     upstream_extension_paths:
       - server/src/schema/gallery-migration-ledger.ts
@@ -62,10 +63,14 @@ features:
       - server/src/schema/index.ts
       - server/src/schema/gallery-upstream-fks.json
       - server/src/schema/gallery-upstream-fks.spec.ts
+      # generated: regenerate on a rebase, never merge by hand
+      - open-api/immich-openapi-specs.json
+      - packages/sdk/src/fetch-client.ts
       - server/src/controllers/index.ts
       - server/src/repositories/index.ts
       - server/src/services/index.ts
       - server/src/services/cli.service.spec.ts
+      - server/src/controllers/index.spec.ts
       - server/test/medium/specs/services/database-migration.service.spec.ts
       - AGENTS.md
       # trip strings under the `trips_` prefix: en plus the nine maintained locales

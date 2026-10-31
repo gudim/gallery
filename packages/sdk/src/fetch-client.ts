@@ -4365,6 +4365,248 @@ export type TrashResponseDto = {
     /** Number of items in trash */
     count: number;
 };
+export type TripAssetDto = {
+    /** Asset ID */
+    assetId: string;
+    /** Inferred or manual latitude, in the trip only */
+    latitude: number | null;
+    /** Inferred or manual longitude, in the trip only */
+    longitude: number | null;
+    pointSource: (TripPointSource) | null;
+    /** Stop ID; null is Unplaced */
+    stopId: string | null;
+};
+export type TripLegDto = {
+    /** Train arrival latitude */
+    arrivalLatitude: number | null;
+    /** Train arrival longitude */
+    arrivalLongitude: number | null;
+    /** Train arrival station */
+    arrivalName: string | null;
+    /** Train departure latitude */
+    departureLatitude: number | null;
+    /** Train departure longitude */
+    departureLongitude: number | null;
+    /** Train departure station */
+    departureName: string | null;
+    /** Length in metres */
+    distance: number | null;
+    /** Duration in seconds */
+    duration: number | null;
+    /** Stop the leg leaves */
+    fromStopId: string;
+    /** Leg ID */
+    id: string;
+    /** The owner picked the mode */
+    isModeManual: boolean;
+    mode: TripLegMode;
+    /** Encoded polyline of the line */
+    polyline: string | null;
+    status: TripLegStatus;
+    /** Stop the leg reaches */
+    toStopId: string;
+};
+export type TripLikeDto = {
+    /** Asset ID */
+    assetId: string;
+    /** Number of likes */
+    count: number;
+};
+export type TripOverlayDto = {
+    /** Line colour */
+    color: string | null;
+    /** GeoJSON geometry */
+    geometry: {
+        [key: string]: any;
+    };
+    /** Overlay ID */
+    id: string;
+    kind: TripOverlayKind;
+};
+export type TripPlaceDto = {
+    /** Place article */
+    article: string | null;
+    /** Who wrote the article */
+    articleSource: string | null;
+    /** Place ID */
+    id: string;
+    /** Name of the place within the trip */
+    key: string;
+    /** Place title */
+    title: string | null;
+};
+export type TripStopDto = {
+    /** Country */
+    country: string | null;
+    /** Stop ID */
+    id: string;
+    /** Places trip: assets filed to the centre, no exact place */
+    isAtCenter: boolean;
+    /** A point the owner set by hand */
+    isManualPoint: boolean;
+    /** The owner moved the pin */
+    isPositionManual: boolean;
+    /** The finish is the start */
+    isSameAsOrigin: boolean;
+    /** Shot on the way: true yes, false declined, null not decided */
+    isTransit: boolean | null;
+    /** Stop latitude */
+    latitude: number | null;
+    /** Local end time */
+    localEnd: string | null;
+    /** Local start time */
+    localStart: string | null;
+    /** Stop longitude */
+    longitude: number | null;
+    /** Place ID */
+    placeId: string | null;
+    /** Region */
+    region: string | null;
+    role: (TripStopRole) | null;
+    /** Order among stops that start at the same time */
+    sequence: number;
+    /** Stop story */
+    story: string | null;
+    /** Who wrote the story */
+    storySource: string | null;
+    /** Stop title */
+    title: string | null;
+    /** Who wrote the title */
+    titleSource: string | null;
+};
+export type TripResponseDto = {
+    /** Album ID; a trip has its album’s ID */
+    albumId: string;
+    /** Every album asset outside the trash, in time order */
+    assets: TripAssetDto[];
+    /** Bumped by every change a guest can see */
+    contentVersion: number;
+    /** The owner’s Favorites trip */
+    isFavorites: boolean;
+    /** Picked by an admin for the home page */
+    isFeatured: boolean;
+    /** Marked for the owner’s showcase */
+    isShowcased: boolean;
+    kind: TripKind;
+    legs: TripLegDto[];
+    /** Like counts of liked assets */
+    likes: TripLikeDto[];
+    overlays: TripOverlayDto[];
+    places: TripPlaceDto[];
+    /** Stops in trip order */
+    stops: TripStopDto[];
+};
+export type TripImportDto = {
+    assets?: {
+        /** Asset ID; the asset must be in the album */
+        assetId: string;
+        /** Inferred or manual latitude, in the trip only */
+        latitude: number | null;
+        /** Inferred or manual longitude, in the trip only */
+        longitude: number | null;
+        pointSource: (TripPointSource) | null;
+        /** Key of the asset’s stop; null is Unplaced */
+        stopKey: string | null;
+    }[];
+    /** The owner’s Favorites trip; Places only */
+    isFavorites?: boolean;
+    /** Marked for the owner’s showcase */
+    isShowcased?: boolean;
+    kind: TripKind;
+    legs?: {
+        /** Train arrival latitude */
+        arrivalLatitude: number | null;
+        /** Train arrival longitude */
+        arrivalLongitude: number | null;
+        /** Train arrival station */
+        arrivalName: string | null;
+        /** Train departure latitude */
+        departureLatitude: number | null;
+        /** Train departure longitude */
+        departureLongitude: number | null;
+        /** Train departure station */
+        departureName: string | null;
+        /** Length in metres */
+        distance: number | null;
+        /** Duration in seconds */
+        duration: number | null;
+        /** Key of the stop the leg leaves */
+        fromStopKey: string;
+        /** The owner picked the mode */
+        isModeManual: boolean;
+        mode: TripLegMode;
+        /** Encoded polyline of the line */
+        polyline: string | null;
+        status: TripLegStatus;
+        /** Key of the stop the leg reaches */
+        toStopKey: string;
+    }[];
+    /** Like counts carried over from elsewhere */
+    likes?: {
+        /** Asset ID */
+        assetId: string;
+        /** Number of likes */
+        count: number;
+    }[];
+    overlays?: {
+        /** Line colour */
+        color: string | null;
+        /** GeoJSON geometry */
+        geometry: {
+            [key: string]: any;
+        };
+        kind: TripOverlayKind;
+    }[];
+    places?: {
+        /** Place article */
+        article: string | null;
+        /** Who wrote the article */
+        articleSource: string | null;
+        /** Name of the place within the trip */
+        key: string;
+        /** Place title */
+        title: string | null;
+    }[];
+    stops?: {
+        /** Country */
+        country: string | null;
+        /** Places trip: assets filed to the centre, no exact place */
+        isAtCenter: boolean;
+        /** A point the owner set by hand */
+        isManualPoint: boolean;
+        /** The owner moved the pin */
+        isPositionManual: boolean;
+        /** The finish is the start */
+        isSameAsOrigin: boolean;
+        /** Shot on the way: true yes, false declined, null not decided */
+        isTransit: boolean | null;
+        /** Name of the stop within the document */
+        key: string;
+        /** Stop latitude */
+        latitude: number | null;
+        /** Local end time */
+        localEnd: string | null;
+        /** Local start time */
+        localStart: string | null;
+        /** Stop longitude */
+        longitude: number | null;
+        /** Key of the stop’s place */
+        placeKey: string | null;
+        /** Region */
+        region: string | null;
+        role: (TripStopRole) | null;
+        /** Order among stops that start at the same time */
+        sequence: number;
+        /** Stop story */
+        story: string | null;
+        /** Who wrote the story */
+        storySource: string | null;
+        /** Stop title */
+        title: string | null;
+        /** Who wrote the title */
+        titleSource: string | null;
+    }[];
+};
 export type UserGroupMemberResponseDto = {
     /** Avatar color */
     avatarColor?: string;
@@ -10867,6 +11109,40 @@ export function restoreAssets({ bulkIdsDto }: {
     })));
 }
 /**
+ * Retrieve a trip
+ */
+export function getTrip({ id, key, slug }: {
+    id: string;
+    key?: string;
+    slug?: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}${QS.query(QS.explode({
+        key,
+        slug
+    }))}`, {
+        ...opts
+    }));
+}
+/**
+ * Import a trip
+ */
+export function importTrip({ id, tripImportDto }: {
+    id: string;
+    tripImportDto: TripImportDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripImportDto
+    })));
+}
+/**
  * Get all user groups
  */
 export function getAllGroups(opts?: Oazapfts.RequestOpts) {
@@ -12140,6 +12416,39 @@ export enum TimeBucketSize {
 export enum AssetOrderBy {
     TakenAt = "takenAt",
     CreatedAt = "createdAt"
+}
+export enum TripPointSource {
+    Inferred = "inferred",
+    Manual = "manual"
+}
+export enum TripKind {
+    Route = "route",
+    Places = "places",
+    Plain = "plain"
+}
+export enum TripLegMode {
+    Foot = "foot",
+    Driving = "driving",
+    Trail = "trail",
+    Direct = "direct",
+    Flight = "flight",
+    Bicycle = "bicycle",
+    Bus = "bus",
+    Train = "train",
+    Boat = "boat"
+}
+export enum TripLegStatus {
+    Pending = "pending",
+    Ok = "ok",
+    Attention = "attention"
+}
+export enum TripOverlayKind {
+    Trail = "trail",
+    Mask = "mask"
+}
+export enum TripStopRole {
+    Origin = "origin",
+    Finish = "finish"
 }
 export enum WorkflowResult {
     Completed = "completed",

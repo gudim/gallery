@@ -68,6 +68,8 @@ const SHARED_LINK_ROUTES = new Set([
   // fork-only: same auth as its upstream siblings above (AssetRead + sharedLink)
   'GET timeline/bucket-covers',
   'GET timeline/buckets',
+  // trips: a guest reads the trip of the shared link's album (trips PLAN D14)
+  'GET trips/:id',
   'POST assets',
   'POST download/archive',
   'POST download/info',

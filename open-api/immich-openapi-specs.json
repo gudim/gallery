@@ -25149,6 +25149,144 @@
         "x-immich-state": "Stable"
       }
     },
+    "/trips/{id}": {
+      "get": {
+        "description": "Returns the whole trip of an album: stops, places, legs, overlays, likes and where each album asset is filed. The trip has its album’s ID. Responds 404 when the album has no trip or the caller cannot read the album.",
+        "operationId": "getTrip",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retrieve a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.read",
+        "x-immich-state": "Beta"
+      },
+      "post": {
+        "description": "Creates the trip of an album from one document. Only the album owner can import, and only into an album without a trip (409 otherwise). Every asset the document names must be in the album.",
+        "operationId": "importTrip",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripImportDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Import a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/user-groups": {
       "get": {
         "description": "Retrieve all user groups created by the current user.",
@@ -46375,6 +46513,903 @@
           "count"
         ],
         "type": "object"
+      },
+      "TripAssetDto": {
+        "properties": {
+          "assetId": {
+            "description": "Asset ID",
+            "type": "string"
+          },
+          "latitude": {
+            "description": "Inferred or manual latitude, in the trip only",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Inferred or manual longitude, in the trip only",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "nullable": true,
+            "type": "number"
+          },
+          "pointSource": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripPointSource"
+              }
+            ],
+            "nullable": true
+          },
+          "stopId": {
+            "description": "Stop ID; null is Unplaced",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetId",
+          "latitude",
+          "longitude",
+          "pointSource",
+          "stopId"
+        ],
+        "type": "object"
+      },
+      "TripImportDto": {
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "properties": {
+                "assetId": {
+                  "description": "Asset ID; the asset must be in the album",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "latitude": {
+                  "description": "Inferred or manual latitude, in the trip only",
+                  "format": "double",
+                  "maximum": 90,
+                  "minimum": -90,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "longitude": {
+                  "description": "Inferred or manual longitude, in the trip only",
+                  "format": "double",
+                  "maximum": 180,
+                  "minimum": -180,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "pointSource": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/TripPointSource"
+                    }
+                  ],
+                  "nullable": true
+                },
+                "stopKey": {
+                  "description": "Key of the asset’s stop; null is Unplaced",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "assetId",
+                "stopKey",
+                "latitude",
+                "longitude",
+                "pointSource"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "isFavorites": {
+            "default": false,
+            "description": "The owner’s Favorites trip; Places only",
+            "type": "boolean"
+          },
+          "isShowcased": {
+            "default": false,
+            "description": "Marked for the owner’s showcase",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TripKind"
+          },
+          "legs": {
+            "default": [],
+            "items": {
+              "properties": {
+                "arrivalLatitude": {
+                  "description": "Train arrival latitude",
+                  "format": "double",
+                  "maximum": 90,
+                  "minimum": -90,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "arrivalLongitude": {
+                  "description": "Train arrival longitude",
+                  "format": "double",
+                  "maximum": 180,
+                  "minimum": -180,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "arrivalName": {
+                  "description": "Train arrival station",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "departureLatitude": {
+                  "description": "Train departure latitude",
+                  "format": "double",
+                  "maximum": 90,
+                  "minimum": -90,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "departureLongitude": {
+                  "description": "Train departure longitude",
+                  "format": "double",
+                  "maximum": 180,
+                  "minimum": -180,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "departureName": {
+                  "description": "Train departure station",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "distance": {
+                  "description": "Length in metres",
+                  "format": "double",
+                  "nullable": true,
+                  "type": "number"
+                },
+                "duration": {
+                  "description": "Duration in seconds",
+                  "format": "double",
+                  "nullable": true,
+                  "type": "number"
+                },
+                "fromStopKey": {
+                  "description": "Key of the stop the leg leaves",
+                  "type": "string"
+                },
+                "isModeManual": {
+                  "description": "The owner picked the mode",
+                  "type": "boolean"
+                },
+                "mode": {
+                  "$ref": "#/components/schemas/TripLegMode"
+                },
+                "polyline": {
+                  "description": "Encoded polyline of the line",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/TripLegStatus"
+                },
+                "toStopKey": {
+                  "description": "Key of the stop the leg reaches",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fromStopKey",
+                "toStopKey",
+                "mode",
+                "isModeManual",
+                "status",
+                "polyline",
+                "distance",
+                "duration",
+                "departureName",
+                "departureLatitude",
+                "departureLongitude",
+                "arrivalName",
+                "arrivalLatitude",
+                "arrivalLongitude"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "likes": {
+            "default": [],
+            "description": "Like counts carried over from elsewhere",
+            "items": {
+              "properties": {
+                "assetId": {
+                  "description": "Asset ID",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "count": {
+                  "description": "Number of likes",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "assetId",
+                "count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "overlays": {
+            "default": [],
+            "items": {
+              "properties": {
+                "color": {
+                  "description": "Line colour",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "geometry": {
+                  "additionalProperties": {},
+                  "description": "GeoJSON geometry",
+                  "type": "object"
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/TripOverlayKind"
+                }
+              },
+              "required": [
+                "kind",
+                "color",
+                "geometry"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "places": {
+            "default": [],
+            "items": {
+              "properties": {
+                "article": {
+                  "description": "Place article",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "articleSource": {
+                  "description": "Who wrote the article",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "key": {
+                  "description": "Name of the place within the trip",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "title": {
+                  "description": "Place title",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "article",
+                "articleSource"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "stops": {
+            "items": {
+              "properties": {
+                "country": {
+                  "description": "Country",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "isAtCenter": {
+                  "description": "Places trip: assets filed to the centre, no exact place",
+                  "type": "boolean"
+                },
+                "isManualPoint": {
+                  "description": "A point the owner set by hand",
+                  "type": "boolean"
+                },
+                "isPositionManual": {
+                  "description": "The owner moved the pin",
+                  "type": "boolean"
+                },
+                "isSameAsOrigin": {
+                  "description": "The finish is the start",
+                  "type": "boolean"
+                },
+                "isTransit": {
+                  "description": "Shot on the way: true yes, false declined, null not decided",
+                  "nullable": true,
+                  "type": "boolean"
+                },
+                "key": {
+                  "description": "Name of the stop within the document",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "latitude": {
+                  "description": "Stop latitude",
+                  "format": "double",
+                  "maximum": 90,
+                  "minimum": -90,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "localEnd": {
+                  "description": "Local end time",
+                  "example": "2024-01-01T00:00:00.000Z",
+                  "format": "date-time",
+                  "nullable": true,
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                  "type": "string"
+                },
+                "localStart": {
+                  "description": "Local start time",
+                  "example": "2024-01-01T00:00:00.000Z",
+                  "format": "date-time",
+                  "nullable": true,
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                  "type": "string"
+                },
+                "longitude": {
+                  "description": "Stop longitude",
+                  "format": "double",
+                  "maximum": 180,
+                  "minimum": -180,
+                  "nullable": true,
+                  "type": "number"
+                },
+                "placeKey": {
+                  "description": "Key of the stop’s place",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "region": {
+                  "description": "Region",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "role": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/TripStopRole"
+                    }
+                  ],
+                  "nullable": true
+                },
+                "sequence": {
+                  "description": "Order among stops that start at the same time",
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                "story": {
+                  "description": "Stop story",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "storySource": {
+                  "description": "Who wrote the story",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "title": {
+                  "description": "Stop title",
+                  "nullable": true,
+                  "type": "string"
+                },
+                "titleSource": {
+                  "description": "Who wrote the title",
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "placeKey",
+                "latitude",
+                "longitude",
+                "isPositionManual",
+                "sequence",
+                "title",
+                "titleSource",
+                "story",
+                "storySource",
+                "region",
+                "country",
+                "isManualPoint",
+                "role",
+                "isSameAsOrigin",
+                "isTransit",
+                "isAtCenter",
+                "localStart",
+                "localEnd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "TripKind": {
+        "description": "Trip kind",
+        "enum": [
+          "route",
+          "places",
+          "plain"
+        ],
+        "type": "string"
+      },
+      "TripLegDto": {
+        "properties": {
+          "arrivalLatitude": {
+            "description": "Train arrival latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "nullable": true,
+            "type": "number"
+          },
+          "arrivalLongitude": {
+            "description": "Train arrival longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "nullable": true,
+            "type": "number"
+          },
+          "arrivalName": {
+            "description": "Train arrival station",
+            "nullable": true,
+            "type": "string"
+          },
+          "departureLatitude": {
+            "description": "Train departure latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "nullable": true,
+            "type": "number"
+          },
+          "departureLongitude": {
+            "description": "Train departure longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "nullable": true,
+            "type": "number"
+          },
+          "departureName": {
+            "description": "Train departure station",
+            "nullable": true,
+            "type": "string"
+          },
+          "distance": {
+            "description": "Length in metres",
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "duration": {
+            "description": "Duration in seconds",
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "fromStopId": {
+            "description": "Stop the leg leaves",
+            "type": "string"
+          },
+          "id": {
+            "description": "Leg ID",
+            "type": "string"
+          },
+          "isModeManual": {
+            "description": "The owner picked the mode",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/TripLegMode"
+          },
+          "polyline": {
+            "description": "Encoded polyline of the line",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TripLegStatus"
+          },
+          "toStopId": {
+            "description": "Stop the leg reaches",
+            "type": "string"
+          }
+        },
+        "required": [
+          "arrivalLatitude",
+          "arrivalLongitude",
+          "arrivalName",
+          "departureLatitude",
+          "departureLongitude",
+          "departureName",
+          "distance",
+          "duration",
+          "fromStopId",
+          "id",
+          "isModeManual",
+          "mode",
+          "polyline",
+          "status",
+          "toStopId"
+        ],
+        "type": "object"
+      },
+      "TripLegMode": {
+        "description": "Leg mode",
+        "enum": [
+          "foot",
+          "driving",
+          "trail",
+          "direct",
+          "flight",
+          "bicycle",
+          "bus",
+          "train",
+          "boat"
+        ],
+        "type": "string"
+      },
+      "TripLegStatus": {
+        "description": "Leg status",
+        "enum": [
+          "pending",
+          "ok",
+          "attention"
+        ],
+        "type": "string"
+      },
+      "TripLikeDto": {
+        "properties": {
+          "assetId": {
+            "description": "Asset ID",
+            "type": "string"
+          },
+          "count": {
+            "description": "Number of likes",
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assetId",
+          "count"
+        ],
+        "type": "object"
+      },
+      "TripOverlayDto": {
+        "properties": {
+          "color": {
+            "description": "Line colour",
+            "nullable": true,
+            "type": "string"
+          },
+          "geometry": {
+            "additionalProperties": {},
+            "description": "GeoJSON geometry",
+            "type": "object"
+          },
+          "id": {
+            "description": "Overlay ID",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TripOverlayKind"
+          }
+        },
+        "required": [
+          "color",
+          "geometry",
+          "id",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "TripOverlayKind": {
+        "description": "Overlay kind",
+        "enum": [
+          "trail",
+          "mask"
+        ],
+        "type": "string"
+      },
+      "TripPlaceDto": {
+        "properties": {
+          "article": {
+            "description": "Place article",
+            "nullable": true,
+            "type": "string"
+          },
+          "articleSource": {
+            "description": "Who wrote the article",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "Place ID",
+            "type": "string"
+          },
+          "key": {
+            "description": "Name of the place within the trip",
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": {
+            "description": "Place title",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "article",
+          "articleSource",
+          "id",
+          "key",
+          "title"
+        ],
+        "type": "object"
+      },
+      "TripPointSource": {
+        "description": "Where the point of an asset in the trip comes from",
+        "enum": [
+          "inferred",
+          "manual"
+        ],
+        "type": "string"
+      },
+      "TripResponseDto": {
+        "properties": {
+          "albumId": {
+            "description": "Album ID; a trip has its album’s ID",
+            "type": "string"
+          },
+          "assets": {
+            "description": "Every album asset outside the trash, in time order",
+            "items": {
+              "$ref": "#/components/schemas/TripAssetDto"
+            },
+            "type": "array"
+          },
+          "contentVersion": {
+            "description": "Bumped by every change a guest can see",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "isFavorites": {
+            "description": "The owner’s Favorites trip",
+            "type": "boolean"
+          },
+          "isFeatured": {
+            "description": "Picked by an admin for the home page",
+            "type": "boolean"
+          },
+          "isShowcased": {
+            "description": "Marked for the owner’s showcase",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TripKind"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/TripLegDto"
+            },
+            "type": "array"
+          },
+          "likes": {
+            "description": "Like counts of liked assets",
+            "items": {
+              "$ref": "#/components/schemas/TripLikeDto"
+            },
+            "type": "array"
+          },
+          "overlays": {
+            "items": {
+              "$ref": "#/components/schemas/TripOverlayDto"
+            },
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/TripPlaceDto"
+            },
+            "type": "array"
+          },
+          "stops": {
+            "description": "Stops in trip order",
+            "items": {
+              "$ref": "#/components/schemas/TripStopDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "albumId",
+          "assets",
+          "contentVersion",
+          "isFavorites",
+          "isFeatured",
+          "isShowcased",
+          "kind",
+          "legs",
+          "likes",
+          "overlays",
+          "places",
+          "stops"
+        ],
+        "type": "object"
+      },
+      "TripStopDto": {
+        "properties": {
+          "country": {
+            "description": "Country",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "Stop ID",
+            "type": "string"
+          },
+          "isAtCenter": {
+            "description": "Places trip: assets filed to the centre, no exact place",
+            "type": "boolean"
+          },
+          "isManualPoint": {
+            "description": "A point the owner set by hand",
+            "type": "boolean"
+          },
+          "isPositionManual": {
+            "description": "The owner moved the pin",
+            "type": "boolean"
+          },
+          "isSameAsOrigin": {
+            "description": "The finish is the start",
+            "type": "boolean"
+          },
+          "isTransit": {
+            "description": "Shot on the way: true yes, false declined, null not decided",
+            "nullable": true,
+            "type": "boolean"
+          },
+          "latitude": {
+            "description": "Stop latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "nullable": true,
+            "type": "number"
+          },
+          "localEnd": {
+            "description": "Local end time",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "localStart": {
+            "description": "Local start time",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "longitude": {
+            "description": "Stop longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "nullable": true,
+            "type": "number"
+          },
+          "placeId": {
+            "description": "Place ID",
+            "nullable": true,
+            "type": "string"
+          },
+          "region": {
+            "description": "Region",
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripStopRole"
+              }
+            ],
+            "nullable": true
+          },
+          "sequence": {
+            "description": "Order among stops that start at the same time",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "story": {
+            "description": "Stop story",
+            "nullable": true,
+            "type": "string"
+          },
+          "storySource": {
+            "description": "Who wrote the story",
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "description": "Stop title",
+            "nullable": true,
+            "type": "string"
+          },
+          "titleSource": {
+            "description": "Who wrote the title",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "id",
+          "isAtCenter",
+          "isManualPoint",
+          "isPositionManual",
+          "isSameAsOrigin",
+          "isTransit",
+          "latitude",
+          "localEnd",
+          "localStart",
+          "longitude",
+          "placeId",
+          "region",
+          "role",
+          "sequence",
+          "story",
+          "storySource",
+          "title",
+          "titleSource"
+        ],
+        "type": "object"
+      },
+      "TripStopRole": {
+        "description": "Start or finish of a route",
+        "enum": [
+          "origin",
+          "finish"
+        ],
+        "type": "string"
       },
       "UpdateAlbumDto": {
         "properties": {

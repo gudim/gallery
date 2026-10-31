@@ -66,7 +66,10 @@ expects it). Node comes from `source ~/.nvm/nvm.sh && nvm use 24.22.1` when `mis
    manifest). The report lands in `.git/upstream-preflight/`. Every incoming commit flagged
    "Touches trips upstream extension path" touches a hook file; read it first.
 3. `git rebase --onto <new tag> <old tag> <stage branch>`. Conflicts are expected only in the hook
-   files the manifest lists under `upstream_extension_paths`; keep each hook to its one line.
+   files the manifest lists under `upstream_extension_paths`; keep each hook to its one line. For
+   the generated `open-api/immich-openapi-specs.json` and `packages/sdk/src/fetch-client.ts`, take
+   the tag's version and regenerate them (`pnpm build`, then `node ./dist/bin/sync-open-api.js` in
+   `server/`, then `oazapfts` as in the root `mise.toml` task `open-api-typescript`).
 4. Set `last_verified_fork_head` to `git rev-parse <new tag>^{commit}` (a rebase rewrites the
    trip SHAs), then run
    `pnpm --filter @gallery/upstream-preflight run ready --manifest docs/fork/trips-ownership.yml`.
