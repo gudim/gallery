@@ -160,8 +160,12 @@ Done when:
 
 ### 2.4 First rollout
 
-- Gallery runs next to travel-album on ThinkCentre (memory and disk are enough, per the owner),
-  with its own Postgres, Redis and ML, an Authelia OIDC client and backups.
+Done last, after §2.8, and by the owner: every other stage is built and checked on the local dev
+stack (DECISIONS-LOG 2026-10-31).
+
+- The trips build replaces the Gallery already running on ThinkCentre next to travel-album; no
+  third instance. Data under `/mnt/sata_500/gallery`; reachable on the local network only at
+  first. An Authelia OIDC client and backups.
 
 Done when:
 - The owner and one family member sign in, and a dev-run migration of their albums opens through
