@@ -4636,11 +4636,23 @@ export type TripImportDto = {
         titleSource: string | null;
     }[];
 };
+export type TripAssetsCenterDto = {
+    /** Album asset IDs, outside the trash */
+    assetIds: string[];
+    /** Where the centre stop is made, when the trip has none yet; its title, such as “Kraków, no exact place” */
+    centre?: (TripEndDto) | null;
+};
 export type TripAssetsMoveDto = {
     /** Album asset IDs, outside the trash */
     assetIds: string[];
     /** Stop of the same trip the assets go to */
     stopId: string;
+};
+export type TripAssetPointDto = {
+    /** Latitude */
+    latitude: number;
+    /** Longitude */
+    longitude: number;
 };
 export type TripFinishUpdateDto = {
     /** The route ends where it began, and the finish follows the start */
@@ -4651,6 +4663,24 @@ export type TripFinishUpdateDto = {
     longitude?: number;
     /** Name of the point; blank leaves it to naming through Nominatim */
     title?: string | null;
+};
+export type TripGeoPlaceDto = {
+    /** Country */
+    country: string | null;
+    /** Part of the city, when it is not the city itself */
+    district: string | null;
+    /** Name of the place */
+    label: string;
+    /** Latitude */
+    latitude: number;
+    /** Longitude */
+    longitude: number;
+    /** City, town, village or county */
+    region: string | null;
+};
+export type TripGeoPlacesDto = {
+    /** Places found, at most five */
+    places: TripGeoPlaceDto[];
 };
 export type TripLegModeUpdateDto = {
     /** The owner’s mode, kept from now on; null returns to the default by distance */
@@ -11274,6 +11304,22 @@ export function importTrip({ id, tripImportDto }: {
     })));
 }
 /**
+ * File assets to the centre of a trip
+ */
+export function toCenter({ id, tripAssetsCenterDto }: {
+    id: string;
+    tripAssetsCenterDto: TripAssetsCenterDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/assets/center`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripAssetsCenterDto
+    })));
+}
+/**
  * Move assets to a trip stop
  */
 export function moveAssets({ id, tripAssetsMoveDto }: {
@@ -11287,6 +11333,38 @@ export function moveAssets({ id, tripAssetsMoveDto }: {
         ...opts,
         method: "PUT",
         body: tripAssetsMoveDto
+    })));
+}
+/**
+ * Remove the point of an asset in a trip
+ */
+export function removeAssetPoint({ assetId, id }: {
+    assetId: string;
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}/point`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Set the point of an asset in a trip
+ */
+export function setAssetPoint({ assetId, id, tripAssetPointDto }: {
+    assetId: string;
+    id: string;
+    tripAssetPointDto: TripAssetPointDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}/point`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripAssetPointDto
     })));
 }
 /**
@@ -11318,6 +11396,40 @@ export function setFinish({ id, tripFinishUpdateDto }: {
         method: "PUT",
         body: tripFinishUpdateDto
     })));
+}
+/**
+ * Name a point for a trip
+ */
+export function reversePlace({ id, latitude, longitude }: {
+    id: string;
+    latitude: number;
+    longitude: number;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripGeoPlacesDto;
+    }>(`/trips/${encodeURIComponent(id)}/geo/reverse${QS.query(QS.explode({
+        latitude,
+        longitude
+    }))}`, {
+        ...opts
+    }));
+}
+/**
+ * Search places for a trip
+ */
+export function searchPlaces2({ id, query }: {
+    id: string;
+    query: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripGeoPlacesDto;
+    }>(`/trips/${encodeURIComponent(id)}/geo/search${QS.query(QS.explode({
+        query
+    }))}`, {
+        ...opts
+    }));
 }
 /**
  * Retry trip legs

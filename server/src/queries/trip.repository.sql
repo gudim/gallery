@@ -122,6 +122,7 @@ where
 -- TripRepository.fileNewAssets
 begin
 select
+  "trip"."albumId",
   "trip"."kind"
 from
   "trip"

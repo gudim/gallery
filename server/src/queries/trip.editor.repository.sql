@@ -164,3 +164,33 @@ where
 for update of
   "trip"
 commit
+
+-- TripEditorRepository.setAssetPoint
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit
+
+-- TripEditorRepository.toCenter
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit

@@ -25343,6 +25343,73 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/assets/center": {
+      "put": {
+        "description": "Files Unplaced assets of a Places trip into its centre stop, “<centre>, no exact place”. The first call makes that stop at the centre it gives; later ones leave it out. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "toCenter",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripAssetsCenterDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "File assets to the centre of a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/assets/stop": {
       "put": {
         "description": "Files the chosen album assets into a stop of the same trip. A stop the move would leave without assets is refused: merge it instead. The album owner and editors edit the trip. Returns the whole trip.",
@@ -25393,6 +25460,148 @@
           }
         ],
         "summary": "Move assets to a trip stop",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/assets/{assetId}/point": {
+      "delete": {
+        "description": "Removes the point set by hand for an asset in a trip, which goes back to its own GPS or a point inferred from its neighbours. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "removeAssetPoint",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Remove the point of an asset in a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      },
+      "put": {
+        "description": "Sets where an asset was taken, for this trip only: the asset itself keeps its coordinates. Assets without GPS are placed again around it. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "setAssetPoint",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripAssetPointDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Set the point of an asset in a trip",
         "tags": [
           "Trips"
         ],
@@ -25515,6 +25724,149 @@
           }
         ],
         "summary": "Set the finish of a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/geo/reverse": {
+      "get": {
+        "description": "Names a point on the map through Nominatim in the trip’s language: one place, or none where Nominatim knows none. Responds 502 when the service does not answer. The album owner and editors only.",
+        "operationId": "reversePlace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "latitude",
+            "required": true,
+            "in": "query",
+            "description": "Latitude",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "longitude",
+            "required": true,
+            "in": "query",
+            "description": "Longitude",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripGeoPlacesDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Name a point for a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/geo/search": {
+      "get": {
+        "description": "Finds up to five places by address or name through Nominatim, named in the trip’s language, for picking a point. Responds 502 when the search does not answer. The album owner and editors only.",
+        "operationId": "searchPlaces",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "required": true,
+            "in": "query",
+            "description": "Address or name of a place",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 300,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripGeoPlacesDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Search places for a trip",
         "tags": [
           "Trips"
         ],
@@ -48003,6 +48355,56 @@
         ],
         "type": "object"
       },
+      "TripAssetPointDto": {
+        "properties": {
+          "latitude": {
+            "description": "Latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "type": "object"
+      },
+      "TripAssetsCenterDto": {
+        "properties": {
+          "assetIds": {
+            "description": "Album asset IDs, outside the trash",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "centre": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripEndDto"
+              }
+            ],
+            "description": "Where the centre stop is made, when the trip has none yet; its title, such as “Kraków, no exact place”",
+            "nullable": true
+          }
+        },
+        "required": [
+          "assetIds"
+        ],
+        "type": "object"
+      },
       "TripAssetsMoveDto": {
         "properties": {
           "assetIds": {
@@ -48130,6 +48532,63 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "TripGeoPlaceDto": {
+        "properties": {
+          "country": {
+            "description": "Country",
+            "nullable": true,
+            "type": "string"
+          },
+          "district": {
+            "description": "Part of the city, when it is not the city itself",
+            "nullable": true,
+            "type": "string"
+          },
+          "label": {
+            "description": "Name of the place",
+            "type": "string"
+          },
+          "latitude": {
+            "description": "Latitude",
+            "format": "double",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Longitude",
+            "format": "double",
+            "type": "number"
+          },
+          "region": {
+            "description": "City, town, village or county",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "district",
+          "label",
+          "latitude",
+          "longitude",
+          "region"
+        ],
+        "type": "object"
+      },
+      "TripGeoPlacesDto": {
+        "properties": {
+          "places": {
+            "description": "Places found, at most five",
+            "items": {
+              "$ref": "#/components/schemas/TripGeoPlaceDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "places"
+        ],
         "type": "object"
       },
       "TripImportDto": {

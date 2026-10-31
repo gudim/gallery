@@ -81,6 +81,28 @@ export const nominatimReverseRequest = ({ latitude, longitude }: LatLng, lang: s
   },
 });
 
+// travel-album `nominatim.SEARCH_LIMIT`: the places a search offers.
+const SEARCH_LIMIT = 5;
+
+/**
+ * Nominatim's search for a place by address or name, for the editor's point picker (travel-album `nominatim.search`).
+ * The query is folded to single spaces and lower case, so the same search reuses the cached answer.
+ */
+export const nominatimSearchRequest = (query: string, lang: string): TripGeoRequest => ({
+  service: TripGeoService.Nominatim,
+  path: '/search',
+  query: {
+    q: normalizeTripGeoQuery(query),
+    limit: SEARCH_LIMIT,
+    format: 'jsonv2',
+    addressdetails: 1,
+    namedetails: 1,
+    'accept-language': lang,
+  },
+});
+
+export const normalizeTripGeoQuery = (query: string) => query.split(/\s+/).filter(Boolean).join(' ').toLowerCase();
+
 /** What naming takes from a Nominatim answer. */
 export type TripPlaceNames = {
   label: string;
@@ -156,3 +178,27 @@ export const hasPlaceNames = (stop: Pick<TripStopToName, 'region' | 'country' | 
 /** A finish at the start is not asked for: it follows the start. */
 export const followsStart = (stop: Pick<TripStopToName, 'role' | 'isFinishAtStart'>) =>
   stop.role === TripStopRole.Finish && stop.isFinishAtStart;
+
+/** A place a search or a reverse geocode found: its names and point. */
+export type TripGeoPlace = TripPlaceNames & LatLng;
+
+const placeOf = (data: unknown): TripGeoPlace | null => {
+  const names = parseNominatimReverse(data);
+  const { lat, lon } = data as Record<string, unknown>;
+  const [latitude, longitude] = [Number(lat), Number(lon)];
+  return names && Number.isFinite(latitude) && Number.isFinite(longitude) ? { ...names, latitude, longitude } : null;
+};
+
+/** The places of a search answer, at most five. Throws on an answer that is not a list, so it is not cached. */
+export const parseNominatimSearch = (data: unknown): TripGeoPlace[] => {
+  if (!Array.isArray(data)) {
+    throw new TypeError('Nominatim answered a search with something that is not a list');
+  }
+  return data
+    .slice(0, SEARCH_LIMIT)
+    .map((item) => placeOf(item))
+    .filter((place) => place !== null);
+};
+
+/** The place at a point, or null when Nominatim knows none there. */
+export const parseNominatimPlace = (data: unknown): TripGeoPlace | null => placeOf(data);
