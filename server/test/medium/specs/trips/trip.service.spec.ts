@@ -35,9 +35,9 @@ const stop = (key: string, overrides: Record<string, unknown> = {}) => ({
   storySource: null,
   region: null,
   country: null,
-  isManualPoint: false,
+  isAddedByHand: false,
   role: null,
-  isSameAsOrigin: false,
+  isFinishAtStart: false,
   isTransit: null,
   isAtCenter: false,
   ...overrides,
@@ -69,7 +69,7 @@ const fixture = ([a1, a2, a3]: string[]) => ({
   isShowcased: true,
   places: [{ key: 'vilnius', title: 'Vilnius', article: 'An article.', articleSource: 'llm' }],
   stops: [
-    stop('home', { role: 'origin', latitude: 54.68, longitude: 25.27 }),
+    stop('home', { role: 'start', latitude: 54.68, longitude: 25.27 }),
     stop('old-town', {
       placeKey: 'vilnius',
       latitude: 54.68,
@@ -91,12 +91,26 @@ const fixture = ([a1, a2, a3]: string[]) => ({
       isTransit: true,
       isPositionManual: true,
     }),
-    stop('back', { role: 'finish', isSameAsOrigin: true }),
+    stop('back', { role: 'finish', isFinishAtStart: true }),
   ],
   assets: [
-    { assetId: a1, stopKey: 'old-town', latitude: null, longitude: null, pointSource: null },
-    { assetId: a2, stopKey: 'road', latitude: 55.1, longitude: 24.9, pointSource: 'inferred' },
-    { assetId: a3, stopKey: null, latitude: 54.9, longitude: 25, pointSource: 'manual' },
+    {
+      assetId: a1,
+      stopKey: 'old-town',
+      latitude: null,
+      longitude: null,
+      pointSource: null,
+      generatedCaption: 'The town hall at dusk.',
+    },
+    {
+      assetId: a2,
+      stopKey: 'road',
+      latitude: 55.1,
+      longitude: 24.9,
+      pointSource: 'inferred',
+      generatedCaption: null,
+    },
+    { assetId: a3, stopKey: null, latitude: 54.9, longitude: 25, pointSource: 'manual', generatedCaption: null },
   ],
   legs: [
     leg('home', 'old-town', { mode: 'foot', distance: 1200, duration: 900 }),
@@ -127,8 +141,11 @@ const fixture = ([a1, a2, a3]: string[]) => ({
   likes: [{ assetId: a1, count: 2 }],
 });
 
-// The read response written back as an import document: server ids replaced by the document's keys.
-const asDocument = (trip: TripResponseDto, stopKeys: string[]) => {
+// The read response written back as an import document: server ids replaced by the document's keys, and the
+// generated captions, which the read does not return, taken from their table.
+const asDocument = async (trip: TripResponseDto, stopKeys: string[]) => {
+  const captions = await db.selectFrom('trip_generated_caption').selectAll().execute();
+  const captionOf = new Map(captions.map(({ assetId, text }) => [assetId, text]));
   const keyOf = new Map(trip.stops.map(({ id }, index) => [id, stopKeys[index]]));
   const placeKeyOf = new Map(trip.places.map(({ id, key }) => [id, key]));
   return {
@@ -144,6 +161,7 @@ const asDocument = (trip: TripResponseDto, stopKeys: string[]) => {
     assets: trip.assets.map(({ stopId, ...asset }) => ({
       ...asset,
       stopKey: stopId === null ? null : keyOf.get(stopId),
+      generatedCaption: captionOf.get(asset.assetId) ?? null,
     })),
     legs: trip.legs.map(({ id: _, fromStopId, toStopId, ...rest }) => ({
       fromStopKey: keyOf.get(fromStopId),
@@ -188,12 +206,21 @@ describe(TripService.name, () => {
 
       const trip = await sut.get(factory.auth({ user: owner }), album.id);
       expect(trip).toMatchObject({ albumId: album.id, isFeatured: false, contentVersion: 1 });
-      expect(
+      await expect(
         asDocument(
           trip,
           document.stops.map(({ key }) => key),
         ),
-      ).toEqual(document);
+      ).resolves.toEqual(document);
+    });
+
+    it('creates one trip when two imports of the album race', async () => {
+      const { importTrip } = await setup();
+
+      const results = await Promise.allSettled([importTrip(), importTrip()]);
+
+      expect(results.map(({ status }) => status).toSorted()).toEqual(['fulfilled', 'rejected']);
+      expect(results.find((result) => result.status === 'rejected')?.reason).toBeInstanceOf(ConflictException);
     });
 
     it('refuses an album that already has a trip', async () => {
@@ -274,6 +301,44 @@ describe(TripService.name, () => {
       await expect(
         sut.get(factory.auth({ user: owner, sharedLink: { id: sharedLink.id } }), album.id),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('answers 404 for a trip whose album is in the trash, shared link included', async () => {
+      const { ctx, sut, owner, album, importTrip } = await setup();
+      await importTrip();
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: album.id,
+      });
+
+      await ctx.softDeleteAlbum(album.id);
+
+      await expect(sut.get(factory.auth({ user: owner }), album.id)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        sut.get(factory.auth({ user: owner, sharedLink: { id: sharedLink.id } }), album.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('hides asset points, not stops, from a shared link that hides metadata', async () => {
+      const { ctx, sut, owner, album, importTrip } = await setup();
+      const imported = await importTrip();
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: album.id,
+      });
+
+      const trip = await sut.get(
+        factory.auth({ user: owner, sharedLink: { id: sharedLink.id, showExif: false } }),
+        album.id,
+      );
+
+      expect(trip.stops).toEqual(imported.stops);
+      expect(trip.legs).toEqual(imported.legs);
+      expect(trip.assets).toEqual(
+        imported.assets.map((asset) => ({ ...asset, latitude: null, longitude: null, pointSource: null })),
+      );
     });
 
     it('answers 404 for an album without a trip', async () => {

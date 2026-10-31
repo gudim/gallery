@@ -47,14 +47,14 @@ export async function up(db: Kysely<any>): Promise<void> {
   "storySource" text,
   "region" text,
   "country" text,
-  "isManualPoint" boolean NOT NULL DEFAULT false,
+  "isAddedByHand" boolean NOT NULL DEFAULT false,
   "role" text,
-  "isSameAsOrigin" boolean NOT NULL DEFAULT false,
+  "isFinishAtStart" boolean NOT NULL DEFAULT false,
   "isTransit" boolean,
   "isAtCenter" boolean NOT NULL DEFAULT false,
   CONSTRAINT "trip_stop_albumId_fkey" FOREIGN KEY ("albumId") REFERENCES "trip" ("albumId") ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT "trip_stop_placeId_fkey" FOREIGN KEY ("placeId") REFERENCES "trip_place" ("id") ON UPDATE CASCADE ON DELETE SET NULL,
-  CONSTRAINT "trip_stop_role_chk" CHECK ("role" IN ('origin', 'finish')),
+  CONSTRAINT "trip_stop_role_chk" CHECK ("role" IN ('start', 'finish')),
   CONSTRAINT "trip_stop_pkey" PRIMARY KEY ("id")
 );`.execute(db);
   await sql`CREATE INDEX "trip_stop_albumId_localStart_idx" ON "trip_stop" ("albumId", "localStart");`.execute(db);
@@ -77,6 +77,12 @@ export async function up(db: Kysely<any>): Promise<void> {
   CONSTRAINT "trip_asset_pkey" PRIMARY KEY ("albumId", "assetId")
 );`.execute(db);
   await sql`CREATE INDEX "trip_asset_stopId_idx" ON "trip_asset" ("stopId");`.execute(db);
+  await sql`CREATE TABLE "trip_generated_caption" (
+  "assetId" uuid NOT NULL,
+  "text" text NOT NULL,
+  CONSTRAINT "trip_generated_caption_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "asset" ("id") ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT "trip_generated_caption_pkey" PRIMARY KEY ("assetId")
+);`.execute(db);
   await sql`CREATE TABLE "trip_leg" (
   "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
   "albumId" uuid NOT NULL,
@@ -140,6 +146,7 @@ export async function up(db: Kysely<any>): Promise<void> {
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+  await sql`DROP TABLE "trip_generated_caption";`.execute(db);
   await sql`DROP TABLE "trip_like";`.execute(db);
   await sql`DROP TABLE "trip_overlay";`.execute(db);
   await sql`DROP TABLE "trip_leg";`.execute(db);

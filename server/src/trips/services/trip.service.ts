@@ -10,7 +10,7 @@ import type { AuthDto } from 'src/dtos/auth.dto.js';
 import { Permission } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { TripImportDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
-import { TripRepository } from 'src/trips/repositories/trip.repository.js';
+import { TripCreateResult, TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
@@ -26,11 +26,7 @@ export class TripService {
 
   async get(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
     await this.requireRead(auth, albumId);
-    const trip = await this.tripRepository.get(albumId);
-    if (!trip) {
-      throw new NotFoundException('Trip not found');
-    }
-    return mapTrip(trip);
+    return this.read(auth, albumId);
   }
 
   /** Creates the album's trip from one document (trips PLAN §2.1). Owner only; an album has at most one trip. */
@@ -39,12 +35,6 @@ export class TripService {
     const isOwner = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
     if (auth.sharedLink || !isOwner.has(albumId)) {
       throw new ForbiddenException('Only the album owner can import a trip');
-    }
-    if (await this.tripRepository.exists(albumId)) {
-      throw new ConflictException('The album already has a trip');
-    }
-    if (dto.isFavorites && (await this.tripRepository.hasFavoritesTrip(auth.user.id))) {
-      throw new ConflictException('The owner already has a Favorites trip');
     }
     const assetIds = [...new Set([...dto.assets, ...dto.likes].map(({ assetId }) => assetId))];
     const inAlbum = await this.tripRepository.getAlbumAssetIds(albumId, assetIds);
@@ -55,7 +45,7 @@ export class TripService {
 
     const placeIds = new Map(dto.places.map(({ key }) => [key, randomUUID()]));
     const stopIds = new Map(dto.stops.map(({ key }) => [key, randomUUID()]));
-    await this.tripRepository.create({
+    const result = await this.tripRepository.create(auth.user.id, {
       trip: { albumId, kind: dto.kind, isFavorites: dto.isFavorites, isShowcased: dto.isShowcased, contentVersion: 1 },
       places: dto.places.map((place) => ({ ...place, id: placeIds.get(place.key)!, albumId })),
       stops: dto.stops.map(({ key, placeKey, ...stop }) => ({
@@ -64,7 +54,7 @@ export class TripService {
         albumId,
         placeId: placeKey === null ? null : placeIds.get(placeKey)!,
       })),
-      assets: dto.assets.map(({ stopKey, ...asset }) => ({
+      assets: dto.assets.map(({ stopKey, generatedCaption: _, ...asset }) => ({
         ...asset,
         albumId,
         stopId: stopKey === null ? null : stopIds.get(stopKey)!,
@@ -80,9 +70,25 @@ export class TripService {
       likes: dto.likes.flatMap(({ assetId, count }) =>
         Array.from({ length: count }, () => ({ albumId, assetId, viewerKey: `import:${randomUUID()}` })),
       ),
+      generatedCaptions: dto.assets.flatMap(({ assetId, generatedCaption }) =>
+        generatedCaption === null ? [] : [{ assetId, text: generatedCaption }],
+      ),
     });
 
-    return this.get(auth, albumId);
+    switch (result) {
+      case TripCreateResult.AlbumMissing: {
+        throw new NotFoundException('Trip not found');
+      }
+      case TripCreateResult.TripExists: {
+        throw new ConflictException('The album already has a trip');
+      }
+      case TripCreateResult.FavoritesExists: {
+        throw new ConflictException('The owner already has a Favorites trip');
+      }
+      case TripCreateResult.Created: {
+        return this.read(auth, albumId);
+      }
+    }
   }
 
   // Owner, editor, viewer or the album's shared link (trips PLAN D7). Anyone else gets 404, as for a missing album.
@@ -96,31 +102,46 @@ export class TripService {
       throw new NotFoundException('Trip not found');
     }
   }
+
+  private async read(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
+    const trip = await this.tripRepository.get(albumId);
+    if (!trip) {
+      throw new NotFoundException('Trip not found');
+    }
+    // A shared link that hides metadata hides where each asset was; stops and legs stay (DECISIONS-LOG 2026-10-31).
+    return mapTrip(trip, { showAssetPoints: auth.sharedLink?.showExif ?? true });
+  }
 }
 
-const mapTrip = ({ trip, places, stops, assets, legs, overlays, likes }: Trip): TripResponseDto => {
-  const stopOrder = new Map(stops.map(({ id }, index) => [id, index]));
-  return {
-    albumId: trip.albumId,
-    kind: trip.kind,
-    isFavorites: trip.isFavorites,
-    isShowcased: trip.isShowcased,
-    isFeatured: trip.isFeatured,
-    contentVersion: trip.contentVersion,
-    places: places.map(({ albumId: _, ...place }) => place),
-    stops: stops.map(({ albumId: _, localStart, localEnd, ...stop }) => ({
+const withoutAlbumId = <T extends { albumId: string }>({ albumId: _, ...rest }: T) => rest;
+
+const mapTrip = (
+  { trip, places, stops, assets, legs, overlays, likes }: Trip,
+  { showAssetPoints }: { showAssetPoints: boolean },
+): TripResponseDto => ({
+  albumId: trip.albumId,
+  kind: trip.kind,
+  isFavorites: trip.isFavorites,
+  isShowcased: trip.isShowcased,
+  isFeatured: trip.isFeatured,
+  contentVersion: trip.contentVersion,
+  places: places.map((row) => withoutAlbumId(row)),
+  stops: stops
+    .map((row) => withoutAlbumId(row))
+    .map(({ localStart, localEnd, ...stop }) => ({
       ...stop,
       localStart: asDateTimeString(localStart),
       localEnd: asDateTimeString(localEnd),
     })),
-    assets,
-    legs: legs
-      .map(({ albumId: _, ...leg }) => leg)
-      .toSorted((a, b) => stopOrder.get(a.fromStopId)! - stopOrder.get(b.fromStopId)! || a.id.localeCompare(b.id)),
-    overlays: overlays.map(({ albumId: _, geometry, ...overlay }) => ({
+  assets: showAssetPoints
+    ? assets
+    : assets.map((asset) => ({ ...asset, latitude: null, longitude: null, pointSource: null })),
+  legs: legs.map((row) => withoutAlbumId(row)),
+  overlays: overlays
+    .map((row) => withoutAlbumId(row))
+    .map(({ geometry, ...overlay }) => ({
       ...overlay,
       geometry: geometry as Record<string, unknown>,
     })),
-    likes,
-  };
-};
+  likes,
+});

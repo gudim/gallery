@@ -57,7 +57,8 @@
         "cleanup_decision_assetId_fkey",
         "shared_space_asset_assetId_fkey",
         "shared_space_face_match_backfill_target_assetId_fkey",
-        "shared_space_thumbnailAssetId_fkey"
+        "shared_space_thumbnailAssetId_fkey",
+        "trip_generated_caption_assetId_fkey"
       ]
     },
     "library_pkey": {

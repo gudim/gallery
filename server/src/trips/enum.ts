@@ -6,7 +6,7 @@ export enum TripKind {
 }
 
 export enum TripStopRole {
-  Origin = 'origin',
+  Start = 'start',
   Finish = 'finish',
 }
 

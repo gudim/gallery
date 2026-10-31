@@ -4762,14 +4762,14 @@ export type TripStopDto = {
     country: string | null;
     /** Stop ID */
     id: string;
+    /** A stop the owner added by hand, not made from assets */
+    isAddedByHand: boolean;
     /** Places trip: assets filed to the centre, no exact place */
     isAtCenter: boolean;
-    /** A point the owner set by hand */
-    isManualPoint: boolean;
+    /** The finish is the same place as the start */
+    isFinishAtStart: boolean;
     /** The owner moved the pin */
     isPositionManual: boolean;
-    /** The finish is the start */
-    isSameAsOrigin: boolean;
     /** Shot on the way: true yes, false declined, null not decided */
     isTransit: boolean | null;
     /** Stop latitude */
@@ -4822,6 +4822,8 @@ export type TripImportDto = {
     assets?: {
         /** Asset ID; the asset must be in the album */
         assetId: string;
+        /** The caption an LLM wrote, when the asset description is still that text */
+        generatedCaption?: string | null;
         /** Inferred or manual latitude, in the trip only */
         latitude: number | null;
         /** Inferred or manual longitude, in the trip only */
@@ -4892,14 +4894,14 @@ export type TripImportDto = {
     stops?: {
         /** Country */
         country: string | null;
+        /** A stop the owner added by hand, not made from assets */
+        isAddedByHand: boolean;
         /** Places trip: assets filed to the centre, no exact place */
         isAtCenter: boolean;
-        /** A point the owner set by hand */
-        isManualPoint: boolean;
+        /** The finish is the same place as the start */
+        isFinishAtStart: boolean;
         /** The owner moved the pin */
         isPositionManual: boolean;
-        /** The finish is the start */
-        isSameAsOrigin: boolean;
         /** Shot on the way: true yes, false declined, null not decided */
         isTransit: boolean | null;
         /** Name of the stop within the document */
@@ -13027,7 +13029,7 @@ export enum TripOverlayKind {
     Mask = "mask"
 }
 export enum TripStopRole {
-    Origin = "origin",
+    Start = "start",
     Finish = "finish"
 }
 export enum WorkflowResult {
