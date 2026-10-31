@@ -957,14 +957,18 @@ export const fileTripAssets = async (
   await trx
     .insertInto('trip_asset')
     .values(
-      filing.assets.map(({ assetId, stopId, point }) => ({
-        albumId,
-        assetId,
-        stopId,
-        latitude: point?.latitude ?? null,
-        longitude: point?.longitude ?? null,
-        pointSource: point && TripPointSource.Inferred,
-      })),
+      filing.assets.map(({ assetId, stopId, point: inferred }) => {
+        // A borrowed point anchors the asset like GPS, but it is the trip's own, so it is kept as inferred.
+        const point = inferred ?? borrowed.get(assetId) ?? null;
+        return {
+          albumId,
+          assetId,
+          stopId,
+          latitude: point?.latitude ?? null,
+          longitude: point?.longitude ?? null,
+          pointSource: point && TripPointSource.Inferred,
+        };
+      }),
     )
     // An Unplaced asset filed again keeps its point, which the caller has inferred already.
     .onConflict((oc) => oc.columns(['albumId', 'assetId']).doUpdateSet((eb) => ({ stopId: eb.ref('excluded.stopId') })))
