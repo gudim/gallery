@@ -7,7 +7,7 @@ import { AlbumRepository } from 'src/repositories/album.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
-import { TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
+import { TripCreateDto, TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { newMediumService } from 'test/medium.factory.js';
@@ -200,6 +200,22 @@ const setup = async () => {
   return { ctx, sut, owner, album, assetIds, document, importTrip };
 };
 
+type Shot = [time: string, point: { latitude: number; longitude: number } | null];
+
+// An album of the owner's assets at local times on 2026-05-01, each with its GPS or none.
+const newAlbumOf = async (ctx: Awaited<ReturnType<typeof setup>>['ctx'], ownerId: string, shots: Shot[]) => {
+  const assetIds = [];
+  for (const [time, point] of shots) {
+    const { asset } = await ctx.newAsset({ ownerId, localDateTime: new Date(`2026-05-01T${time}:00.000Z`) });
+    if (point) {
+      await ctx.newExif({ assetId: asset.id, ...point });
+    }
+    assetIds.push(asset.id);
+  }
+  const { album } = await ctx.newAlbum({ ownerId }, assetIds);
+  return { album, assetIds };
+};
+
 const changes = (dto: Record<string, unknown>) => TripStopUpdateDto.schema.parse(dto);
 
 describe(TripService.name, () => {
@@ -264,6 +280,91 @@ describe(TripService.name, () => {
       await expect(sut.import(factory.auth({ user: owner }), second.id, favorites)).rejects.toBeInstanceOf(
         ConflictException,
       );
+    });
+  });
+
+  describe('create', () => {
+    const P = { latitude: 54.68, longitude: 25.28 };
+
+    it('lays a route out into stops between its start and finish, with pending legs', async () => {
+      const { ctx, sut, owner } = await setup();
+      const { album, assetIds } = await newAlbumOf(ctx, owner.id, [
+        ['10:00', P],
+        ['10:30', null],
+        ['11:00', P],
+        ['18:00', { latitude: 55, longitude: 25 }],
+      ]);
+
+      const trip = await sut.create(
+        factory.auth({ user: owner }),
+        TripCreateDto.schema.parse({
+          albumId: album.id,
+          kind: 'route',
+          start: { latitude: 54.685, longitude: 25.28, title: 'Home' },
+          isFinishAtStart: true,
+        }),
+      );
+
+      expect(trip).toMatchObject({ albumId: album.id, kind: 'route', contentVersion: 1 });
+      const [start, first, second, finish] = trip.stops;
+      expect(trip.stops).toHaveLength(4);
+      expect(start).toMatchObject({ role: 'start', title: 'Home', titleSource: 'manual', isAddedByHand: true });
+      expect(finish).toMatchObject({ role: 'finish', title: 'Home', latitude: 54.685, isFinishAtStart: true });
+      expect(first).toMatchObject({
+        ...P,
+        role: null,
+        localStart: '2026-05-01T10:00:00.000Z',
+        localEnd: '2026-05-01T11:00:00.000Z',
+      });
+      expect(second).toMatchObject({ latitude: 55, longitude: 25, localStart: '2026-05-01T18:00:00.000Z' });
+      expect(trip.assets).toEqual([
+        { assetId: assetIds[0], stopId: first.id, latitude: null, longitude: null, pointSource: null },
+        { assetId: assetIds[1], stopId: first.id, ...P, pointSource: 'inferred' },
+        { assetId: assetIds[2], stopId: first.id, latitude: null, longitude: null, pointSource: null },
+        { assetId: assetIds[3], stopId: second.id, latitude: null, longitude: null, pointSource: null },
+      ]);
+      expect(trip.legs.map(({ fromStopId, toStopId, mode, status }) => [fromStopId, toStopId, mode, status])).toEqual([
+        [start.id, first.id, 'foot', 'pending'],
+        [first.id, second.id, 'driving', 'pending'],
+        [second.id, finish.id, 'driving', 'pending'],
+      ]);
+    });
+
+    it('sections a plain trip by day, without legs, and leaves trashed assets out', async () => {
+      const { ctx, sut, owner } = await setup();
+      const { album, assetIds } = await newAlbumOf(ctx, owner.id, [
+        ['10:00', P],
+        ['12:00', null],
+        ['13:00', null],
+      ]);
+      await db.updateTable('asset').set({ deletedAt: new Date() }).where('id', '=', assetIds[2]).execute();
+
+      const trip = await sut.create(
+        factory.auth({ user: owner }),
+        TripCreateDto.schema.parse({ albumId: album.id, kind: 'plain' }),
+      );
+
+      expect(trip.stops).toEqual([
+        expect.objectContaining({ latitude: null, longitude: null, localEnd: '2026-05-01T12:00:00.000Z' }),
+      ]);
+      expect(trip.assets.map(({ stopId, pointSource }) => [stopId, pointSource])).toEqual([
+        [trip.stops[0].id, null],
+        [trip.stops[0].id, null],
+      ]);
+      expect(trip.legs).toEqual([]);
+    });
+
+    it('lets only the owner make a trip, once', async () => {
+      const { ctx, sut, owner, album, importTrip } = await setup();
+      const { user: editor } = await ctx.newUser();
+      const { user: stranger } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: editor.id, role: AlbumUserRole.Editor });
+      const dto = TripCreateDto.schema.parse({ albumId: album.id, kind: 'places' });
+
+      await expect(sut.create(factory.auth({ user: editor }), dto)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(sut.create(factory.auth({ user: stranger }), dto)).rejects.toBeInstanceOf(NotFoundException);
+      await importTrip();
+      await expect(sut.create(factory.auth({ user: owner }), dto)).rejects.toBeInstanceOf(ConflictException);
     });
   });
 

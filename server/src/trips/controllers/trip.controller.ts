@@ -9,6 +9,7 @@ import { Endpoint, HistoryBuilder } from 'src/decorators.js';
 import { Permission } from 'src/enum.js';
 import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.js';
 import {
+  TripCreateDto,
   TripImportDto,
   TripLikeDto,
   TripResponseDto,
@@ -87,6 +88,18 @@ export class TripController {
     @Req() req: Request,
   ): Promise<TripLikeDto> {
     return this.service.unlike(auth, id, assetId, viewerKeyOf(req));
+  }
+
+  @Post()
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Create a trip',
+    description:
+      'Makes a trip of an album and lays its assets out into stops by the trip kind; assets that fit no stop are Unplaced. A Route trip may take a start and a finish. Only the album owner can make a trip, and only of an album without one (409 otherwise). Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  createTrip(@Auth() auth: AuthDto, @Body() dto: TripCreateDto): Promise<TripResponseDto> {
+    return this.service.create(auth, dto);
   }
 
   @Post(':id')

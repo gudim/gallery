@@ -4687,6 +4687,25 @@ export type TrashResponseDto = {
     /** Number of items in trash */
     count: number;
 };
+export type TripEndDto = {
+    /** Latitude */
+    latitude: number;
+    /** Longitude */
+    longitude: number;
+    /** Name of the point; blank names it by its coordinates */
+    title?: string | null;
+};
+export type TripCreateDto = {
+    /** Album ID; the trip takes it */
+    albumId: string;
+    /** Where a route ends */
+    finish?: (TripEndDto) | null;
+    /** The route ends where it began */
+    isFinishAtStart?: boolean;
+    kind: TripKind;
+    /** Where a route begins */
+    start?: (TripEndDto) | null;
+};
 export type TripAssetDto = {
     /** Asset ID */
     assetId: string;
@@ -11627,6 +11646,21 @@ export function restoreAssets({ bulkIdsDto }: {
     })));
 }
 /**
+ * Create a trip
+ */
+export function createTrip({ tripCreateDto }: {
+    tripCreateDto: TripCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>("/trips", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripCreateDto
+    })));
+}
+/**
  * Retrieve a trip
  */
 export function getTrip({ id, key, slug }: {
@@ -13066,14 +13100,14 @@ export enum AssetOrderBy {
     TakenAt = "takenAt",
     CreatedAt = "createdAt"
 }
-export enum TripPointSource {
-    Inferred = "inferred",
-    Manual = "manual"
-}
 export enum TripKind {
     Route = "route",
     Places = "places",
     Plain = "plain"
+}
+export enum TripPointSource {
+    Inferred = "inferred",
+    Manual = "manual"
 }
 export enum TripLegMode {
     Foot = "foot",

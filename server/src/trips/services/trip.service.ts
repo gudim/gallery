@@ -9,8 +9,17 @@ import { randomUUID } from 'node:crypto';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
 import { Permission } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
-import { TripImportDto, TripLikeDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
+import {
+  TripCreateDto,
+  TripEndDto,
+  TripImportDto,
+  TripLikeDto,
+  TripResponseDto,
+  TripStopUpdateDto,
+} from 'src/trips/dtos/trip.dto.js';
+import { TripKind, TripPointSource, TripStopRole } from 'src/trips/enum.js';
 import { TripCreateResult, TripEditResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
+import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
 import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
@@ -55,11 +64,7 @@ export class TripService {
 
   /** Creates the album's trip from one document (trips PLAN §2.1). Owner only; an album has at most one trip. */
   async import(auth: AuthDto, albumId: string, dto: TripImportDto): Promise<TripResponseDto> {
-    await this.requireRead(auth, albumId);
-    const isOwner = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
-    if (auth.sharedLink || !isOwner.has(albumId)) {
-      throw new ForbiddenException('Only the album owner can import a trip');
-    }
+    await this.requireOwner(auth, albumId, 'Only the album owner can import a trip');
     const assetIds = [...new Set([...dto.assets, ...dto.likes].map(({ assetId }) => assetId))];
     const inAlbum = await this.tripRepository.getAlbumAssetIds(albumId, assetIds);
     const missing = assetIds.filter((id) => !inAlbum.has(id));
@@ -98,21 +103,52 @@ export class TripService {
         generatedCaption === null ? [] : [{ assetId, text: generatedCaption }],
       ),
     });
+    return this.created(auth, albumId, result);
+  }
 
-    switch (result) {
-      case TripCreateResult.AlbumMissing: {
-        throw new NotFoundException('Trip not found');
-      }
-      case TripCreateResult.TripExists: {
-        throw new ConflictException('The album already has a trip');
-      }
-      case TripCreateResult.FavoritesExists: {
-        throw new ConflictException('The owner already has a Favorites trip');
-      }
-      case TripCreateResult.Created: {
-        return this.read(auth, albumId);
-      }
-    }
+  /**
+   * Makes a trip of the album and lays every asset out into new stops by its kind, the rest Unplaced (trips PLAN
+   * §2.5). A route also gets its start and finish and pending legs between consecutive stops. Owner only.
+   */
+  async create(auth: AuthDto, dto: TripCreateDto): Promise<TripResponseDto> {
+    const { albumId, kind, start, finish, isFinishAtStart } = dto;
+    await this.requireOwner(auth, albumId, 'Only the album owner can make a trip');
+    const assets = await this.tripRepository.getLayoutAssets(albumId);
+    const layout = layOutTrip(kind, assets, start);
+
+    const startStop = start && endStop(albumId, TripStopRole.Start, start);
+    const finishEnd = isFinishAtStart ? start : finish;
+    const finishStop = finishEnd && { ...endStop(albumId, TripStopRole.Finish, finishEnd), isFinishAtStart };
+    const stops = layout.stops.map(({ latitude, longitude, start, end }) => ({
+      id: randomUUID(),
+      albumId,
+      latitude,
+      longitude,
+      localStart: start,
+      localEnd: end,
+    }));
+    const route = [startStop, ...stops, finishStop].filter((stop) => !!stop);
+    const result = await this.tripRepository.create(auth.user.id, {
+      trip: { albumId, kind, contentVersion: 1 },
+      places: [],
+      stops: route,
+      assets: layout.assets.map(({ assetId, stopIndex, point }) => ({
+        albumId,
+        assetId,
+        stopId: stopIndex === null ? null : stops[stopIndex].id,
+        latitude: point?.latitude ?? null,
+        longitude: point?.longitude ?? null,
+        pointSource: point && TripPointSource.Inferred,
+      })),
+      legs:
+        kind === TripKind.Route
+          ? routeLegs(route).map(({ from, to, mode }) => ({ albumId, fromStopId: from.id, toStopId: to.id, mode }))
+          : [],
+      overlays: [],
+      likes: [],
+      generatedCaptions: [],
+    });
+    return this.created(auth, albumId, result);
   }
 
   /** Sets a stop's title, story or place. The album's owner and editors edit (trips PLAN D7). */
@@ -131,6 +167,32 @@ export class TripService {
       case TripEditResult.Updated: {
         return this.read(auth, albumId);
       }
+    }
+  }
+
+  private async created(auth: AuthDto, albumId: string, result: TripCreateResult): Promise<TripResponseDto> {
+    switch (result) {
+      case TripCreateResult.AlbumMissing: {
+        throw new NotFoundException('Trip not found');
+      }
+      case TripCreateResult.TripExists: {
+        throw new ConflictException('The album already has a trip');
+      }
+      case TripCreateResult.FavoritesExists: {
+        throw new ConflictException('The owner already has a Favorites trip');
+      }
+      case TripCreateResult.Created: {
+        return this.read(auth, albumId);
+      }
+    }
+  }
+
+  // A reader who is not the album owner gets 403; anyone else 404, as for a missing album.
+  private async requireOwner(auth: AuthDto, albumId: string, refusal: string) {
+    await this.requireRead(auth, albumId);
+    const isOwner = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
+    if (auth.sharedLink || !isOwner.has(albumId)) {
+      throw new ForbiddenException(refusal);
     }
   }
 
@@ -176,6 +238,18 @@ export class TripService {
     return mapTrip(trip, { showAssetPoints: auth.sharedLink?.showExif ?? true });
   }
 }
+
+// A start or finish of a route: a stop without assets, named by its coordinates until the owner names it.
+const endStop = (albumId: string, role: TripStopRole, { latitude, longitude, title }: TripEndDto) => ({
+  id: randomUUID(),
+  albumId,
+  role,
+  latitude,
+  longitude,
+  title: title ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+  titleSource: 'manual',
+  isAddedByHand: true,
+});
 
 // Through a shared link the caller is a guest, whatever user the link belongs to.
 const likerOf = (auth: AuthDto, viewerKey?: string): TripLiker | undefined => {

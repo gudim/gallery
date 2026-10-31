@@ -73,6 +73,21 @@ export class TripRepository {
     return new Set(rows.map(({ assetId }) => assetId));
   }
 
+  /** The album's assets outside the trash in time order, with their own GPS, for laying the trip out. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getLayoutAssets(albumId: string) {
+    return this.db
+      .selectFrom('album_asset')
+      .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+      .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
+      .select(['asset.id', 'asset.localDateTime as time', 'asset_exif.latitude', 'asset_exif.longitude'])
+      .where('album_asset.albumId', '=', asUuid(albumId))
+      .where('asset.deletedAt', 'is', null)
+      .orderBy('asset.localDateTime')
+      .orderBy('asset.id')
+      .execute();
+  }
+
   /** The whole trip, or nothing when the album has none or is in the trash. Likes say whether `liker` is among them. */
   @GenerateSql({ params: [DummyValue.UUID, { userId: DummyValue.UUID }] })
   get(albumId: string, liker?: TripLiker) {

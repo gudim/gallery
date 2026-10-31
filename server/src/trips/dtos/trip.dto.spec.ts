@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TripImportDto } from 'src/trips/dtos/trip.dto.js';
+import { TripCreateDto, TripImportDto } from 'src/trips/dtos/trip.dto.js';
 
 const assetId = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
 
@@ -143,5 +143,37 @@ describe('TripImportDto', () => {
       new Date('2026-05-01T10:00:00.000Z'),
     );
     expect(parseStart('2026-05-01T10:00:00+03:00').success).toBe(false);
+  });
+});
+
+describe('TripCreateDto', () => {
+  const albumId = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
+  const start = { latitude: 54.68, longitude: 25.28, title: ' ' };
+  const createIssues = (dto: object) => {
+    const result = TripCreateDto.schema.safeParse({ albumId, ...dto });
+    return result.success ? [] : result.error.issues.map(({ message }) => message);
+  };
+
+  it('takes a route with a start and a finish at it, and names a blank title by coordinates later', () => {
+    expect(TripCreateDto.schema.parse({ albumId, kind: 'route', start, isFinishAtStart: true })).toEqual({
+      albumId,
+      kind: 'route',
+      start: { latitude: 54.68, longitude: 25.28, title: null },
+      finish: null,
+      isFinishAtStart: true,
+    });
+  });
+
+  it('gives a start and a finish only to a route', () => {
+    expect(createIssues({ kind: 'places', start })).toEqual(['Only a Route trip has a start and a finish']);
+    expect(createIssues({ kind: 'plain', isFinishAtStart: true })).toContain(
+      'Only a Route trip has a start and a finish',
+    );
+  });
+
+  it('needs a start, and no finish of its own, for a finish at the start', () => {
+    const issue = 'A finish at the start needs a start and no finish of its own';
+    expect(createIssues({ kind: 'route', isFinishAtStart: true })).toEqual([issue]);
+    expect(createIssues({ kind: 'route', start, finish: start, isFinishAtStart: true })).toEqual([issue]);
   });
 });
