@@ -120,8 +120,9 @@ export type TripView = {
 const localDate = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
 const localTime = (iso: string | null | undefined) => (iso ? iso.slice(11, 16) : '');
 
-/** Decodes a Google encoded polyline (precision 5) into [latitude, longitude] points. */
-export const decodePolyline = (encoded: string): [number, number][] => {
+/** Decodes an encoded polyline into [latitude, longitude] points. Trip legs use precision 6, as Valhalla does. */
+export const decodePolyline = (encoded: string, precision = 6): [number, number][] => {
+  const factor = 10 ** precision;
   const points: [number, number][] = [];
   let index = 0;
   let lat = 0;
@@ -143,7 +144,7 @@ export const decodePolyline = (encoded: string): [number, number][] => {
         lng += delta;
       }
     }
-    points.push([lat / 1e5, lng / 1e5]);
+    points.push([lat / factor, lng / factor]);
   }
   return points;
 };
