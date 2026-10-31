@@ -307,7 +307,7 @@ export class TripEditorRepository {
       // Assets without GPS lean on the start: their points move with it, and those left Unplaced for want of a point
       // are filed (travel-album `locate` and `assign`).
       await relocate(trx, albumId, kind, touch);
-      const filed = await fileTripAssets(trx, albumId, kind, { isUnplacedRefiled: true });
+      const filed = await fileTripAssets(trx, albumId, { kind, isFavorites: false }, { isUnplacedRefiled: true });
       touch(...filed.stopIds);
     });
   }
@@ -958,7 +958,7 @@ const movedStopIds = (before: Map<string, LatLng | null>, after: Map<string, Lat
  * point of an asset, else its GPS (travel-album `refresh_stops`). A start, a finish, a stop without assets and a pin
  * the owner placed keep theirs; a Plain trip's sections have no point.
  */
-const refreshStops = async (trx: Transaction<DB>, albumId: string, kind: TripKind, stopIds: string[]) => {
+export const refreshStops = async (trx: Transaction<DB>, albumId: string, kind: TripKind, stopIds: string[]) => {
   if (stopIds.length === 0) {
     return;
   }

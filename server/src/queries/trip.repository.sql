@@ -129,7 +129,8 @@ where
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -250,7 +251,8 @@ order by
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -291,7 +293,8 @@ where
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -322,3 +325,15 @@ where
       and "trip_stop"."longitude" is not null
       and coalesce(btrim("trip_stop"."title"), '') = $2
   )
+
+-- TripRepository.getFavoritesOwnerIds
+select distinct
+  "album_user"."userId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+  inner join "album_user" on "album_user"."albumId" = "trip"."albumId"
+where
+  "trip"."isFavorites" = $1
+  and "album"."deletedAt" is null
+  and "album_user"."role" = $2

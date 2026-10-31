@@ -167,7 +167,10 @@ export class AssetService extends BaseService {
     // endpoint. Written BEFORE the repository read below so the isFavoriteForUser it projects for
     // the response reflects the caller's own just-written state, not the pre-write value.
     if (isFavorite !== undefined) {
-      await updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, auth, { ids: [id], isFavorite });
+      await updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, this.eventRepository, auth, {
+        ids: [id],
+        isFavorite,
+      });
     }
 
     // #763: auth.user.id is the CALLER — this endpoint requires Permission.AssetUpdate (never
@@ -266,7 +269,10 @@ export class AssetService extends BaseService {
     // into the plain column write (assetDto below). Routed through the SAME updateFavorites logic
     // as the canonical endpoint, so the alias can never be more permissive.
     if (isFavorite !== undefined) {
-      await updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, auth, { ids, isFavorite });
+      await updateAssetFavorites(this.accessRepository, this.assetFavoriteRepository, this.eventRepository, auth, {
+        ids,
+        isFavorite,
+      });
     }
 
     const assetDto = omitBy({ visibility, duplicateId }, isUndefined);

@@ -13399,7 +13399,8 @@ export enum JobName {
     TripFile = "TripFile",
     TripFileSweep = "TripFileSweep",
     TripRouteLegs = "TripRouteLegs",
-    TripName = "TripName"
+    TripName = "TripName",
+    TripFavorites = "TripFavorites"
 }
 export enum QueueJobStatus {
     Active = "active",

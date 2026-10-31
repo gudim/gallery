@@ -36963,7 +36963,8 @@
           "TripFile",
           "TripFileSweep",
           "TripRouteLegs",
-          "TripName"
+          "TripName",
+          "TripFavorites"
         ],
         "type": "string"
       },

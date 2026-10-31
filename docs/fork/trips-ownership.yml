@@ -69,11 +69,16 @@ features:
       - server/src/schema/index.ts
       - server/src/schema/gallery-upstream-fks.json
       - server/src/schema/gallery-upstream-fks.spec.ts
-      # the filing, routing and naming jobs (trips PLAN D12, D13, §2.5): four JobName values, their JobItem lines, the nightly sweep
+      # the filing, routing, naming and Favorites jobs (trips PLAN D12, D13, D15, §2.5): five JobName values, their JobItem lines, the nightly sweep
       - server/src/enum.ts
       - server/src/types.ts
       - server/src/services/queue.service.ts
       - server/src/services/queue.service.spec.ts
+      # the Favorites trip mirrors stars (trips PLAN D15): one event, emitted where Gallery writes a star by hand
+      - server/src/repositories/event.repository.ts
+      - server/src/gallery/services/gallery-asset.service.ts
+      - server/src/gallery/services/gallery-asset.service.spec.ts
+      - server/src/services/asset.service.ts
       # generated: regenerate on a rebase, never merge by hand
       - open-api/immich-openapi-specs.json
       - packages/sdk/src/fetch-client.ts
