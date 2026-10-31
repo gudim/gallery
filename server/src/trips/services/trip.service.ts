@@ -15,6 +15,7 @@ import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import {
+  TripAssetsMoveDto,
   TripCreateDto,
   TripEndDto,
   TripImportDto,
@@ -23,6 +24,8 @@ import {
   TripLegStationsDto,
   TripLikeDto,
   TripResponseDto,
+  TripStopCreateDto,
+  TripStopSplitDto,
   TripStopUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
 import {
@@ -33,6 +36,7 @@ import {
   TripStationSide,
   TripStopRole,
 } from 'src/trips/enum.js';
+import { TripEdited, TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripGeoError, TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import {
   RoutingLegRow,
@@ -68,6 +72,7 @@ export class TripService {
     private jobRepository: JobRepository,
     private tripRepository: TripRepository,
     private tripGeoRepository: TripGeoRepository,
+    private tripEditorRepository: TripEditorRepository,
   ) {}
 
   private readonly languages = resolveTripNamingLanguages();
@@ -284,15 +289,59 @@ export class TripService {
     return trip;
   }
 
-  /** Sets a stop's title, story or place. The album's owner and editors edit (trips PLAN D7). */
+  /**
+   * Sets a stop's title, story, place or pin, or gives the pin back to its assets. The album's owner and editors edit
+   * (trips PLAN D7). A cleared title is named again (travel-album `editor.edited`), and a moved pin routes its legs
+   * again.
+   */
   async updateStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopUpdateDto): Promise<TripResponseDto> {
     await this.requireEdit(auth, albumId);
-    const result = await this.tripRepository.updateStop(albumId, stopId, dto);
-    if (result !== TripEditResult.Updated) {
-      throw refusal(result);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.updateStop(albumId, stopId, dto));
+  }
+
+  /** Merges a stop with the next one in trip order; the first keeps its texts. */
+  async mergeNextStop(auth: AuthDto, albumId: string, stopId: string): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.mergeNext(albumId, stopId));
+  }
+
+  /** Splits a stop: the asset and every later one go to a new stop. */
+  async splitStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopSplitDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.split(albumId, stopId, dto.assetId));
+  }
+
+  /** Deletes a stop without assets. */
+  async deleteStop(auth: AuthDto, albumId: string, stopId: string): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.deleteStop(albumId, stopId));
+  }
+
+  /** Makes a new stop of the chosen assets. */
+  async createStop(auth: AuthDto, albumId: string, dto: TripStopCreateDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.newStop(albumId, dto.assetIds));
+  }
+
+  /** Moves the chosen assets into a stop. */
+  async moveAssets(auth: AuthDto, albumId: string, dto: TripAssetsMoveDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.moveAssets(albumId, dto.assetIds, dto.stopId),
+    );
+  }
+
+  // After a stop edit, as travel-album's `editor.edited`: pending legs are routed and untitled stops named.
+  private async stopsEdited(auth: AuthDto, albumId: string, edited: TripEdited): Promise<TripResponseDto> {
+    if (edited.result !== TripEditResult.Updated) {
+      throw refusal(edited.result);
     }
-    // A cleared title is named again (travel-album `editor.edited`).
-    if (dto.title === null) {
+    if (edited.needsRouting) {
+      await this.queueRouting(albumId);
+    }
+    if (edited.needsNaming) {
       await this.queueNaming(albumId);
     }
     return this.read(auth, albumId);
@@ -486,6 +535,30 @@ const refusal = (result: Exclude<TripEditResult, TripEditResult.Updated>) => {
     }
     case TripEditResult.LegMissing: {
       return new NotFoundException('Leg not found in the trip');
+    }
+    case TripEditResult.StopIsEnd: {
+      return new BadRequestException('The start and finish are edited as such');
+    }
+    case TripEditResult.StopIsPoint: {
+      return new BadRequestException('A point added by hand has no assets');
+    }
+    case TripEditResult.StopHasAssets: {
+      return new BadRequestException('Only a stop without assets is deleted');
+    }
+    case TripEditResult.NoMap: {
+      return new BadRequestException('A Plain trip has no map');
+    }
+    case TripEditResult.MergeLast: {
+      return new BadRequestException('The last stop has no next one to merge with');
+    }
+    case TripEditResult.SplitFirst: {
+      return new BadRequestException('A stop is split after its first asset');
+    }
+    case TripEditResult.AssetForeign: {
+      return new BadRequestException('An asset is not in the trip, or in the trash');
+    }
+    case TripEditResult.MoveEmpties: {
+      return new BadRequestException('A stop would be left without assets; merge it instead');
     }
     case TripEditResult.PlaceForeign: {
       return new BadRequestException('The place is not in the trip');

@@ -299,9 +299,35 @@ const TripStopUpdateSchema = z
     title: editedText('Stop title; blank clears it'),
     story: editedText('Stop story; blank clears it'),
     placeId: z.uuidv4().nullable().optional().describe('Place of the stop, in the same trip; null for none'),
+    latitude: latitudeSchema.optional().describe('Where the owner puts the pin; kept until given back to the assets'),
+    longitude: longitudeSchema.optional().describe('Where the owner puts the pin; kept until given back to the assets'),
+    isPositionManual: z.literal(false).optional().describe('false puts the pin back at the mean of the stop’s assets'),
   })
-  .refine((dto) => Object.values(dto).some((value) => value !== undefined), { error: 'Nothing to change' })
+  .superRefine((dto, ctx) => {
+    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (Object.values(dto).every((value) => value === undefined)) {
+      issue('Nothing to change');
+    }
+    if ((dto.latitude === undefined) !== (dto.longitude === undefined)) {
+      issue('A pin takes both a latitude and a longitude');
+    }
+    if (dto.latitude !== undefined && dto.isPositionManual === false) {
+      issue('A pin is either moved or given back to the assets');
+    }
+  })
   .meta({ id: 'TripStopUpdateDto' });
+
+const assetIdsSchema = z.array(z.uuidv4()).min(1).describe('Album asset IDs, outside the trash');
+
+const TripStopSplitSchema = z
+  .object({ assetId: z.uuidv4().describe('The stop’s asset that begins the new stop, with every later one') })
+  .meta({ id: 'TripStopSplitDto' });
+
+const TripStopCreateSchema = z.object({ assetIds: assetIdsSchema }).meta({ id: 'TripStopCreateDto' });
+
+const TripAssetsMoveSchema = z
+  .object({ assetIds: assetIdsSchema, stopId: z.uuidv4().describe('Stop of the same trip the assets go to') })
+  .meta({ id: 'TripAssetsMoveDto' });
 
 const TripEndSchema = z
   .object({
@@ -378,6 +404,9 @@ export class TripImportDto extends createZodDto(TripImportSchema) {}
 export class TripCreateDto extends createZodDto(TripCreateSchema) {}
 export class TripEndDto extends createZodDto(TripEndSchema) {}
 export class TripStopUpdateDto extends createZodDto(TripStopUpdateSchema) {}
+export class TripStopSplitDto extends createZodDto(TripStopSplitSchema) {}
+export class TripStopCreateDto extends createZodDto(TripStopCreateSchema) {}
+export class TripAssetsMoveDto extends createZodDto(TripAssetsMoveSchema) {}
 export class TripStopParamDto extends createZodDto(TripStopParamSchema) {}
 export class TripLegParamDto extends createZodDto(TripLegParamSchema) {}
 export class TripLegModeUpdateDto extends createZodDto(TripLegModeUpdateSchema) {}

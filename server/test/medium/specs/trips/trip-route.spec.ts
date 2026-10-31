@@ -15,6 +15,7 @@ import {
   TripResponseDto,
 } from 'src/trips/dtos/trip.dto.js';
 import { TripGeoService, TripLegMode, TripLegStatus } from 'src/trips/enum.js';
+import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
@@ -155,7 +156,7 @@ const setup = async () => {
   job.queueAll.mockResolvedValue();
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
-  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db), geo);
+  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db), geo, new TripEditorRepository(db));
   const { user: owner } = await ctx.newUser();
   const { album } = await ctx.newAlbum({ ownerId: owner.id });
   const auth = factory.auth({ user: owner });

@@ -42,8 +42,6 @@ const isLiker = (liker: TripLiker | undefined) =>
       ? sql<boolean>`coalesce(bool_or("trip_like"."userId" = ${asUuid(liker.userId)}), false)`
       : sql<boolean>`coalesce(bool_or("trip_like"."viewerKey" = ${liker.viewerKey}), false)`;
 
-export type TripStopChanges = { title?: string | null; story?: string | null; placeId?: string | null };
-
 /**
  * A name for a stop, with the point and title source the stop had when it was read: the write is skipped if either
  * changed while Nominatim was asked.
@@ -65,6 +63,14 @@ export enum TripEditResult {
   Updated = 'updated',
   TripMissing = 'trip-missing',
   StopMissing = 'stop-missing',
+  StopIsEnd = 'stop-is-end',
+  StopIsPoint = 'stop-is-point',
+  StopHasAssets = 'stop-has-assets',
+  NoMap = 'no-map',
+  MergeLast = 'merge-last',
+  SplitFirst = 'split-first',
+  AssetForeign = 'asset-foreign',
+  MoveEmpties = 'move-empties',
   PlaceForeign = 'place-foreign',
   LegMissing = 'leg-missing',
   LegNotTrain = 'leg-not-train',
@@ -80,7 +86,7 @@ export enum TripCreateResult {
 }
 
 // Trip order: the start first, the finish last (travel-album decision P20), the rest by local start time.
-const stopOrder = (stop: 'trip_stop' | 'from_stop') =>
+export const stopOrder = (stop: 'trip_stop' | 'from_stop') =>
   sql.join([
     sql`CASE ${sql.ref(`${stop}.role`)} WHEN ${sql.lit(TripStopRole.Start)} THEN 0 WHEN ${sql.lit(TripStopRole.Finish)} THEN 2 ELSE 1 END`,
     sql`${sql.ref(`${stop}.localStart`)} ASC NULLS LAST`,
@@ -229,55 +235,6 @@ export class TripRepository {
       .where('assetId', '=', asUuid(assetId))
       .executeTakeFirstOrThrow();
     return row;
-  }
-
-  /**
-   * Sets a stop's texts and place. Every id must belong to this trip: there are no composite keys to check it (trips
-   * DECISIONS-LOG 2026-10-31). A text set by hand is `manual`, a cleared one has no source. A finish that is the same
-   * place as the start takes the start's title (travel-album decision P20).
-   */
-  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { title: DummyValue.STRING }] })
-  updateStop(albumId: string, stopId: string, { title, story, placeId }: TripStopChanges): Promise<TripEditResult> {
-    return editTrip(this.db, albumId, async (trx) => {
-      const stop = await trx
-        .selectFrom('trip_stop')
-        .select('role')
-        .where('albumId', '=', asUuid(albumId))
-        .where('id', '=', asUuid(stopId))
-        .executeTakeFirst();
-      if (!stop) {
-        return TripEditResult.StopMissing;
-      }
-      if (placeId) {
-        const place = await trx
-          .selectFrom('trip_place')
-          .select('id')
-          .where('albumId', '=', asUuid(albumId))
-          .where('id', '=', asUuid(placeId))
-          .executeTakeFirst();
-        if (!place) {
-          return TripEditResult.PlaceForeign;
-        }
-      }
-      await trx
-        .updateTable('trip_stop')
-        .set({
-          ...(title !== undefined && { title, titleSource: title && 'manual' }),
-          ...(story !== undefined && { story, storySource: story && 'manual' }),
-          ...(placeId !== undefined && { placeId }),
-        })
-        .where('id', '=', asUuid(stopId))
-        .execute();
-      if (title !== undefined && stop.role === TripStopRole.Start) {
-        await trx
-          .updateTable('trip_stop')
-          .set({ title, titleSource: title && 'manual' })
-          .where('albumId', '=', asUuid(albumId))
-          .where('role', '=', TripStopRole.Finish)
-          .where('isFinishAtStart', '=', true)
-          .execute();
-      }
-    });
   }
 
   /**
@@ -525,29 +482,7 @@ export class TripRepository {
         .execute();
 
       if (trip.kind === TripKind.Route && created.length > 0) {
-        const [ordered, legs] = await Promise.all([
-          trx
-            .selectFrom('trip_stop')
-            .select(['id', 'latitude', 'longitude', 'isTransit'])
-            .where('albumId', '=', id)
-            .orderBy(stopOrder('trip_stop'))
-            .execute(),
-          trx
-            .selectFrom('trip_leg')
-            .select(['id', 'fromStopId', 'toStopId', 'mode', 'isModeManual'])
-            .where('albumId', '=', id)
-            .execute(),
-        ]);
-        const { removedIds, added } = syncLegs(ordered, legs);
-        if (removedIds.length > 0) {
-          await trx.deleteFrom('trip_leg').where('id', 'in', removedIds).execute();
-        }
-        if (added.length > 0) {
-          await trx
-            .insertInto('trip_leg')
-            .values(added.map((leg) => ({ ...leg, albumId })))
-            .execute();
-        }
+        await syncRouteLegs(trx, albumId);
       }
 
       await trx
@@ -934,8 +869,8 @@ const stationValues = (side: TripStationSide, { name, latitude, longitude }: Sta
     : { arrivalName: name, arrivalLatitude: latitude, arrivalLongitude: longitude };
 
 // A leg waiting for its line: what the routing job builds.
-const unbuilt = { status: TripLegStatus.Pending, polyline: null, distance: null, duration: null };
-const noStations = Object.fromEntries(stationColumns.map((column) => [column, null])) as Record<
+export const unbuilt = { status: TripLegStatus.Pending, polyline: null, distance: null, duration: null };
+export const noStations = Object.fromEntries(stationColumns.map((column) => [column, null])) as Record<
   (typeof stationColumns)[number],
   null
 >;
@@ -948,17 +883,17 @@ const automaticMode = (leg: Record<'fromLatitude' | 'fromLongitude' | 'toLatitud
 };
 
 // Holds the trip row, so writes to one trip queue up. Nothing when the trip is missing or its album is in the trash.
-const lockTrip = (trx: Transaction<DB>, albumId: string) =>
+export const lockTrip = (trx: Transaction<DB>, albumId: string) =>
   trx
     .selectFrom('trip')
     .innerJoin('album', 'album.id', 'trip.albumId')
-    .select('trip.albumId')
+    .select(['trip.albumId', 'trip.kind'])
     .where('trip.albumId', '=', asUuid(albumId))
     .where('album.deletedAt', 'is', null)
     .forUpdate('trip')
     .executeTakeFirst();
 
-const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
+export const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
   trx
     .updateTable('trip')
     .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
@@ -986,6 +921,37 @@ const editTrip = (
     await bumpContentVersion(trx, albumId);
     return TripEditResult.Updated;
   });
+
+/**
+ * Legs between consecutive stops of a route in trip order (`syncLegs`): legs between stops that are no longer
+ * neighbours go, a new pair is pending.
+ */
+export const syncRouteLegs = async (trx: Transaction<DB>, albumId: string) => {
+  const id = asUuid(albumId);
+  const [ordered, legs] = await Promise.all([
+    trx
+      .selectFrom('trip_stop')
+      .select(['id', 'latitude', 'longitude', 'isTransit'])
+      .where('albumId', '=', id)
+      .orderBy(stopOrder('trip_stop'))
+      .execute(),
+    trx
+      .selectFrom('trip_leg')
+      .select(['id', 'fromStopId', 'toStopId', 'mode', 'isModeManual'])
+      .where('albumId', '=', id)
+      .execute(),
+  ]);
+  const { removedIds, added } = syncLegs(ordered, legs);
+  if (removedIds.length > 0) {
+    await trx.deleteFrom('trip_leg').where('id', 'in', removedIds).execute();
+  }
+  if (added.length > 0) {
+    await trx
+      .insertInto('trip_leg')
+      .values(added.map((leg) => ({ ...leg, albumId })))
+      .execute();
+  }
+};
 
 /** Whether the user already owns a Favorites trip (trips PLAN D15: one per album owner). */
 const hasFavoritesTrip = async (trx: Transaction<DB>, ownerId: string) => {

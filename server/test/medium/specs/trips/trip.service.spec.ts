@@ -10,6 +10,7 @@ import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripLegMode, TripLegStatus } from 'src/trips/enum.js';
+import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
@@ -191,6 +192,7 @@ const setup = async () => {
     job,
     new TripRepository(db),
     new TripGeoRepository(db, LoggingRepository.create()),
+    new TripEditorRepository(db),
   );
   const { user: owner } = await ctx.newUser();
   const assets = [];

@@ -9,6 +9,7 @@ import { Endpoint, HistoryBuilder } from 'src/decorators.js';
 import { Permission } from 'src/enum.js';
 import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.js';
 import {
+  TripAssetsMoveDto,
   TripCreateDto,
   TripImportDto,
   TripLegModeUpdateDto,
@@ -17,7 +18,9 @@ import {
   TripLegStationsDto,
   TripLikeDto,
   TripResponseDto,
+  TripStopCreateDto,
   TripStopParamDto,
+  TripStopSplitDto,
   TripStopUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
 import { TripService } from 'src/trips/services/trip.service.js';
@@ -127,7 +130,7 @@ export class TripController {
   @Endpoint({
     summary: 'Update a trip stop',
     description:
-      'Sets a stop’s title, story or place. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared. The place must belong to the same trip. Returns the whole trip.',
+      'Sets a stop’s title, story, place or pin, or puts the pin back at the mean of its assets. The album owner and editors edit the trip; a viewer gets 403. A blank text is cleared and the title named again. The place must belong to the same trip. A moved pin routes its legs again. Returns the whole trip.',
     history: new HistoryBuilder().added('v1').beta('v1'),
   })
   updateStop(
@@ -136,6 +139,78 @@ export class TripController {
     @Body() dto: TripStopUpdateDto,
   ): Promise<TripResponseDto> {
     return this.service.updateStop(auth, id, stopId, dto);
+  }
+
+  @Post(':id/stops')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Create a trip stop',
+    description:
+      'Makes a new stop of the chosen album assets; it takes its place in the trip by their times. A stop the move would leave without assets is refused. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  createStop(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripStopCreateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.createStop(auth, id, dto);
+  }
+
+  @Post(':id/stops/:stopId/merge-next')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Merge a trip stop with the next',
+    description:
+      'Merges a stop with the next one in trip order: the assets join the first, which keeps its texts and takes the second’s where its own are empty. Not for the start, the finish or a point added by hand. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  mergeNextStop(@Auth() auth: AuthDto, @Param() { id, stopId }: TripStopParamDto): Promise<TripResponseDto> {
+    return this.service.mergeNextStop(auth, id, stopId);
+  }
+
+  @Post(':id/stops/:stopId/split')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Split a trip stop',
+    description:
+      'Moves one of a stop’s assets and every later one into a new stop. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  splitStop(
+    @Auth() auth: AuthDto,
+    @Param() { id, stopId }: TripStopParamDto,
+    @Body() dto: TripStopSplitDto,
+  ): Promise<TripResponseDto> {
+    return this.service.splitStop(auth, id, stopId, dto);
+  }
+
+  @Delete(':id/stops/:stopId')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Delete a trip stop',
+    description:
+      'Deletes a stop without assets, such as a point added by hand; its neighbours get one leg. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  deleteStop(@Auth() auth: AuthDto, @Param() { id, stopId }: TripStopParamDto): Promise<TripResponseDto> {
+    return this.service.deleteStop(auth, id, stopId);
+  }
+
+  @Put(':id/assets/stop')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Move assets to a trip stop',
+    description:
+      'Files the chosen album assets into a stop of the same trip. A stop the move would leave without assets is refused: merge it instead. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  moveAssets(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripAssetsMoveDto,
+  ): Promise<TripResponseDto> {
+    return this.service.moveAssets(auth, id, dto);
   }
 
   @Put(':id/legs/:legId/mode')

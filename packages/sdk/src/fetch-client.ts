@@ -4958,6 +4958,12 @@ export type TripImportDto = {
         titleSource: string | null;
     }[];
 };
+export type TripAssetsMoveDto = {
+    /** Album asset IDs, outside the trash */
+    assetIds: string[];
+    /** Stop of the same trip the assets go to */
+    stopId: string;
+};
 export type TripLegModeUpdateDto = {
     /** The owner’s mode, kept from now on; null returns to the default by distance */
     mode: (TripLegMode) | null;
@@ -4987,13 +4993,27 @@ export type TripLegStationsDto = {
     /** Stations near the stop the leg leaves, nearest first */
     departure: TripStationDto[];
 };
+export type TripStopCreateDto = {
+    /** Album asset IDs, outside the trash */
+    assetIds: string[];
+};
 export type TripStopUpdateDto = {
+    /** false puts the pin back at the mean of the stop’s assets */
+    isPositionManual?: false;
+    /** Where the owner puts the pin; kept until given back to the assets */
+    latitude?: number;
+    /** Where the owner puts the pin; kept until given back to the assets */
+    longitude?: number;
     /** Place of the stop, in the same trip; null for none */
     placeId?: string | null;
     /** Stop story; blank clears it */
     story?: string | null;
     /** Stop title; blank clears it */
     title?: string | null;
+};
+export type TripStopSplitDto = {
+    /** The stop’s asset that begins the new stop, with every later one */
+    assetId: string;
 };
 export type UserGroupMemberResponseDto = {
     /** Avatar color */
@@ -11730,6 +11750,22 @@ export function importTrip({ id, tripImportDto }: {
     })));
 }
 /**
+ * Move assets to a trip stop
+ */
+export function moveAssets({ id, tripAssetsMoveDto }: {
+    id: string;
+    tripAssetsMoveDto: TripAssetsMoveDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/assets/stop`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripAssetsMoveDto
+    })));
+}
+/**
  * Retry trip legs
  */
 export function retryLegs({ id }: {
@@ -11847,6 +11883,37 @@ export function likeAsset({ assetId, id, key, slug }: {
     }));
 }
 /**
+ * Create a trip stop
+ */
+export function createStop({ id, tripStopCreateDto }: {
+    id: string;
+    tripStopCreateDto: TripStopCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripStopCreateDto
+    })));
+}
+/**
+ * Delete a trip stop
+ */
+export function deleteStop({ id, stopId }: {
+    id: string;
+    stopId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops/${encodeURIComponent(stopId)}`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
  * Update a trip stop
  */
 export function updateStop({ id, stopId, tripStopUpdateDto }: {
@@ -11861,6 +11928,38 @@ export function updateStop({ id, stopId, tripStopUpdateDto }: {
         ...opts,
         method: "PATCH",
         body: tripStopUpdateDto
+    })));
+}
+/**
+ * Merge a trip stop with the next
+ */
+export function mergeNextStop({ id, stopId }: {
+    id: string;
+    stopId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops/${encodeURIComponent(stopId)}/merge-next`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
+ * Split a trip stop
+ */
+export function splitStop({ id, stopId, tripStopSplitDto }: {
+    id: string;
+    stopId: string;
+    tripStopSplitDto: TripStopSplitDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops/${encodeURIComponent(stopId)}/split`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripStopSplitDto
     })));
 }
 /**
