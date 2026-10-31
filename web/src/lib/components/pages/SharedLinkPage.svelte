@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AlbumViewer from '$lib/components/album-page/AlbumViewer.svelte';
+  import TripOrAlbumViewer from '$lib/trips/components/TripOrAlbumViewer.svelte';
   import IndividualSharedViewer from '$lib/components/share-page/IndividualSharedViewer.svelte';
   import ControlAppBar from '$lib/components/shared-components/ControlAppBar.svelte';
   import ThemeButton from '$lib/components/shared-components/ThemeButton.svelte';
@@ -107,7 +107,7 @@
 {/if}
 
 {#if !passwordRequired && sharedLink?.type === SharedLinkType.Album}
-  <AlbumViewer {sharedLink} />
+  <TripOrAlbumViewer {sharedLink} />
 {/if}
 {#if !passwordRequired && sharedLink?.type === SharedLinkType.Individual}
   <div class="immich-scrollbar">

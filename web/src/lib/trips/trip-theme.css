@@ -1,0 +1,106 @@
+/* The trip viewer's palette, from travel-album's static/tokens.css; Gallery's `.dark` on <html> picks the dark one. */
+.trip {
+  --trip-bg: #f5f3ee;
+  --trip-panel: #ffffff;
+  --trip-panel2: #f0ece4;
+  --trip-sunk: #eeeae2;
+  --trip-line: #ddd6ca;
+  --trip-glass: rgba(255, 255, 255, 0.92);
+  --trip-scroll: #c9c1b3;
+  --trip-shadow: 0 12px 32px rgba(60, 45, 20, 0.14);
+  --trip-text: #1a1e26;
+  --trip-muted: #535d6d;
+  --trip-dim: #5d6675;
+  --trip-read: #2e3440;
+  --trip-accent: #e8912a;
+  --trip-accent-ink: #955003;
+  --trip-accent-line: #e3b77a;
+  --trip-on-accent: #1a1206;
+  --trip-route: #2f6fa8;
+  --trip-road-base: #e6e0d4;
+  --trip-road-edge: #d8d0c1;
+  --trip-road-mid: #b3a894;
+  --trip-road-me: #1e88c7;
+  --trip-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  background: var(--trip-bg);
+  color: var(--trip-text);
+  font: 15px/1.55 var(--trip-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root.dark .trip {
+  --trip-bg: #0e1116;
+  --trip-panel: #161a21;
+  --trip-panel2: #1f242e;
+  --trip-sunk: #0b0d11;
+  --trip-line: #2a303c;
+  --trip-glass: rgba(22, 26, 33, 0.9);
+  --trip-scroll: #3a4354;
+  --trip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --trip-text: #eaeef4;
+  --trip-muted: #9aa4b4;
+  --trip-dim: #808b9d;
+  --trip-read: #c3cbd9;
+  --trip-accent: #f2a33c;
+  --trip-accent-ink: #f5b25a;
+  --trip-accent-line: #6b5020;
+  --trip-on-accent: #14110c;
+  --trip-route: #4f8fc6;
+  --trip-road-base: #1a1f28;
+  --trip-road-edge: #252d3a;
+  --trip-road-mid: #48546a;
+  --trip-road-me: #7fd4ff;
+}
+
+.trip :is(h1, h2, h3, p) {
+  font-family: inherit;
+}
+
+.trip :where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--trip-accent);
+  outline-offset: 1px;
+}
+
+/* Leg avatars (travel-album map.css): the body in the day colour, a halo in the panel colour. */
+.trip .trip-avatar {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 0 0.6px var(--trip-panel)) drop-shadow(0 0 0.6px var(--trip-panel))
+    drop-shadow(0 0 0.6px var(--trip-panel)) drop-shadow(0 1.5px 2px rgba(0, 0, 0, 0.4));
+}
+.trip .trip-avatar .b {
+  fill: var(--day);
+}
+.trip .trip-avatar .k {
+  fill: var(--trip-text);
+}
+.trip .trip-avatar .w {
+  fill: #f4f7fb;
+}
+.trip .trip-avatar :is(.bl, .kl, .wl, .wv) {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trip .trip-avatar .bl {
+  stroke: var(--day);
+  stroke-width: 3.4;
+}
+.trip .trip-avatar .kl {
+  stroke: var(--trip-text);
+  stroke-width: 3;
+}
+.trip .trip-avatar .wl {
+  stroke: #f4f7fb;
+  stroke-width: 1.3;
+}
+.trip .trip-avatar .wv {
+  stroke: #2f7fd6;
+  stroke-width: 1.6;
+}
+.trip .trip-avatar .kr {
+  fill: rgba(244, 247, 251, 0.55);
+  stroke: var(--trip-text);
+  stroke-width: 2.4;
+}

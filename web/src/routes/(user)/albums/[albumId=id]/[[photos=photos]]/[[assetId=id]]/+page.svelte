@@ -12,6 +12,7 @@
   import ButtonContextMenu from '$lib/components/shared-components/context-menu/ButtonContextMenu.svelte';
   import MenuOption from '$lib/components/shared-components/context-menu/MenuOption.svelte';
   import ControlAppBar from '$lib/components/shared-components/ControlAppBar.svelte';
+  import TripAlbumButton from '$lib/trips/components/TripAlbumButton.svelte';
   import UserAvatar from '$lib/components/shared-components/UserAvatar.svelte';
   import ArchiveAction from '$lib/components/timeline/actions/ArchiveAction.svelte';
   import ChangeDate from '$lib/components/timeline/actions/ChangeDateAction.svelte';
@@ -563,6 +564,7 @@
         <ControlAppBar backIcon={mdiArrowLeft} onClose={() => goto(Route.albums())}>
           {#snippet trailing()}
             <ActionButton action={Cast} />
+            <TripAlbumButton albumId={album.id} />
 
             {#if isEditor}
               <IconButton
