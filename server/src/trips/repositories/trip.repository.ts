@@ -18,7 +18,7 @@ import {
 } from 'src/trips/enum.js';
 import { TripsDB } from 'src/trips/schema/index.js';
 import { fileAssets, syncLegs } from 'src/trips/utils/filing.js';
-import { pointOf } from 'src/trips/utils/geo.js';
+import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { TRIP_TITLE_SOURCE_GEOCODED } from 'src/trips/utils/naming.js';
 import { asUuid } from 'src/utils/database.js';
 
@@ -260,7 +260,7 @@ export class TripRepository {
   create(ownerId: string, rows: TripRows): Promise<TripCreateResult> {
     const { trip, places, stops, assets, legs, overlays, likes, generatedCaptions } = rows;
     return this.db.transaction().execute(async (trx) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${'trip-import:' + ownerId}))`.execute(trx);
+      await lockOwner(trx, ownerId);
       const albumId = asUuid(trip.albumId);
       const album = await trx
         .selectFrom('album')
@@ -275,7 +275,7 @@ export class TripRepository {
       if (existing) {
         return TripCreateResult.TripExists;
       }
-      if (trip.isFavorites && (await hasFavoritesTrip(trx, ownerId))) {
+      if (trip.isFavorites && (await getFavoritesAlbumId(trx, ownerId))) {
         return TripCreateResult.FavoritesExists;
       }
 
@@ -298,6 +298,19 @@ export class TripRepository {
       }
       if (likes.length > 0) {
         await trx.insertInto('trip_like').values(likes).execute();
+      }
+      // A Favorites trip holds exactly its owner's stars, so the album's assets are starred (trips DECISIONS-LOG).
+      if (trip.isFavorites) {
+        await trx
+          .insertInto('asset_favorite')
+          .expression((eb) =>
+            eb
+              .selectFrom('album_asset')
+              .select([sql<string>`${ownerId}::uuid`.as('userId'), 'album_asset.assetId'])
+              .where('album_asset.albumId', '=', albumId),
+          )
+          .onConflict((oc) => oc.doNothing())
+          .execute();
       }
       if (generatedCaptions.length > 0) {
         await trx
@@ -390,7 +403,7 @@ export class TripRepository {
       if (!trip) {
         return { assets: 0, stops: 0 };
       }
-      const { assets, stops } = await fileTripAssets(trx, albumId, trip.kind, { isUnplacedRefiled: false });
+      const { assets, stops } = await fileTripAssets(trx, albumId, trip, { isUnplacedRefiled: false });
       if (assets > 0) {
         await bumpContentVersion(trx, albumId);
       }
@@ -757,6 +770,22 @@ export class TripRepository {
       .execute();
     return rows.map(({ albumId }) => albumId);
   }
+
+  /** The owners of Favorites trips outside the trash: the nightly sweep mirrors stars no event reported. */
+  @GenerateSql()
+  async getFavoritesOwnerIds(): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('trip')
+      .innerJoin('album', 'album.id', 'trip.albumId')
+      .innerJoin('album_user', 'album_user.albumId', 'trip.albumId')
+      .select('album_user.userId')
+      .distinct()
+      .where('trip.isFavorites', '=', true)
+      .where('album.deletedAt', 'is', null)
+      .where('album_user.role', '=', AlbumUserRole.Owner)
+      .execute();
+    return rows.map(({ userId }) => userId);
+  }
 }
 
 const stationColumns = [
@@ -787,7 +816,7 @@ export const lockTrip = (trx: Transaction<DB>, albumId: string) =>
   trx
     .selectFrom('trip')
     .innerJoin('album', 'album.id', 'trip.albumId')
-    .select(['trip.albumId', 'trip.kind'])
+    .select(['trip.albumId', 'trip.kind', 'trip.isFavorites'])
     .where('trip.albumId', '=', asUuid(albumId))
     .where('album.deletedAt', 'is', null)
     .forUpdate('trip')
@@ -821,7 +850,7 @@ export const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
 export const fileTripAssets = async (
   trx: Transaction<DB>,
   albumId: string,
-  kind: TripKind,
+  { kind, isFavorites }: { kind: TripKind; isFavorites: boolean },
   { isUnplacedRefiled }: { isUnplacedRefiled: boolean },
 ): Promise<TripFileResult & { stopIds: string[] }> => {
   const id = asUuid(albumId);
@@ -880,6 +909,7 @@ export const fileTripAssets = async (
     .where('trip_stop.albumId', '=', id)
     .execute();
 
+  const borrowed = isFavorites ? await getOtherTripPoints(trx, albumId, assets) : new Map<string, LatLng>();
   const start = stops.find(({ role }) => role === TripStopRole.Start);
   const filing = fileAssets(
     kind,
@@ -892,7 +922,7 @@ export const fileTripAssets = async (
       anchor:
         asset.pointSource === TripPointSource.Manual
           ? pointOf({ latitude: asset.pointLatitude, longitude: asset.pointLongitude })
-          : pointOf(asset),
+          : (pointOf(asset) ?? borrowed.get(asset.id) ?? null),
       isNew: asset.isNew,
     })),
     { start: start ? pointOf(start) : null, newId: () => randomUUID() },
@@ -948,6 +978,54 @@ export const fileTripAssets = async (
 };
 
 /**
+ * For a Favorites trip, the point of each new asset without GPS: the centre of its stop in another trip of the same
+ * owner, the oldest album first (travel-album `favorites._coords`: an inferred point is not GPS, and its stop stands
+ * there anyway). A start, a finish and Unplaced do not count.
+ */
+const getOtherTripPoints = async (
+  trx: Transaction<DB>,
+  albumId: string,
+  assets: Array<{ id: string; isNew: boolean; latitude: number | null; longitude: number | null }>,
+): Promise<Map<string, LatLng>> => {
+  const assetIds = assets.filter((asset) => asset.isNew && !pointOf(asset)).map(({ id }) => id);
+  if (assetIds.length === 0) {
+    return new Map();
+  }
+  const rows = await trx
+    .selectFrom('trip_asset')
+    .innerJoin('trip_stop', 'trip_stop.id', 'trip_asset.stopId')
+    .innerJoin('album', 'album.id', 'trip_asset.albumId')
+    .innerJoin('album_user as other_owner', (join) =>
+      join.onRef('other_owner.albumId', '=', 'album.id').on('other_owner.role', '=', sql.lit(AlbumUserRole.Owner)),
+    )
+    .innerJoin('album_user as owner', (join) =>
+      join
+        .onRef('owner.userId', '=', 'other_owner.userId')
+        .on('owner.albumId', '=', asUuid(albumId))
+        .on('owner.role', '=', sql.lit(AlbumUserRole.Owner)),
+    )
+    .distinctOn('trip_asset.assetId')
+    .select(['trip_asset.assetId', 'trip_stop.latitude', 'trip_stop.longitude'])
+    .where('trip_asset.assetId', 'in', assetIds)
+    .where('trip_asset.albumId', '!=', asUuid(albumId))
+    .where('trip_stop.role', 'is', null)
+    .where('trip_stop.latitude', 'is not', null)
+    .where('trip_stop.longitude', 'is not', null)
+    .where('album.deletedAt', 'is', null)
+    .orderBy('trip_asset.assetId')
+    .orderBy('album.createdAt')
+    .execute();
+  const points = new Map<string, LatLng>();
+  for (const { assetId, ...point } of rows) {
+    const latLng = pointOf(point);
+    if (latLng) {
+      points.set(assetId, latLng);
+    }
+  }
+  return points;
+};
+
+/**
  * Legs between consecutive stops of a route in trip order (`syncLegs`): legs between stops that are no longer
  * neighbours go, a new pair is pending.
  */
@@ -978,8 +1056,12 @@ export const syncRouteLegs = async (trx: Transaction<DB>, albumId: string) => {
   }
 };
 
-/** Whether the user already owns a Favorites trip (trips PLAN D15: one per album owner). */
-const hasFavoritesTrip = async (trx: Transaction<DB>, ownerId: string) => {
+// Serialises the writes that create an owner's trips: imports, and the Favorites trip made by a star.
+export const lockOwner = (trx: Transaction<DB>, ownerId: string) =>
+  sql`SELECT pg_advisory_xact_lock(hashtext(${'trip-import:' + ownerId}))`.execute(trx);
+
+/** The album of the user's Favorites trip, outside the trash (trips PLAN D15: one per album owner). */
+export const getFavoritesAlbumId = async (trx: Transaction<DB>, ownerId: string) => {
   const row = await trx
     .selectFrom('trip')
     .innerJoin('album', 'album.id', 'trip.albumId')
@@ -992,6 +1074,7 @@ const hasFavoritesTrip = async (trx: Transaction<DB>, ownerId: string) => {
     .select('trip.albumId')
     .where('album.deletedAt', 'is', null)
     .where('trip.isFavorites', '=', true)
+    .orderBy('album.createdAt')
     .executeTakeFirst();
-  return !!row;
+  return row?.albumId ?? null;
 };

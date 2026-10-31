@@ -4,7 +4,8 @@
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -19,7 +20,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -34,7 +36,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -49,7 +52,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -64,7 +68,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -79,7 +84,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -94,7 +100,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -109,7 +116,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -124,7 +132,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -139,7 +148,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -154,7 +164,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -169,7 +180,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -184,7 +196,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -199,7 +212,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -214,7 +228,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -229,7 +244,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -244,7 +260,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
@@ -259,7 +276,8 @@ commit
 begin
 select
   "trip"."albumId",
-  "trip"."kind"
+  "trip"."kind",
+  "trip"."isFavorites"
 from
   "trip"
   inner join "album" on "album"."id" = "trip"."albumId"

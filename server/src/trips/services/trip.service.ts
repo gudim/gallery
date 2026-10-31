@@ -164,17 +164,20 @@ export class TripService {
     return JobStatus.Success;
   }
 
-  // Nightly: files what no event reached, such as assets added while the worker was down, and names again the stops a
-  // failed or interrupted naming left without a title.
+  // Nightly: files what no event reached, such as assets added while the worker was down, names again the stops a
+  // failed or interrupted naming left without a title, and mirrors the stars written without an event (an upload, a
+  // duplicate merge, a stock Immich server) into Favorites trips.
   @OnJob({ name: JobName.TripFileSweep, queue: QueueName.BackgroundTask })
   async handleFileSweep(): Promise<JobStatus> {
-    const [toFile, toName] = await Promise.all([
+    const [toFile, toName, toMirror] = await Promise.all([
       this.tripRepository.getAlbumIdsToFile(),
       this.tripRepository.getAlbumIdsToName(),
+      this.tripRepository.getFavoritesOwnerIds(),
     ]);
     await this.jobRepository.queueAll([
       ...toFile.map((id) => ({ name: JobName.TripFile, data: { id } }) as const),
       ...toName.map((id) => ({ name: JobName.TripName, data: { id } }) as const),
+      ...toMirror.map((id) => ({ name: JobName.TripFavorites, data: { id, canCreate: false } }) as const),
     ]);
     return JobStatus.Success;
   }
@@ -258,6 +261,10 @@ export class TripService {
     });
     // Names untitled stops, and fetches the second language of the names the document brought.
     const trip = await this.created(auth, albumId, result, dto.kind);
+    // The owner's other stars join an imported Favorites trip.
+    if (dto.isFavorites) {
+      await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: auth.user.id, canCreate: false } });
+    }
     if (dto.legs.some(({ mode, status }) => status === TripLegStatus.Pending && mode !== TripLegMode.Trail)) {
       await this.queueRouting(albumId);
     }

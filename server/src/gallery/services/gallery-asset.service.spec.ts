@@ -70,6 +70,11 @@ describe(GalleryAssetService.name, () => {
 
       expect(mocks.assetFavorite.addAll).toHaveBeenCalledWith(auth.user.id, ['asset-1', 'asset-2']);
       expect(mocks.assetFavorite.removeAll).not.toHaveBeenCalled();
+      expect(mocks.event.emit).toHaveBeenCalledWith('AssetFavoritesUpdate', {
+        userId: auth.user.id,
+        assetIds: ['asset-1', 'asset-2'],
+        isFavorite: true,
+      });
     });
 
     it('calls removeAll for the CALLER only when isFavorite is false', async () => {
@@ -80,6 +85,11 @@ describe(GalleryAssetService.name, () => {
 
       expect(mocks.assetFavorite.removeAll).toHaveBeenCalledWith(auth.user.id, ['asset-1']);
       expect(mocks.assetFavorite.addAll).not.toHaveBeenCalled();
+      expect(mocks.event.emit).toHaveBeenCalledWith('AssetFavoritesUpdate', {
+        userId: auth.user.id,
+        assetIds: ['asset-1'],
+        isFavorite: false,
+      });
     });
 
     it('favorites an asset the caller only has space-read (not owner/editor) access to (E3)', async () => {
