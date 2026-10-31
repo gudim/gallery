@@ -2,9 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { Kysely, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { randomUUID } from 'node:crypto';
+import type { Station } from 'src/trips/utils/routing.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { DB } from 'src/schema/index.js';
-import { TripKind, TripLegMode, TripLegStatus, TripPointSource, TripStopRole } from 'src/trips/enum.js';
+import {
+  TripKind,
+  TripLegMode,
+  TripLegStatus,
+  TripPointSource,
+  TripStationSide,
+  TripStopRole,
+} from 'src/trips/enum.js';
 import {
   TripEditResult,
   bumpContentVersion,
@@ -12,16 +20,17 @@ import {
   lockTrip,
   noStations,
   recordLocalTimes,
+  stationValues,
   stopOrder,
   syncRouteLegs,
   unbuilt,
 } from 'src/trips/repositories/trip.repository.js';
 import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
-import { type LatLng, haversineM, pointOf } from 'src/trips/utils/geo.js';
+import { type LatLng, defaultMode, haversineM, pointOf } from 'src/trips/utils/geo.js';
 import { inferPoints, speedKmh } from 'src/trips/utils/grouping.js';
 import { asUuid } from 'src/utils/database.js';
 
-// The stop editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the
+// The stop and leg editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the
 // trip it edits: there are no composite keys to check it (trips DECISIONS-LOG 2026-10-31).
 
 /** A point the owner picked, with its name; without one, naming gives it. */
@@ -534,6 +543,112 @@ export class TripEditorRepository {
    * back. Stops it did not touch keep their times and centres: an imported trip's may differ from what its assets
    * give, and a text edit must not move them.
    */
+  /**
+   * The owner's mode for a leg (travel-album `set_leg_mode`): kept by every later build and by filing. `null` gives the
+   * leg back to the default by distance. Either way the leg is built again from scratch, its stations forgotten.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, TripLegMode.Train] })
+  setLegMode(albumId: string, legId: string, mode: TripLegMode | null): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .innerJoin('trip_stop as from_stop', 'from_stop.id', 'trip_leg.fromStopId')
+        .innerJoin('trip_stop as to_stop', 'to_stop.id', 'trip_leg.toStopId')
+        .select([
+          'from_stop.latitude as fromLatitude',
+          'from_stop.longitude as fromLongitude',
+          'to_stop.latitude as toLatitude',
+          'to_stop.longitude as toLongitude',
+        ])
+        .where('trip_leg.albumId', '=', asUuid(albumId))
+        .where('trip_leg.id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      await trx
+        .updateTable('trip_leg')
+        .set({
+          mode: mode ?? automaticMode(leg),
+          isModeManual: mode !== null,
+          ...unbuilt,
+          ...noStations,
+        })
+        .where('id', '=', asUuid(legId))
+        .execute();
+    });
+  }
+
+  /**
+   * The owner's station at one end of a train leg (travel-album `set_leg_station`); the leg is built again. The
+   * caller checks that it is one of the stations offered at that end.
+   */
+  @GenerateSql({
+    params: [
+      DummyValue.UUID,
+      DummyValue.UUID,
+      TripStationSide.Departure,
+      { name: DummyValue.STRING, latitude: 54.68, longitude: 25.28 },
+    ],
+  })
+  setLegStation(albumId: string, legId: string, side: TripStationSide, station: Station): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .select('mode')
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      if (leg.mode !== TripLegMode.Train) {
+        return TripEditResult.LegNotTrain;
+      }
+      await trx
+        .updateTable('trip_leg')
+        .set({ ...stationValues(side, station), ...unbuilt })
+        .where('id', '=', asUuid(legId))
+        .execute();
+    });
+  }
+
+  /** A leg that needs attention goes back to the routing queue as it is (travel-album `retry_leg`). */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  retryLeg(albumId: string, legId: string): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .select('status')
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      if (leg.status !== TripLegStatus.Attention) {
+        return TripEditResult.LegNotAttention;
+      }
+      await trx.updateTable('trip_leg').set(unbuilt).where('id', '=', asUuid(legId)).execute();
+    });
+  }
+
+  /** Every leg of the trip that needs attention goes back to the routing queue (travel-album `retry_legs`). */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  retryLegs(albumId: string): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const { numUpdatedRows } = await trx
+        .updateTable('trip_leg')
+        .set(unbuilt)
+        .where('albumId', '=', asUuid(albumId))
+        .where('status', '=', TripLegStatus.Attention)
+        .executeTakeFirst();
+      if (numUpdatedRows === 0n) {
+        return TripEditResult.NoLegsToRetry;
+      }
+    });
+  }
+
   // An edit only a route has; another kind of trip refuses it.
   private editRoute(albumId: string, edit: Edit): Promise<TripEdited> {
     return this.edit(albumId, (trx, kind, touch) =>
@@ -591,6 +706,35 @@ class Refused extends Error {
     super(result);
   }
 }
+
+/**
+ * Runs one edit of a trip in a transaction that holds the trip row, so edits of one trip queue up, and bumps its
+ * `contentVersion`. A trip whose album is in the trash is missing. `edit` returns why it refused, or nothing.
+ */
+const editTrip = (
+  db: Kysely<DB>,
+  albumId: string,
+  edit: (trx: Transaction<DB>) => Promise<TripEditResult | void>,
+): Promise<TripEditResult> =>
+  db.transaction().execute(async (trx) => {
+    const trip = await lockTrip(trx, albumId);
+    if (!trip) {
+      return TripEditResult.TripMissing;
+    }
+    const refused = await edit(trx);
+    if (refused) {
+      return refused;
+    }
+    await bumpContentVersion(trx, albumId);
+    return TripEditResult.Updated;
+  });
+
+// The mode a leg without the owner's choice has until it is built: by its straight length, by car without points.
+const automaticMode = (leg: Record<'fromLatitude' | 'fromLongitude' | 'toLatitude' | 'toLongitude', number | null>) => {
+  const from = pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude });
+  const to = pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude });
+  return from && to ? defaultMode(haversineM(from, to)) : TripLegMode.Driving;
+};
 
 const pointValues = ({ latitude, longitude, title }: TripPoint) => ({
   latitude,

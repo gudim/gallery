@@ -209,3 +209,63 @@ where
 for update of
   "trip"
 commit
+
+-- TripEditorRepository.setLegMode
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit
+
+-- TripEditorRepository.setLegStation
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit
+
+-- TripEditorRepository.retryLeg
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit
+
+-- TripEditorRepository.retryLegs
+begin
+select
+  "trip"."albumId",
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit

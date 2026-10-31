@@ -483,7 +483,7 @@ export class TripService {
    * stations forgotten. The album's owner and editors edit.
    */
   async setLegMode(auth: AuthDto, albumId: string, legId: string, dto: TripLegModeUpdateDto): Promise<TripResponseDto> {
-    return this.editLeg(auth, albumId, () => this.tripRepository.setLegMode(albumId, legId, dto.mode));
+    return this.editLeg(auth, albumId, () => this.tripEditorRepository.setLegMode(albumId, legId, dto.mode));
   }
 
   /** Up to five stations near each end of a leg, nearest first (travel-album `leg_stations`). Editors only. */
@@ -516,18 +516,18 @@ export class TripService {
       if (!isOffered(station, await this.stationsNear(end, await this.languageOf(albumId)))) {
         throw new BadRequestException('The station is not one offered at that end of the leg');
       }
-      return this.tripRepository.setLegStation(albumId, legId, side, station);
+      return this.tripEditorRepository.setLegStation(albumId, legId, side, station);
     });
   }
 
   /** Sends a leg that needs attention back to routing, mode unchanged. */
   async retryLeg(auth: AuthDto, albumId: string, legId: string): Promise<TripResponseDto> {
-    return this.editLeg(auth, albumId, () => this.tripRepository.retryLeg(albumId, legId));
+    return this.editLeg(auth, albumId, () => this.tripEditorRepository.retryLeg(albumId, legId));
   }
 
   /** Sends every leg of the trip that needs attention back to routing. */
   async retryLegs(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
-    return this.editLeg(auth, albumId, () => this.tripRepository.retryLegs(albumId));
+    return this.editLeg(auth, albumId, () => this.tripEditorRepository.retryLegs(albumId));
   }
 
   // A leg edit by the album's owner or an editor; the leg is routed again.
