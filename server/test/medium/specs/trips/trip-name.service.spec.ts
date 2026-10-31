@@ -2,6 +2,7 @@ import { Kysely } from 'kysely';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { JobName, JobStatus } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
+import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
@@ -81,7 +82,14 @@ const setup = async () => {
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   // The rate limit has its own test; here every request goes at once.
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
-  const trips = new TripService(new AccessRepository(db), job, tripRepository, geo, new TripEditorRepository(db));
+  const trips = new TripService(
+    new AccessRepository(db),
+    job,
+    tripRepository,
+    geo,
+    new TripEditorRepository(db),
+    new AssetFavoriteRepository(db),
+  );
   const sut = new TripNameService(LoggingRepository.create(), tripRepository, geo);
   const { user: owner } = await ctx.newUser();
   const auth = factory.auth({ user: owner });

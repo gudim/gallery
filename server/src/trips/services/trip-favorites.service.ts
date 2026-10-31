@@ -3,6 +3,7 @@ import type { ArgOf } from 'src/repositories/event.repository.js';
 import type { JobOf } from 'src/types.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
 import { JobName, JobStatus, QueueName } from 'src/enum.js';
+import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { TripFavoritesRepository } from 'src/trips/repositories/trip-favorites.repository.js';
 import { resolveTripNamingLanguages } from 'src/trips/utils/naming.js';
@@ -34,6 +35,7 @@ export class TripFavoritesService {
   constructor(
     private jobRepository: JobRepository,
     private tripFavoritesRepository: TripFavoritesRepository,
+    private assetFavoriteRepository: AssetFavoriteRepository,
   ) {}
 
   // The server keeps no user locale, so a new Favorites trip takes the instance's first naming language (trips
@@ -45,14 +47,21 @@ export class TripFavoritesService {
     await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: userId, canCreate: isFavorite } });
   }
 
+  // Adding to the Favorites trip's album stars the asset for its owner, removing unstars it (trips GLOSSARY).
   @OnEvent({ name: 'AlbumAssetsAdd' })
   async onAlbumAssetsAdd({ albumId, assetIds }: ArgOf<'AlbumAssetsAdd'>) {
-    await this.tripFavoritesRepository.setStars(albumId, assetIds, true);
+    const ownerId = await this.tripFavoritesRepository.getFavoritesOwnerId(albumId);
+    if (ownerId) {
+      await this.assetFavoriteRepository.addAll(ownerId, assetIds);
+    }
   }
 
   @OnEvent({ name: 'AlbumAssetsRemove' })
   async onAlbumAssetsRemove({ albumId, assetIds }: ArgOf<'AlbumAssetsRemove'>) {
-    await this.tripFavoritesRepository.setStars(albumId, assetIds, false);
+    const ownerId = await this.tripFavoritesRepository.getFavoritesOwnerId(albumId);
+    if (ownerId) {
+      await this.assetFavoriteRepository.removeAll(ownerId, assetIds);
+    }
   }
 
   @OnJob({ name: JobName.TripFavorites, queue: QueueName.BackgroundTask })

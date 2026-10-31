@@ -82,15 +82,9 @@ export class TripFavoritesRepository {
     });
   }
 
-  /**
-   * Stars the assets for the owner of the album, or takes their stars back, when it is a Favorites trip's: adding to
-   * that album stars, removing from it unstars (trips GLOSSARY "Favorites trip").
-   */
-  @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], true] })
-  async setStars(albumId: string, assetIds: string[], isFavorite: boolean): Promise<void> {
-    if (assetIds.length === 0) {
-      return;
-    }
+  /** The owner of the album when it is a Favorites trip's, else null. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async getFavoritesOwnerId(albumId: string): Promise<string | null> {
     const owner = await this.db
       .selectFrom('trip')
       .innerJoin('album_user', 'album_user.albumId', 'trip.albumId')
@@ -99,20 +93,7 @@ export class TripFavoritesRepository {
       .where('trip.isFavorites', '=', true)
       .where('album_user.role', '=', AlbumUserRole.Owner)
       .executeTakeFirst();
-    if (!owner) {
-      return;
-    }
-    await (isFavorite
-      ? this.db
-          .insertInto('asset_favorite')
-          .values(assetIds.map((assetId) => ({ userId: owner.userId, assetId })))
-          .onConflict((oc) => oc.doNothing())
-          .execute()
-      : this.db
-          .deleteFrom('asset_favorite')
-          .where('userId', '=', owner.userId)
-          .where('assetId', 'in', assetIds)
-          .execute());
+    return owner?.userId ?? null;
   }
 }
 

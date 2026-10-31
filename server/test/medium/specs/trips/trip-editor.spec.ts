@@ -3,6 +3,7 @@ import { Kysely } from 'kysely';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AlbumUserRole, JobName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
+import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
@@ -69,7 +70,14 @@ const setup = async (shots: Shot[] = SHOTS, kind = 'route', { withStart = true }
   job.queueAll.mockResolvedValue();
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
-  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db), geo, new TripEditorRepository(db));
+  const sut = new TripService(
+    new AccessRepository(db),
+    job,
+    new TripRepository(db),
+    geo,
+    new TripEditorRepository(db),
+    new AssetFavoriteRepository(db),
+  );
   const { user: owner } = await ctx.newUser();
   const newAlbum = async () => {
     const assetIds = [];

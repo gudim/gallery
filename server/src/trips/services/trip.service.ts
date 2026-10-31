@@ -13,6 +13,7 @@ import type { JobOf } from 'src/types.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
 import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
+import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import {
   TripAssetPointDto,
@@ -93,6 +94,7 @@ export class TripService {
     private tripRepository: TripRepository,
     private tripGeoRepository: TripGeoRepository,
     private tripEditorRepository: TripEditorRepository,
+    private assetFavoriteRepository: AssetFavoriteRepository,
   ) {}
 
   private readonly languages = resolveTripNamingLanguages();
@@ -219,6 +221,14 @@ export class TripService {
     const missing = assetIds.filter((id) => !inAlbum.has(id));
     if (missing.length > 0) {
       throw new BadRequestException(`Assets not in the album: ${missing.join(', ')}`);
+    }
+
+    // A Favorites trip holds exactly its owner's stars, so the album's assets are starred first: an import that is
+    // then refused leaves stars, never a trip whose mirroring would take unstarred assets out (trips DECISIONS-LOG).
+    if (dto.isFavorites) {
+      await this.assetFavoriteRepository.addAll(auth.user.id, [
+        ...(await this.tripRepository.getAlbumAssetIds(albumId)),
+      ]);
     }
 
     const placeIds = new Map(dto.places.map(({ key }) => [key, randomUUID()]));

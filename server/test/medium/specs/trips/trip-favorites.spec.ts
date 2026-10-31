@@ -2,6 +2,7 @@ import { Kysely } from 'kysely';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AssetVisibility, JobName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
+import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
@@ -33,13 +34,14 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
-  const sut = new TripFavoritesService(job, new TripFavoritesRepository(db));
+  const sut = new TripFavoritesService(job, new TripFavoritesRepository(db), new AssetFavoriteRepository(db));
   const trips = new TripService(
     new AccessRepository(db),
     job,
     new TripRepository(db),
     new TripGeoRepository(db, LoggingRepository.create()),
     new TripEditorRepository(db),
+    new AssetFavoriteRepository(db),
   );
   const { user } = await ctx.newUser();
   // An asset of `ownerId` with its GPS or none, its metadata read.

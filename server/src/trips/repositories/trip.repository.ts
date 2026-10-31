@@ -114,17 +114,17 @@ export const stopOrder = (stop: 'trip_stop' | 'from_stop') =>
 export class TripRepository {
   constructor(@InjectKysely() private db: Kysely<DB>) {}
 
-  /** Of `assetIds`, those in the album, trashed ones included. */
+  /** Of `assetIds`, or of every asset without them, those in the album, trashed ones included. */
   @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID]] })
-  async getAlbumAssetIds(albumId: string, assetIds: string[]): Promise<Set<string>> {
-    if (assetIds.length === 0) {
+  async getAlbumAssetIds(albumId: string, assetIds?: string[]): Promise<Set<string>> {
+    if (assetIds?.length === 0) {
       return new Set();
     }
     const rows = await this.db
       .selectFrom('album_asset')
       .select('album_asset.assetId')
       .where('album_asset.albumId', '=', asUuid(albumId))
-      .where('album_asset.assetId', 'in', assetIds)
+      .$if(!!assetIds, (qb) => qb.where('album_asset.assetId', 'in', assetIds!))
       .execute();
     return new Set(rows.map(({ assetId }) => assetId));
   }
@@ -298,19 +298,6 @@ export class TripRepository {
       }
       if (likes.length > 0) {
         await trx.insertInto('trip_like').values(likes).execute();
-      }
-      // A Favorites trip holds exactly its owner's stars, so the album's assets are starred (trips DECISIONS-LOG).
-      if (trip.isFavorites) {
-        await trx
-          .insertInto('asset_favorite')
-          .expression((eb) =>
-            eb
-              .selectFrom('album_asset')
-              .select([sql<string>`${ownerId}::uuid`.as('userId'), 'album_asset.assetId'])
-              .where('album_asset.albumId', '=', albumId),
-          )
-          .onConflict((oc) => oc.doNothing())
-          .execute();
       }
       if (generatedCaptions.length > 0) {
         await trx
