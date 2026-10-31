@@ -62,7 +62,9 @@
     onReady,
   }: Props = $props();
 
-  const SPLIT_ZOOM = 15;
+  // travel-album's Leaflet zooms less one: MapLibre's 512 px tiles show at zoom z what 256 px tiles show at z + 1.
+  const SPLIT_ZOOM = 14;
+  const STOP_ZOOM = 12;
   const POLE = 14;
   const BADGE_MIN_PX = 90;
 
@@ -326,9 +328,10 @@
 
   // ---- Markers ------------------------------------------------------------------------------------------------------
 
-  type StopMarker = { item: TripItem; marker: Marker; element: HTMLDivElement; isFlag: boolean };
+  // A marker's own element belongs to MapLibre (its classes and transform place it); what it shows is a child.
+  type StopMarker = { item: TripItem; marker: Marker; element: HTMLDivElement; body: HTMLDivElement; isFlag: boolean };
   let stopMarkers: StopMarker[] = [];
-  let transitMarkers: { item: TripItem; marker: Marker; element: HTMLDivElement }[] = [];
+  let transitMarkers: { item: TripItem; marker: Marker; element: HTMLDivElement; body: HTMLDivElement }[] = [];
   let badgeMarkers: { leg: TripView['legs'][number]; marker: Marker; element: HTMLDivElement; point: Position }[] = [];
   let tooltip: Popup | undefined;
 
@@ -381,24 +384,24 @@
   const pinSize = (count: number) => Math.round(13 + Math.min(15, Math.sqrt(count) * 2.6));
 
   const renderStop = (entry: StopMarker, asFlag: boolean) => {
-    const { item, element, marker } = entry;
+    const { item, element, body, marker } = entry;
     const color = colorOf(item.day);
-    element.replaceChildren();
-    element.style.setProperty('--day', color);
-    element.style.setProperty('--ink', inkOn(color));
-    element.dataset.tripStop = item.id;
+    body.replaceChildren();
+    body.style.setProperty('--day', color);
+    body.style.setProperty('--ink', inkOn(color));
+    body.dataset.tripStop = item.id;
     element.setAttribute('role', 'button');
     element.tabIndex = 0;
     element.setAttribute('aria-label', itemLines(item).join(', '));
     const count = item.photos.length;
     if (asFlag && count > 0) {
       const side = flagSide();
-      element.className = 'trip-flag';
-      element.style.setProperty('--fw', `${side}px`);
-      element.style.width = '';
-      element.style.height = '';
-      element.style.background = '';
-      element.style.color = '';
+      body.className = 'trip-flag';
+      body.style.setProperty('--fw', `${side}px`);
+      body.style.width = '';
+      body.style.height = '';
+      body.style.background = '';
+      body.style.color = '';
       const pole = document.createElement('span');
       pole.className = 'pole';
       const cloth = document.createElement('span');
@@ -418,22 +421,22 @@
       number.className = 'n';
       number.textContent = String(count);
       cloth.append(number);
-      element.append(pole, cloth);
+      body.append(pole, cloth);
       marker.setOffset([side / 2 - 1, -(side + POLE) / 2]);
       element.style.zIndex = String(1000 + count);
     } else {
       const size = pinSize(count);
-      element.className = `trip-pin${count === 0 ? ' start' : ''}`;
-      element.style.width = `${size}px`;
-      element.style.height = `${size}px`;
-      element.style.background = color;
-      element.style.color = inkOn(color);
-      element.textContent = count > 3 ? String(count) : '';
+      body.className = `trip-pin${count === 0 ? ' start' : ''}`;
+      body.style.width = `${size}px`;
+      body.style.height = `${size}px`;
+      body.style.background = color;
+      body.style.color = inkOn(color);
+      body.textContent = count > 3 ? String(count) : '';
       marker.setOffset([0, 0]);
       element.style.zIndex = String(count);
     }
     entry.isFlag = asFlag && count > 0;
-    element.classList.toggle('on', item.id === selectedId || item.id === hotId);
+    body.classList.toggle('on', item.id === selectedId || item.id === hotId);
   };
 
   let hotId = $state<string>();
@@ -447,8 +450,10 @@
         continue;
       }
       const element = document.createElement('div');
+      const body = document.createElement('div');
+      element.append(body);
       const marker = new Marker({ element, anchor: 'center' }).setLngLat([stop.longitude, stop.latitude]).addTo(map);
-      const entry: StopMarker = { item: stop, marker, element, isFlag: false };
+      const entry: StopMarker = { item: stop, marker, element, body, isFlag: false };
       element.addEventListener('click', (event) => {
         event.stopPropagation();
         onItem?.(stop);
@@ -497,17 +502,19 @@
         continue;
       }
       const element = document.createElement('div');
-      element.className = 'trip-onway';
-      element.style.setProperty('--day', colorOf(item.day));
-      element.style.setProperty('--ink', inkOn(colorOf(item.day)));
-      element.dataset.tripTransit = item.id;
+      const body = document.createElement('div');
+      element.append(body);
+      body.className = 'trip-onway';
+      body.style.setProperty('--day', colorOf(item.day));
+      body.style.setProperty('--ink', inkOn(colorOf(item.day)));
+      body.dataset.tripTransit = item.id;
       const image = document.createElement('img');
       image.src = thumbUrl(item.photos[0]);
       image.alt = '';
       const number = document.createElement('span');
       number.className = 'n';
       number.textContent = String(item.photos.length);
-      element.append(image, number);
+      body.append(image, number);
       element.addEventListener('click', (event) => {
         event.stopPropagation();
         onItem?.(item);
@@ -526,7 +533,7 @@
       const lngLat = point as [number, number];
       element.addEventListener('mouseenter', () => showTooltip(lngLat, lines, 20));
       element.addEventListener('mouseleave', hideTooltip);
-      transitMarkers.push({ item, element, marker: new Marker({ element }).setLngLat(lngLat).addTo(map) });
+      transitMarkers.push({ item, element, body, marker: new Marker({ element }).setLngLat(lngLat).addTo(map) });
     }
 
     // Mode avatars in the middle of a leg, moved aside when assets on the way sit there.
@@ -546,11 +553,13 @@
       const b = map.project(to as [number, number]);
       const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
       const element = document.createElement('div');
-      element.className = 'trip-legmode';
-      element.dataset.tripMode = leg.mode;
-      element.style.setProperty('--day', colorOf(leg.day));
+      const body = document.createElement('div');
+      element.append(body);
+      body.className = 'trip-legmode';
+      body.dataset.tripMode = leg.mode;
+      body.style.setProperty('--day', colorOf(leg.day));
       // MODE_ART is a fixed set of shapes from this repository, not user text.
-      element.innerHTML = `<svg class="trip-avatar" width="40" height="40" viewBox="0 0 40 40" style="transform:${avatarTransform(angle)}" aria-hidden="true">${art}</svg>`;
+      body.innerHTML = `<svg class="trip-avatar" width="40" height="40" viewBox="0 0 40 40" style="transform:${avatarTransform(angle)}" aria-hidden="true">${art}</svg>`;
       const lines = [legTitle(leg)];
       if (leg.departureName && leg.arrivalName) {
         lines.push(`${leg.departureName} → ${leg.arrivalName}`);
@@ -616,7 +625,7 @@
       const visible =
         shown(entry.item.day) && !(exploded && entry.item.photos.some(({ latitude }) => latitude !== null));
       entry.element.style.display = visible ? '' : 'none';
-      if (flags.includes(entry) !== entry.isFlag || entry.element.childElementCount === 0) {
+      if (flags.includes(entry) !== entry.isFlag) {
         renderStop(entry, flags.includes(entry));
       }
     }
@@ -626,7 +635,7 @@
     // An avatar shows where its leg is at least 90 px long on screen.
     let badges = 0;
     for (const { leg, element, point } of badgeMarkers) {
-      const metresPerPixel = (40_075_016.686 * Math.cos((point[1] * Math.PI) / 180)) / 2 ** (map.getZoom() + 8);
+      const metresPerPixel = (40_075_016.686 * Math.cos((point[1] * Math.PI) / 180)) / 2 ** (map.getZoom() + 9);
       const visible = shown(leg.day) && (leg.distance ?? 0) / metresPerPixel >= BADGE_MIN_PX;
       element.style.display = visible ? '' : 'none';
       element.style.cursor = toc ? 'pointer' : 'default';
@@ -690,16 +699,26 @@
     }
     const { clientWidth: width, clientHeight: height } = container;
     const top = toc ? flagSide() + POLE + 10 : Math.round(height * 0.06);
-    map.fitBounds(bounds, {
+    const camera = map.cameraForBounds(bounds, {
       padding: {
         top: top + topInset,
         bottom: toc ? 20 : Math.round(height * 0.06),
         left: toc ? 40 : Math.round(width * 0.06),
         right: toc ? 40 : Math.round(width * 0.06),
       },
-      maxZoom: toc ? 14 : 16,
-      animate,
+      maxZoom: toc ? 13 : 18,
     });
+    if (!camera) {
+      return;
+    }
+    // Leaflet snaps a fit to whole zoom levels (quarters in the Photos view); the counts on the map depend on it.
+    const step = toc ? 4 : 1;
+    const zoom = Math.floor((camera.zoom ?? 2) * step) / step;
+    if (animate) {
+      map.easeTo({ center: camera.center, zoom });
+    } else {
+      map.jumpTo({ center: camera.center, zoom });
+    }
   };
 
   const flyTo = (item: TripItem) => {
@@ -711,7 +730,7 @@
     if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) {
       return;
     }
-    map.easeTo({ center: [longitude, latitude], zoom: Math.max(map.getZoom(), 13) });
+    map.easeTo({ center: [longitude, latitude], zoom: Math.max(map.getZoom(), STOP_ZOOM) });
   };
 
   // ---- Lifecycle -------------------------------------------------------------------------------------------------------
@@ -789,8 +808,8 @@
   $effect(() => {
     void selectedId;
     void hotId;
-    for (const { item, element } of [...stopMarkers, ...transitMarkers]) {
-      element.classList.toggle('on', item.id === selectedId || item.id === hotId);
+    for (const { item, body } of [...stopMarkers, ...transitMarkers]) {
+      body.classList.toggle('on', item.id === selectedId || item.id === hotId);
     }
   });
 
