@@ -1,5 +1,7 @@
 import { TripAssetTable } from 'src/trips/schema/tables/trip-asset.table.js';
 import { TripGeneratedCaptionTable } from 'src/trips/schema/tables/trip-generated-caption.table.js';
+import { TripGeoCacheTable } from 'src/trips/schema/tables/trip-geo-cache.table.js';
+import { TripGeoHostTable } from 'src/trips/schema/tables/trip-geo-host.table.js';
 import { TripLegTable } from 'src/trips/schema/tables/trip-leg.table.js';
 import { TripLikeTable } from 'src/trips/schema/tables/trip-like.table.js';
 import { TripOverlayTable } from 'src/trips/schema/tables/trip-overlay.table.js';
@@ -17,6 +19,8 @@ export const tripTables = [
   TripOverlayTable,
   TripLikeTable,
   TripGeneratedCaptionTable,
+  TripGeoCacheTable,
+  TripGeoHostTable,
 ];
 
 export interface TripsDB {
@@ -28,4 +32,6 @@ export interface TripsDB {
   trip_overlay: TripOverlayTable;
   trip_like: TripLikeTable;
   trip_generated_caption: TripGeneratedCaptionTable;
+  trip_geo_cache: TripGeoCacheTable;
+  trip_geo_host: TripGeoHostTable;
 }

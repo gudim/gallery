@@ -37,3 +37,11 @@ export enum TripOverlayKind {
   Trail = 'trail',
   Mask = 'mask',
 }
+
+// The public services routing and naming call (trips DECISIONS-LOG 2026-10-31), as trip_geo_cache.service names them.
+export enum TripGeoService {
+  Valhalla = 'valhalla',
+  BRouter = 'brouter',
+  Overpass = 'overpass',
+  Nominatim = 'nominatim',
+}
