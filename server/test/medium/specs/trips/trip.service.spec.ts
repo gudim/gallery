@@ -250,6 +250,31 @@ describe(TripService.name, () => {
       ).resolves.toEqual(document);
     });
 
+    it('orders stops as travel-album: a point without a time after the start, an undated stop before the finish', async () => {
+      const { sut, owner, album, document } = await setup();
+      const stops = [
+        stop('finish', { role: 'finish' }),
+        stop('undated'),
+        stop('noon', { localStart: '2026-05-01T12:00:00.000Z' }),
+        stop('point', { isAddedByHand: true, isPositionManual: true, latitude: 1, longitude: 1 }),
+        stop('start', { role: 'start' }),
+      ];
+
+      const trip = await sut.import(
+        factory.auth({ user: owner }),
+        album.id,
+        TripImportDto.schema.parse({ ...document, stops, assets: [], legs: [], likes: [] }),
+      );
+
+      expect(trip.stops.map(({ role, isAddedByHand, localStart }) => [role, isAddedByHand, localStart])).toEqual([
+        ['start', false, null],
+        [null, true, null],
+        [null, false, '2026-05-01T12:00:00.000Z'],
+        [null, false, null],
+        ['finish', false, null],
+      ]);
+    });
+
     it('creates one trip when two imports of the album race', async () => {
       const { importTrip } = await setup();
 

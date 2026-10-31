@@ -85,11 +85,17 @@ export enum TripCreateResult {
   FavoritesExists = 'favorites-exists',
 }
 
-// Trip order: the start first, the finish last (travel-album decision P20), the rest by local start time.
+// Trip order (travel-album `ordered_stops`, decision P20): the start first, the finish last, the rest by local start
+// time. A point added by hand without a time comes first after the start, where it was placed; a stop of assets
+// without a time (a Plain trip's undated section) comes just before the finish.
 export const stopOrder = (stop: 'trip_stop' | 'from_stop') =>
   sql.join([
-    sql`CASE ${sql.ref(`${stop}.role`)} WHEN ${sql.lit(TripStopRole.Start)} THEN 0 WHEN ${sql.lit(TripStopRole.Finish)} THEN 2 ELSE 1 END`,
-    sql`${sql.ref(`${stop}.localStart`)} ASC NULLS LAST`,
+    sql`CASE
+      WHEN ${sql.ref(`${stop}.role`)} = ${sql.lit(TripStopRole.Start)} THEN 0
+      WHEN ${sql.ref(`${stop}.role`)} = ${sql.lit(TripStopRole.Finish)} THEN 3
+      WHEN ${sql.ref(`${stop}.localStart`)} IS NULL AND NOT ${sql.ref(`${stop}.isAddedByHand`)} THEN 2
+      ELSE 1 END`,
+    sql`${sql.ref(`${stop}.localStart`)} ASC NULLS FIRST`,
     sql.ref(`${stop}.sequence`),
     sql.ref(`${stop}.id`),
   ]);

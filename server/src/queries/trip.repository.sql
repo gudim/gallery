@@ -181,12 +181,14 @@ where
   and "to_stop"."latitude" is not null
   and "to_stop"."longitude" is not null
 order by
-  CASE "from_stop"."role"
-    WHEN 'start' THEN 0
-    WHEN 'finish' THEN 2
+  CASE
+    WHEN "from_stop"."role" = 'start' THEN 0
+    WHEN "from_stop"."role" = 'finish' THEN 3
+    WHEN "from_stop"."localStart" IS NULL
+    AND NOT "from_stop"."isAddedByHand" THEN 2
     ELSE 1
   END,
-  "from_stop"."localStart" ASC NULLS LAST,
+  "from_stop"."localStart" ASC NULLS FIRST,
   "from_stop"."sequence",
   "from_stop"."id",
   "trip_leg"."id"
