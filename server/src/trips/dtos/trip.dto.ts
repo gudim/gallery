@@ -337,6 +337,45 @@ const TripEndSchema = z
   })
   .meta({ id: 'TripEndDto' });
 
+const afterStopIdSchema = z
+  .uuidv4()
+  .nullable()
+  .describe('Stop of the same trip the point goes right after; null puts it right after the start');
+
+const TripPointCreateSchema = TripEndSchema.extend({ afterStopId: afterStopIdSchema.default(null) }).meta({
+  id: 'TripPointCreateDto',
+});
+
+const TripPointOrderSchema = z.object({ afterStopId: afterStopIdSchema }).meta({ id: 'TripPointOrderDto' });
+
+const TripFinishUpdateSchema = z
+  .object({
+    latitude: latitudeSchema.optional().describe('Latitude'),
+    longitude: longitudeSchema.optional().describe('Longitude'),
+    title: editedText('Name of the point; blank leaves it to naming through Nominatim'),
+    isFinishAtStart: z
+      .boolean()
+      .default(false)
+      .describe('The route ends where it began, and the finish follows the start'),
+  })
+  .superRefine((dto, ctx) => {
+    const hasPoint = dto.latitude !== undefined && dto.longitude !== undefined;
+    if ((dto.latitude === undefined) !== (dto.longitude === undefined) || hasPoint === dto.isFinishAtStart) {
+      ctx.addIssue({ code: 'custom', message: 'A finish takes either a point or isFinishAtStart' });
+    }
+  })
+  .meta({ id: 'TripFinishUpdateDto' });
+
+const TripTransitUpdateSchema = z
+  .object({
+    stopIds: z.array(z.uuidv4()).min(1).describe('Stops of the same trip, of assets'),
+    isTransit: z
+      .boolean()
+      .nullable()
+      .describe('Shot on the way; false declines the suggestion for good, null leaves it undecided'),
+  })
+  .meta({ id: 'TripTransitUpdateDto' });
+
 const TripCreateSchema = z
   .object({
     albumId: z.uuidv4().describe('Album ID; the trip takes it'),
@@ -404,6 +443,10 @@ export class TripImportDto extends createZodDto(TripImportSchema) {}
 export class TripCreateDto extends createZodDto(TripCreateSchema) {}
 export class TripEndDto extends createZodDto(TripEndSchema) {}
 export class TripStopUpdateDto extends createZodDto(TripStopUpdateSchema) {}
+export class TripPointCreateDto extends createZodDto(TripPointCreateSchema) {}
+export class TripPointOrderDto extends createZodDto(TripPointOrderSchema) {}
+export class TripFinishUpdateDto extends createZodDto(TripFinishUpdateSchema) {}
+export class TripTransitUpdateDto extends createZodDto(TripTransitUpdateSchema) {}
 export class TripStopSplitDto extends createZodDto(TripStopSplitSchema) {}
 export class TripStopCreateDto extends createZodDto(TripStopCreateSchema) {}
 export class TripAssetsMoveDto extends createZodDto(TripAssetsMoveSchema) {}

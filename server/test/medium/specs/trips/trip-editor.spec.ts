@@ -10,12 +10,17 @@ import { BaseService } from 'src/services/base.service.js';
 import {
   TripAssetsMoveDto,
   TripCreateDto,
+  TripEndDto,
+  TripFinishUpdateDto,
+  TripPointCreateDto,
+  TripPointOrderDto,
   TripResponseDto,
   TripStopCreateDto,
   TripStopSplitDto,
   TripStopUpdateDto,
+  TripTransitUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
-import { TripLegStatus } from 'src/trips/enum.js';
+import { TripLegMode, TripLegStatus } from 'src/trips/enum.js';
 import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
@@ -341,6 +346,203 @@ describe('stop editor', () => {
     });
   });
 
+  describe('points', () => {
+    const P = { latitude: 54.8, longitude: 25.29 };
+
+    it('adds a point right after a stop, at its end time, and routes and names it', async () => {
+      const { job, sut, auth, album, trip } = await setup();
+      const [start, a, b, c] = trip.stops;
+
+      const edited = await sut.addPoint(auth, album.id, TripPointCreateDto.schema.parse({ ...P, afterStopId: a.id }));
+
+      const point = edited.stops[2];
+      expect(edited.stops.map(({ id }) => id)).toEqual([start.id, a.id, point.id, b.id, c.id]);
+      expect(point).toMatchObject({
+        ...P,
+        isAddedByHand: true,
+        isPositionManual: true,
+        title: null,
+        localStart: '2026-05-01T10:10:00.000Z',
+      });
+      expect(legPairs(edited)).toEqual([
+        [start.id, a.id, 'ok'],
+        [a.id, point.id, 'pending'],
+        [point.id, b.id, 'pending'],
+        [b.id, c.id, 'ok'],
+      ]);
+      expect(job.queue).toHaveBeenCalledWith(routeJob(album.id));
+      expect(job.queue).toHaveBeenCalledWith(nameJob(album.id));
+    });
+
+    it('puts a point right after the start, and moves it after another stop', async () => {
+      const { sut, auth, album, trip } = await setup();
+      const [start, a, b, c] = trip.stops;
+
+      const added = await sut.addPoint(
+        auth,
+        album.id,
+        TripPointCreateDto.schema.parse({ ...P, title: 'Lake', afterStopId: null }),
+      );
+      const point = added.stops[1];
+      expect(added.stops.map(({ id }) => id)).toEqual([start.id, point.id, a.id, b.id, c.id]);
+      expect(point).toMatchObject({ title: 'Lake', titleSource: 'manual', localStart: null });
+
+      const moved = await sut.movePoint(
+        auth,
+        album.id,
+        point.id,
+        TripPointOrderDto.schema.parse({ afterStopId: b.id }),
+      );
+
+      expect(moved.stops.map(({ id }) => id)).toEqual([start.id, a.id, b.id, point.id, c.id]);
+      expect(moved.stops[3].localStart).toBe('2026-05-01T12:20:00.000Z');
+    });
+
+    it('refuses a point after the finish, a stop of assets in the order, and a trip that is not a route', async () => {
+      const { sut, auth, album, trip } = await setup();
+      const places = await setup(SHOTS, 'places');
+      const withFinish = await sut.setFinish(auth, album.id, TripFinishUpdateDto.schema.parse(P));
+      const finish = withFinish.stops.at(-1)!;
+
+      await expect(
+        sut.addPoint(auth, album.id, TripPointCreateDto.schema.parse({ ...P, afterStopId: finish.id })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        sut.movePoint(auth, album.id, trip.stops[1].id, TripPointOrderDto.schema.parse({ afterStopId: null })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        places.sut.addPoint(places.auth, places.album.id, TripPointCreateDto.schema.parse(P)),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('start and finish', () => {
+    const P = { latitude: 54.65, longitude: 25.25 };
+
+    it('moves the start: its leg is routed again and the cleared title named', async () => {
+      const { job, sut, auth, album, trip } = await setup();
+
+      const edited = await sut.setStart(auth, album.id, TripEndDto.schema.parse(P));
+
+      expect(edited.stops[0]).toMatchObject({ ...P, role: 'start', title: null, id: trip.stops[0].id });
+      expect(edited.legs.map(({ status }) => status)).toEqual(['pending', 'ok', 'ok']);
+      expect(job.queue).toHaveBeenCalledWith(nameJob(album.id));
+    });
+
+    it('puts the finish at the start, which it follows and goes with', async () => {
+      const { sut, auth, album, trip } = await setup();
+      const c = trip.stops[3];
+
+      const withFinish = await sut.setFinish(
+        auth,
+        album.id,
+        TripFinishUpdateDto.schema.parse({ isFinishAtStart: true }),
+      );
+      expect(withFinish.stops[4]).toMatchObject({ ...HOME, role: 'finish', isFinishAtStart: true });
+      expect(withFinish.legs.at(-1)).toMatchObject({ fromStopId: c.id, toStopId: withFinish.stops[4].id });
+
+      const moved = await sut.setStart(auth, album.id, TripEndDto.schema.parse({ ...P, title: 'Home' }));
+      expect(moved.stops[4]).toMatchObject({ ...P, title: 'Home', role: 'finish', isFinishAtStart: true });
+
+      const removed = await sut.setStart(auth, album.id, null);
+      expect(removed.stops.map(({ role }) => role)).toEqual([null, null, null]);
+      expect(removed.legs).toHaveLength(2);
+    });
+
+    it('sets and removes a finish of its own, and refuses a finish at a start that is not there', async () => {
+      const { sut, auth, album } = await setup();
+
+      const withFinish = await sut.setFinish(auth, album.id, TripFinishUpdateDto.schema.parse(P));
+      expect(withFinish.stops.at(-1)).toMatchObject({ ...P, role: 'finish', isFinishAtStart: false });
+      const removed = await sut.setFinish(auth, album.id, null);
+      expect(removed.stops.at(-1)?.role).toBeNull();
+
+      await sut.setStart(auth, album.id, null);
+      await expect(
+        sut.setFinish(auth, album.id, TripFinishUpdateDto.schema.parse({ isFinishAtStart: true })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('takes a finish with either a point or isFinishAtStart', () => {
+      expect(TripFinishUpdateDto.schema.safeParse({}).success).toBe(false);
+      expect(TripFinishUpdateDto.schema.safeParse({ ...P, isFinishAtStart: true }).success).toBe(false);
+    });
+
+    it('refuses a start on a trip that is not a route', async () => {
+      const plain = await setup(SHOTS, 'plain');
+
+      await expect(plain.sut.setStart(plain.auth, plain.album.id, TripEndDto.schema.parse(P))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('transit', () => {
+    it('lays a transit stop on the leg between the stops around it', async () => {
+      const { sut, auth, album, trip } = await setup();
+      const [start, a, b, c] = trip.stops;
+
+      const edited = await sut.setTransit(
+        auth,
+        album.id,
+        TripTransitUpdateDto.schema.parse({ stopIds: [b.id], isTransit: true }),
+      );
+
+      expect(edited.stops[2]).toMatchObject({ id: b.id, isTransit: true });
+      expect(edited.legs.map(({ fromStopId, toStopId, mode }) => [fromStopId, toStopId, mode])).toEqual([
+        [start.id, a.id, 'driving'],
+        [a.id, c.id, 'driving'],
+      ]);
+
+      const back = await sut.setTransit(
+        auth,
+        album.id,
+        TripTransitUpdateDto.schema.parse({ stopIds: [b.id], isTransit: false }),
+      );
+      expect(back.stops[2].isTransit).toBe(false);
+      expect(back.legs).toHaveLength(3);
+    });
+
+    it('makes the leg a flight when a leg it replaces was one', async () => {
+      const { sut, auth, album, trip } = await setup();
+      const [, a, b, c] = trip.stops;
+      await db.updateTable('trip_leg').set({ mode: TripLegMode.Flight }).where('fromStopId', '=', a.id).execute();
+
+      const edited = await sut.setTransit(
+        auth,
+        album.id,
+        TripTransitUpdateDto.schema.parse({ stopIds: [b.id], isTransit: true }),
+      );
+
+      expect(edited.legs[1]).toMatchObject({
+        fromStopId: a.id,
+        toStopId: c.id,
+        mode: 'flight',
+        isModeManual: true,
+        status: 'pending',
+      });
+    });
+
+    it('refuses the start, a stop of another trip, and a trip that is not a route', async () => {
+      const { sut, auth, album, trip, newTrip } = await setup();
+      const other = await newTrip();
+      const places = await setup(SHOTS, 'places');
+      const transit = (stopIds: string[]) =>
+        sut.setTransit(auth, album.id, TripTransitUpdateDto.schema.parse({ stopIds, isTransit: true }));
+
+      await expect(transit([trip.stops[0].id])).rejects.toBeInstanceOf(BadRequestException);
+      await expect(transit([trip.stops[2].id, other.trip.stops[2].id])).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        places.sut.setTransit(
+          places.auth,
+          places.album.id,
+          TripTransitUpdateDto.schema.parse({ stopIds: [places.trip.stops[0].id], isTransit: true }),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(read(sut, auth, album.id)).resolves.toMatchObject({ contentVersion: trip.contentVersion });
+    });
+  });
+
   describe('same trip', () => {
     it('refuses a stop or an asset of another trip, and changes nothing', async () => {
       const { sut, auth, album, assetIds, trip, newTrip } = await setup();
@@ -351,6 +553,8 @@ describe('stop editor', () => {
 
       for (const edit of [
         () => sut.updateStop(auth, album.id, otherStop.id, stopChanges({ title: 'X' })),
+        () => sut.addPoint(auth, album.id, TripPointCreateDto.schema.parse({ ...A, afterStopId: otherStop.id })),
+        () => sut.movePoint(auth, album.id, otherStop.id, TripPointOrderDto.schema.parse({ afterStopId: null })),
         () => sut.mergeNextStop(auth, album.id, otherStop.id),
         () =>
           sut.splitStop(auth, album.id, otherStop.id, TripStopSplitDto.schema.parse({ assetId: other.assetIds[3] })),

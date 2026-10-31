@@ -18,15 +18,19 @@ import {
   TripAssetsMoveDto,
   TripCreateDto,
   TripEndDto,
+  TripFinishUpdateDto,
   TripImportDto,
   TripLegModeUpdateDto,
   TripLegStationUpdateDto,
   TripLegStationsDto,
   TripLikeDto,
+  TripPointCreateDto,
+  TripPointOrderDto,
   TripResponseDto,
   TripStopCreateDto,
   TripStopSplitDto,
   TripStopUpdateDto,
+  TripTransitUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
 import {
   TripKind,
@@ -333,6 +337,53 @@ export class TripService {
     );
   }
 
+  /** Adds a point by hand to a route, right after a stop or the start. */
+  async addPoint(auth: AuthDto, albumId: string, dto: TripPointCreateDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    const { afterStopId, ...point } = dto;
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.addPoint(albumId, pointOfEnd(point), afterStopId),
+    );
+  }
+
+  /** Puts a point added by hand right after another stop, or the start. */
+  async movePoint(auth: AuthDto, albumId: string, stopId: string, dto: TripPointOrderDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.movePoint(albumId, stopId, dto.afterStopId));
+  }
+
+  /** Sets or moves the start of a route; null removes it. A finish at the start follows. */
+  async setStart(auth: AuthDto, albumId: string, dto: TripEndDto | null): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(auth, albumId, await this.tripEditorRepository.setStart(albumId, dto && pointOfEnd(dto)));
+  }
+
+  /** Sets or moves the finish of a route, or puts it at the start; null removes it. */
+  async setFinish(auth: AuthDto, albumId: string, dto: TripFinishUpdateDto | null): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    const point =
+      dto && !dto.isFinishAtStart
+        ? pointOfEnd({ latitude: dto.latitude!, longitude: dto.longitude!, title: dto.title })
+        : null;
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.setFinish(albumId, point, dto?.isFinishAtStart ?? false),
+    );
+  }
+
+  /** Marks stops of a route as shot on the way, not, or undecided. */
+  async setTransit(auth: AuthDto, albumId: string, dto: TripTransitUpdateDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.stopsEdited(
+      auth,
+      albumId,
+      await this.tripEditorRepository.setTransit(albumId, dto.stopIds, dto.isTransit),
+    );
+  }
+
   // After a stop edit, as travel-album's `editor.edited`: pending legs are routed and untitled stops named.
   private async stopsEdited(auth: AuthDto, albumId: string, edited: TripEdited): Promise<TripResponseDto> {
     if (edited.result !== TripEditResult.Updated) {
@@ -542,6 +593,18 @@ const refusal = (result: Exclude<TripEditResult, TripEditResult.Updated>) => {
     case TripEditResult.StopIsPoint: {
       return new BadRequestException('A point added by hand has no assets');
     }
+    case TripEditResult.StopNotPoint: {
+      return new BadRequestException('Only a point added by hand moves in the order; stops go by their assets’ time');
+    }
+    case TripEditResult.NotRoute: {
+      return new BadRequestException('Only a Route trip has points, a start, a finish and stops on the way');
+    }
+    case TripEditResult.NoStart: {
+      return new BadRequestException('A finish at the start needs a start');
+    }
+    case TripEditResult.AfterFinish: {
+      return new BadRequestException('Nothing goes after the finish');
+    }
     case TripEditResult.StopHasAssets: {
       return new BadRequestException('Only a stop without assets is deleted');
     }
@@ -599,6 +662,9 @@ const endStop = (albumId: string, role: TripStopRole, { latitude, longitude, tit
   titleSource: title && 'manual',
   isAddedByHand: true,
 });
+
+// A start, finish or point the owner picked; without a title, naming gives one.
+const pointOfEnd = ({ latitude, longitude, title }: TripEndDto) => ({ latitude, longitude, title: title ?? null });
 
 // Through a shared link the caller is a guest, whatever user the link belongs to.
 const likerOf = (auth: AuthDto, viewerKey?: string): TripLiker | undefined => {
