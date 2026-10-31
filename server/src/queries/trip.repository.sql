@@ -20,3 +20,39 @@ where
   "trip"."albumId" = $1::uuid
   and "album"."deletedAt" is null
 commit
+
+-- TripRepository.hasAsset
+select
+  "asset"."id"
+from
+  "trip"
+  inner join "album_asset" on "album_asset"."albumId" = "trip"."albumId"
+  inner join "asset" on "asset"."id" = "album_asset"."assetId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album_asset"."assetId" = $2::uuid
+  and "asset"."deletedAt" is null
+
+-- TripRepository.like
+insert into
+  "trip_like" ("albumId", "assetId", "userId")
+values
+  ($1, $2, $3)
+on conflict do nothing
+
+-- TripRepository.unlike
+delete from "trip_like"
+where
+  "albumId" = $1::uuid
+  and "assetId" = $2::uuid
+  and "userId" = $3::uuid
+
+-- TripRepository.getLike
+select
+  count(*)::int as "count",
+  coalesce(bool_or("trip_like"."userId" = $1::uuid), false) as "isLiked"
+from
+  "trip_like"
+where
+  "albumId" = $2::uuid
+  and "assetId" = $3::uuid

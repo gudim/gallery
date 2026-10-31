@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
 import { Permission } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
-import { TripImportDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
-import { TripCreateResult, TripRepository } from 'src/trips/repositories/trip.repository.js';
+import { TripImportDto, TripLikeDto, TripResponseDto } from 'src/trips/dtos/trip.dto.js';
+import { TripCreateResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
@@ -24,9 +24,33 @@ export class TripService {
     private tripRepository: TripRepository,
   ) {}
 
-  async get(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
+  /** `viewerKey` is a guest's browser key, which tells whether they liked each asset. */
+  async get(auth: AuthDto, albumId: string, viewerKey?: string): Promise<TripResponseDto> {
     await this.requireRead(auth, albumId);
-    return this.read(auth, albumId);
+    return this.read(auth, albumId, likerOf(auth, viewerKey));
+  }
+
+  /**
+   * Anyone who can read the trip likes its assets (travel-album PLAN §5.17): a user as themselves, a guest by their
+   * browser key. A second like changes nothing. Likes do not bump `contentVersion`.
+   */
+  async like(auth: AuthDto, albumId: string, assetId: string, viewerKey?: string): Promise<TripLikeDto> {
+    await this.requireAsset(auth, albumId, assetId);
+    const liker = likerOf(auth, viewerKey);
+    if (!liker) {
+      throw new BadRequestException('A guest likes with a browser key');
+    }
+    await this.tripRepository.like(albumId, assetId, liker);
+    return { assetId, ...(await this.tripRepository.getLike(albumId, assetId, liker)) };
+  }
+
+  async unlike(auth: AuthDto, albumId: string, assetId: string, viewerKey?: string): Promise<TripLikeDto> {
+    await this.requireAsset(auth, albumId, assetId);
+    const liker = likerOf(auth, viewerKey);
+    if (liker) {
+      await this.tripRepository.unlike(albumId, assetId, liker);
+    }
+    return { assetId, ...(await this.tripRepository.getLike(albumId, assetId, liker)) };
   }
 
   /** Creates the album's trip from one document (trips PLAN §2.1). Owner only; an album has at most one trip. */
@@ -103,8 +127,16 @@ export class TripService {
     }
   }
 
-  private async read(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
-    const trip = await this.tripRepository.get(albumId);
+  // An asset of a trip the caller can read, outside the trash; anything else is 404.
+  private async requireAsset(auth: AuthDto, albumId: string, assetId: string) {
+    await this.requireRead(auth, albumId);
+    if (!(await this.tripRepository.hasAsset(albumId, assetId))) {
+      throw new NotFoundException('Asset not found in the trip');
+    }
+  }
+
+  private async read(auth: AuthDto, albumId: string, liker?: TripLiker): Promise<TripResponseDto> {
+    const trip = await this.tripRepository.get(albumId, liker);
     if (!trip) {
       throw new NotFoundException('Trip not found');
     }
@@ -112,6 +144,14 @@ export class TripService {
     return mapTrip(trip, { showAssetPoints: auth.sharedLink?.showExif ?? true });
   }
 }
+
+// Through a shared link the caller is a guest, whatever user the link belongs to.
+const likerOf = (auth: AuthDto, viewerKey?: string): TripLiker | undefined => {
+  if (!auth.sharedLink) {
+    return { userId: auth.user.id };
+  }
+  return viewerKey ? { viewerKey } : undefined;
+};
 
 const withoutAlbumId = <T extends { albumId: string }>({ albumId: _, ...rest }: T) => rest;
 

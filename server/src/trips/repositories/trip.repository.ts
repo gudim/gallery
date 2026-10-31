@@ -19,6 +19,16 @@ export type TripRows = {
   generatedCaptions: Insertable<TripsDB['trip_generated_caption']>[];
 };
 
+/** Who likes: a signed-in user, or a guest known by their browser key (trips GLOSSARY "Like"). */
+export type TripLiker = { userId: string } | { viewerKey: string };
+
+const isLiker = (liker: TripLiker | undefined) =>
+  liker === undefined
+    ? sql<boolean>`false`
+    : 'userId' in liker
+      ? sql<boolean>`coalesce(bool_or("trip_like"."userId" = ${asUuid(liker.userId)}), false)`
+      : sql<boolean>`coalesce(bool_or("trip_like"."viewerKey" = ${liker.viewerKey}), false)`;
+
 export enum TripCreateResult {
   Created = 'created',
   AlbumMissing = 'album-missing',
@@ -54,9 +64,9 @@ export class TripRepository {
     return new Set(rows.map(({ assetId }) => assetId));
   }
 
-  /** The whole trip, or nothing when the album has none or is in the trash. */
-  @GenerateSql({ params: [DummyValue.UUID] })
-  get(albumId: string) {
+  /** The whole trip, or nothing when the album has none or is in the trash. Likes say whether `liker` is among them. */
+  @GenerateSql({ params: [DummyValue.UUID, { userId: DummyValue.UUID }] })
+  get(albumId: string, liker?: TripLiker) {
     const id = asUuid(albumId);
     return this.db.transaction().execute(async (trx) => {
       const trip = await trx
@@ -103,7 +113,7 @@ export class TripRepository {
         trx
           .selectFrom('trip_like')
           .innerJoin('asset', 'asset.id', 'trip_like.assetId')
-          .select(['trip_like.assetId', sql<number>`count(*)::int`.as('count')])
+          .select(['trip_like.assetId', sql<number>`count(*)::int`.as('count'), isLiker(liker).as('isLiked')])
           .where('trip_like.albumId', '=', id)
           .where('asset.deletedAt', 'is', null)
           .groupBy('trip_like.assetId')
@@ -112,6 +122,55 @@ export class TripRepository {
       ]);
       return { trip, places, stops, assets, legs, overlays, likes };
     });
+  }
+
+  /** Whether the album has a trip and the asset is in it, outside the trash. */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  async hasAsset(albumId: string, assetId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('trip')
+      .innerJoin('album_asset', 'album_asset.albumId', 'trip.albumId')
+      .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+      .select('asset.id')
+      .where('trip.albumId', '=', asUuid(albumId))
+      .where('album_asset.assetId', '=', asUuid(assetId))
+      .where('asset.deletedAt', 'is', null)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /** One like per liker: a second like of the same asset changes nothing. */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { userId: DummyValue.UUID }] })
+  async like(albumId: string, assetId: string, liker: TripLiker): Promise<void> {
+    await this.db
+      .insertInto('trip_like')
+      .values({ albumId, assetId, ...liker })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { userId: DummyValue.UUID }] })
+  async unlike(albumId: string, assetId: string, liker: TripLiker): Promise<void> {
+    await this.db
+      .deleteFrom('trip_like')
+      .where('albumId', '=', asUuid(albumId))
+      .where('assetId', '=', asUuid(assetId))
+      .where((eb) =>
+        'userId' in liker ? eb('userId', '=', asUuid(liker.userId)) : eb('viewerKey', '=', liker.viewerKey),
+      )
+      .execute();
+  }
+
+  /** The likes of one asset in the trip. */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { userId: DummyValue.UUID }] })
+  async getLike(albumId: string, assetId: string, liker?: TripLiker): Promise<{ count: number; isLiked: boolean }> {
+    const row = await this.db
+      .selectFrom('trip_like')
+      .select([sql<number>`count(*)::int`.as('count'), isLiker(liker).as('isLiked')])
+      .where('albumId', '=', asUuid(albumId))
+      .where('assetId', '=', asUuid(assetId))
+      .executeTakeFirstOrThrow();
+    return row;
   }
 
   /**

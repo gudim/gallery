@@ -169,9 +169,12 @@ const asDocument = async (trip: TripResponseDto, stopKeys: string[]) => {
       ...rest,
     })),
     overlays: trip.overlays.map(({ id: _, ...overlay }) => overlay),
-    likes: trip.likes,
+    likes: trip.likes.map(({ isLiked: _, ...like }) => like),
   };
 };
+
+// A guest through a shared link: the auth carries the link's owner as its user.
+const guest = (sharedLinkId: string, user: { id: string }) => factory.auth({ user, sharedLink: { id: sharedLinkId } });
 
 const setup = async () => {
   const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository] });
@@ -345,6 +348,93 @@ describe(TripService.name, () => {
       const { sut, owner, album } = await setup();
 
       await expect(sut.get(factory.auth({ user: owner }), album.id)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('likes', () => {
+    it('counts one like per user and per guest key, and tells each liker their own', async () => {
+      const { ctx, sut, owner, album, assetIds, importTrip } = await setup();
+      await importTrip();
+      const { user: viewer } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: viewer.id, role: AlbumUserRole.Viewer });
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: album.id,
+      });
+      const [a1, a2] = assetIds;
+
+      await sut.like(factory.auth({ user: viewer }), album.id, a1);
+      await sut.like(factory.auth({ user: viewer }), album.id, a1);
+      await sut.like(guest(sharedLink.id, owner), album.id, a1, 'k'.repeat(32));
+      await expect(sut.like(guest(sharedLink.id, owner), album.id, a2, 'g'.repeat(32))).resolves.toEqual({
+        assetId: a2,
+        count: 1,
+        isLiked: true,
+      });
+
+      // Two imported likes, the viewer and one guest; the link's owner is not the guest.
+      const asGuest = await sut.get(guest(sharedLink.id, owner), album.id, 'k'.repeat(32));
+      expect(asGuest.likes).toEqual(
+        [
+          { assetId: a1, count: 4, isLiked: true },
+          { assetId: a2, count: 1, isLiked: false },
+        ].sort((a, b) => a.assetId.localeCompare(b.assetId)),
+      );
+      const asOwner = await sut.get(factory.auth({ user: owner }), album.id);
+      expect(asOwner.likes.every(({ isLiked }) => !isLiked)).toBe(true);
+      const asKeylessGuest = await sut.get(guest(sharedLink.id, owner), album.id);
+      expect(asKeylessGuest.likes.every(({ isLiked }) => !isLiked)).toBe(true);
+    });
+
+    it('takes back only the caller’s like', async () => {
+      const { ctx, sut, owner, album, assetIds, importTrip } = await setup();
+      await importTrip();
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: album.id,
+      });
+      const [a1] = assetIds;
+      await sut.like(factory.auth({ user: owner }), album.id, a1);
+
+      await expect(sut.unlike(guest(sharedLink.id, owner), album.id, a1)).resolves.toEqual({
+        assetId: a1,
+        count: 3,
+        isLiked: false,
+      });
+      await expect(sut.unlike(guest(sharedLink.id, owner), album.id, a1, 'k'.repeat(32))).resolves.toMatchObject({
+        count: 3,
+      });
+      await expect(sut.unlike(factory.auth({ user: owner }), album.id, a1)).resolves.toEqual({
+        assetId: a1,
+        count: 2,
+        isLiked: false,
+      });
+    });
+
+    it('answers 404 for an asset outside the trip, a trashed asset, a stranger and another album’s link', async () => {
+      const { ctx, sut, owner, album, assetIds, importTrip } = await setup();
+      await importTrip();
+      const { asset: outside } = await ctx.newAsset({ ownerId: owner.id });
+      const { user: stranger } = await ctx.newUser();
+      const { album: other } = await ctx.newAlbum({ ownerId: owner.id });
+      const { sharedLink } = await ctx.newSharedLink({
+        userId: owner.id,
+        type: SharedLinkType.Album,
+        albumId: other.id,
+      });
+      await ctx.softDeleteAsset(assetIds[1]);
+
+      for (const like of [
+        () => sut.like(factory.auth({ user: owner }), album.id, outside.id),
+        () => sut.like(factory.auth({ user: owner }), album.id, assetIds[1]),
+        () => sut.like(factory.auth({ user: stranger }), album.id, assetIds[0]),
+        () => sut.like(guest(sharedLink.id, owner), album.id, assetIds[0], 'k'.repeat(32)),
+        () => sut.like(factory.auth({ user: owner }), other.id, assetIds[0]),
+      ]) {
+        await expect(like()).rejects.toBeInstanceOf(NotFoundException);
+      }
     });
   });
 

@@ -4733,6 +4733,8 @@ export type TripLikeDto = {
     assetId: string;
     /** Number of likes */
     count: number;
+    /** The caller liked the asset: a user, or a guest by their browser key */
+    isLiked: boolean;
 };
 export type TripOverlayDto = {
     /** Line colour */
@@ -11649,6 +11651,46 @@ export function importTrip({ id, tripImportDto }: {
         method: "POST",
         body: tripImportDto
     })));
+}
+/**
+ * Unlike an asset in a trip
+ */
+export function unlikeAsset({ assetId, id, key, slug }: {
+    assetId: string;
+    id: string;
+    key?: string;
+    slug?: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripLikeDto;
+    }>(`/trips/${encodeURIComponent(id)}/likes/${encodeURIComponent(assetId)}${QS.query(QS.explode({
+        key,
+        slug
+    }))}`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Like an asset in a trip
+ */
+export function likeAsset({ assetId, id, key, slug }: {
+    assetId: string;
+    id: string;
+    key?: string;
+    slug?: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripLikeDto;
+    }>(`/trips/${encodeURIComponent(id)}/likes/${encodeURIComponent(assetId)}${QS.query(QS.explode({
+        key,
+        slug
+    }))}`, {
+        ...opts,
+        method: "PUT"
+    }));
 }
 /**
  * Get all user groups
