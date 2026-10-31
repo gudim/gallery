@@ -207,6 +207,14 @@ const TripImportSchema = z
   })
   .meta({ id: 'TripImportDto' });
 
+const TripLikeSchema = z
+  .object({
+    assetId: z.string().describe('Asset ID'),
+    count: z.int32().min(0).describe('Number of likes'),
+    isLiked: z.boolean().describe('The caller liked the asset: a user, or a guest by their browser key'),
+  })
+  .meta({ id: 'TripLikeDto' });
+
 const TripResponseSchema = z
   .object({
     albumId: z.string().describe('Album ID; a trip has its album’s ID'),
@@ -253,11 +261,10 @@ const TripResponseSchema = z
     overlays: z.array(
       z.object({ id: z.string().describe('Overlay ID'), ...overlayFields }).meta({ id: 'TripOverlayDto' }),
     ),
-    likes: z
-      .array(z.object({ assetId: z.string().describe('Asset ID'), count: likeCountSchema }).meta({ id: 'TripLikeDto' }))
-      .describe('Like counts of liked assets'),
+    likes: z.array(TripLikeSchema).describe('Like counts of liked assets'),
   })
   .meta({ id: 'TripResponseDto' });
 
 export class TripImportDto extends createZodDto(TripImportSchema) {}
 export class TripResponseDto extends createZodDto(TripResponseSchema) {}
+export class TripLikeDto extends createZodDto(TripLikeSchema) {}
