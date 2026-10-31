@@ -102,6 +102,9 @@ const node = (id: number, lat: number, name?: string) => ({
   ...(name && { tags: { name, railway: 'station' } }),
 });
 
+const stationNamed = (tags: Record<string, unknown>) =>
+  parseStations(WARSAW, 'de')({ elements: [{ type: 'node', id: 1, lat: 52.23, lon: 21.0122, tags }] })[0].name;
+
 describe('stations', () => {
   it('asks Overpass for stations and halts within 3 km', () => {
     const request = stationsRequest(WARSAW);
@@ -115,7 +118,10 @@ describe('stations', () => {
   });
 
   it('lists up to five nodes, nearest first, with their names and distances', () => {
-    const stations = parseStations(WARSAW)({
+    const stations = parseStations(
+      WARSAW,
+      'ru',
+    )({
       elements: [
         node(1, 52.25, 'Far'),
         node(2, 52.23, 'Near'),
@@ -131,8 +137,17 @@ describe('stations', () => {
   });
 
   it('takes an empty answer, and throws on one that is not Overpass’s', () => {
-    expect(parseStations(WARSAW)({ elements: [] })).toEqual([]);
-    expect(() => parseStations(WARSAW)({ remark: 'runtime error' })).toThrow(TripGeoError);
+    expect(parseStations(WARSAW, 'ru')({ elements: [] })).toEqual([]);
+    expect(() => parseStations(WARSAW, 'ru')({ remark: 'runtime error' })).toThrow(TripGeoError);
+  });
+
+  it('names a station in the trip’s language when OpenStreetMap has it, else by its own name', () => {
+    expect(
+      stationNamed({ name: 'Warszawa Centralna', 'name:de': 'Warschau Zentralbahnhof', 'name:ru': 'Варшава' }),
+    ).toBe('Warschau Zentralbahnhof');
+    expect(stationNamed({ name: 'Warszawa Centralna', 'name:ru': 'Варшава' })).toBe('Warszawa Centralna');
+    expect(stationNamed({ name: 'Warszawa Centralna', 'name:de': ' ' })).toBe('Warszawa Centralna');
+    expect(stationNamed({ 'name:de': 'Warschau' })).toBe('Warschau');
   });
 
   it('tells an offered station by its name and point', () => {

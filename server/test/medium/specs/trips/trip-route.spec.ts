@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-type Station = { name: string; latitude: number; longitude: number };
+type Station = { name: string; latitude: number; longitude: number; names?: Record<string, string> };
 
 // The fake services, as travel-album's fixtures answer: a route is 1.3 times the straight line through its middle,
 // 600 s by road and 900 s by rail; a station is any of `stations` within 3 km of the point asked about.
@@ -123,7 +123,7 @@ const fakeServices = (options: FakeOptions = {}) => {
           id,
           lat: station.latitude,
           lon: station.longitude,
-          tags: { railway: 'station', name: station.name },
+          tags: { railway: 'station', name: station.name, ...station.names },
         }));
       return Response.json({ elements });
     }
@@ -476,6 +476,26 @@ describe('leg editing', () => {
 
   it('refuses a trail, which only an import makes', () => {
     expect(() => modeDto(TripLegMode.Trail)).toThrow();
+  });
+
+  it('names stations in the trip’s language, else in the instance default, else by their own name', async () => {
+    const { sut, auth, album, places, importRoute } = await setup();
+    const { WARSAW, KRAKOW, WARSAW_STATION, KRAKOW_STATION } = places;
+    fakeServices({
+      stations: [
+        { ...WARSAW_STATION, names: { 'name:de': 'Warschau Hauptbahnhof', 'name:ru': 'Варшава-Центральная' } },
+        KRAKOW_STATION,
+      ],
+    });
+    const trip = await importRoute([WARSAW, KRAKOW], [TripLegMode.Train]);
+    const legId = trip.legs[0].id;
+
+    const byDefault = await sut.getLegStations(auth, album.id, legId);
+    expect([byDefault.departure[0].name, byDefault.arrival[0].name]).toEqual(['Варшава-Центральная', 'Kraków Główny']);
+
+    await db.updateTable('trip').set({ language: 'de' }).where('albumId', '=', album.id).execute();
+    const german = await sut.getLegStations(auth, album.id, legId);
+    expect([german.departure[0].name, german.arrival[0].name]).toEqual(['Warschau Hauptbahnhof', 'Kraków Główny']);
   });
 
   it('lists stations near both ends and takes only an offered one, kept until the mode changes', async () => {

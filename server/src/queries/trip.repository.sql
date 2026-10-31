@@ -147,6 +147,14 @@ for update of
   "trip"
 commit
 
+-- TripRepository.getLanguage
+select
+  "language"
+from
+  "trip"
+where
+  "albumId" = $1::uuid
+
 -- TripRepository.hasPendingLegs
 select
   "id"
