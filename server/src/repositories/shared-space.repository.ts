@@ -24,6 +24,7 @@ import { SharedSpacePersonAliasTable } from 'src/schema/tables/shared-space-pers
 import { SharedSpacePersonFaceTable } from 'src/schema/tables/shared-space-person-face.table.js';
 import { SharedSpacePersonTable } from 'src/schema/tables/shared-space-person.table.js';
 import { SharedSpaceTable } from 'src/schema/tables/shared-space.table.js';
+import { isNotFavoritesTripAlbum } from 'src/trips/utils/favorites.js';
 import { assetFilterConditions, assetFilterKeys, withAssetFilter } from 'src/utils/asset-filter.js';
 import { anyUuid, asUuid, retryOnDeadlock, searchAssetBuilderLegacy } from 'src/utils/database.js';
 import { reviewableAssetVisibility } from 'src/utils/face-review.js';
@@ -416,6 +417,7 @@ export class SharedSpaceRepository {
             .on('asset.visibility', 'in', spaceVisibleAssetVisibilities), // gate out Hidden/Locked
       )
       .where('link.albumId', 'in', albumIds)
+      .where(isNotFavoritesTripAlbum('link.albumId'))
       .where((eb) =>
         eb.or([
           // Directly shared into the space's pool.

@@ -105,6 +105,15 @@ from
   and "asset"."visibility" in ($6, $7)
 where
   "link"."albumId" in ($8)
+  and NOT EXISTS (
+    SELECT
+      1
+    FROM
+      "trip"
+    WHERE
+      "trip"."albumId" = "link"."albumId"
+      AND "trip"."isFavorites"
+  )
   and (
     exists (
       select
@@ -156,6 +165,15 @@ from
   and "asset"."visibility" in ($6, $7)
 where
   "link"."albumId" in ($8)
+  and NOT EXISTS (
+    SELECT
+      1
+    FROM
+      "trip"
+    WHERE
+      "trip"."albumId" = "link"."albumId"
+      AND "trip"."isFavorites"
+  )
   and (
     exists (
       select
