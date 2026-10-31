@@ -79,7 +79,15 @@ const setup = async () => {
     db
       .selectFrom('trip_asset')
       .leftJoin('trip_stop', 'trip_stop.id', 'trip_asset.stopId')
-      .select(['trip_asset.assetId', 'trip_asset.stopId', 'trip_stop.latitude', 'trip_stop.longitude'])
+      .select([
+        'trip_asset.assetId',
+        'trip_asset.stopId',
+        'trip_stop.latitude',
+        'trip_stop.longitude',
+        'trip_asset.latitude as pointLatitude',
+        'trip_asset.longitude as pointLongitude',
+        'trip_asset.pointSource',
+      ])
       .where('trip_asset.albumId', '=', albumId)
       .execute();
   const mirror = (canCreate = false) => sut.handleMirror({ id: user.id, canCreate });
@@ -161,20 +169,28 @@ describe(TripFavoritesService.name, () => {
     await expect(albumAssetIds(albumId)).resolves.toEqual([far]);
   });
 
-  it('places a starred asset without GPS at its stop in another trip of the owner', async () => {
+  it('places a starred asset without GPS at its stop in another trip of the owner, as an inferred point', async () => {
     const { ctx, trips, user, newAsset, star, favoritesTrip, filing, mirror } = await setup();
     const anchor = await newAsset(user.id, KAUNAS);
     const blind = await newAsset(user.id, null);
     const { album } = await ctx.newAlbum({ ownerId: user.id }, [anchor, blind]);
     await trips.create(factory.auth({ user }), TripCreateDto.schema.parse({ albumId: album.id, kind: 'places' }));
-    const [own] = await filing(album.id);
+    const filed = await filing(album.id);
+    const own = filed.find(({ assetId }) => assetId === anchor)!;
     await star(user.id, blind);
 
     await mirror(true);
 
     const [{ albumId }] = await favoritesTrip();
     expect(await filing(albumId)).toEqual([
-      expect.objectContaining({ assetId: blind, latitude: own.latitude, longitude: own.longitude }),
+      expect.objectContaining({
+        assetId: blind,
+        latitude: own.latitude,
+        longitude: own.longitude,
+        pointLatitude: own.latitude,
+        pointLongitude: own.longitude,
+        pointSource: 'inferred',
+      }),
     ]);
   });
 
