@@ -85,6 +85,6 @@ features:
       - i18n/gallery/zh_Hans.json
       - i18n/gallery/zh_Hant.json
     database:
-      tables: [trips_migrations, trips_migrations_lock, trip, trip_place, trip_stop, trip_asset, trip_leg, trip_overlay, trip_like]
+      tables: [trips_migrations, trips_migrations_lock, trip, trip_place, trip_stop, trip_asset, trip_leg, trip_overlay, trip_like, trip_generated_caption]
       migration_globs:
         - server/src/schema/migrations-trips/*.ts

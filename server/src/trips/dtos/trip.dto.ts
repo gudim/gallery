@@ -8,7 +8,7 @@ import {
   TripPointSource,
   TripStopRole,
 } from 'src/trips/enum.js';
-import { isoDatetimeToDate, latitudeSchema, longitudeSchema } from 'src/validation.js';
+import { latitudeSchema, longitudeSchema } from 'src/validation.js';
 
 // The trip document (trips PLAN §2.1): what an import takes and, with server ids in place of document keys, what a
 // read returns. A stop's local times are wall-clock times written as UTC, like an asset's localDateTime.
@@ -26,6 +26,22 @@ const TripOverlayKindSchema = z.enum(TripOverlayKind).describe('Overlay kind').m
 const text = (description: string) => z.string().nullable().describe(description);
 const double = (description: string) => z.number().meta({ format: 'double' }).nullable().describe(description);
 const localTime = (description: string) => z.string().meta({ format: 'date-time' }).nullable().describe(description);
+
+// Wall-clock time: `Z` or no offset, both read as that wall-clock time. Any other offset would shift it, so it is refused.
+const localTimeToDate = z
+  .codec(
+    z.iso.datetime({
+      local: true,
+      error: (iss) =>
+        `Invalid input: expected a local ISO 8601 datetime without an offset, received ${String(iss.input)}`,
+    }),
+    z.date(),
+    {
+      decode: (isoString) => new Date(isoString.endsWith('Z') ? isoString : `${isoString}Z`),
+      encode: (date) => date.toISOString(),
+    },
+  )
+  .meta({ example: '2026-05-01T10:00:00.000Z' });
 
 const placeFields = {
   key: z.string().min(1).describe('Name of the place within the trip'),
@@ -45,9 +61,9 @@ const stopFields = {
   storySource: text('Who wrote the story'),
   region: text('Region'),
   country: text('Country'),
-  isManualPoint: z.boolean().describe('A point the owner set by hand'),
+  isAddedByHand: z.boolean().describe('A stop the owner added by hand, not made from assets'),
   role: TripStopRoleSchema.nullable(),
-  isSameAsOrigin: z.boolean().describe('The finish is the start'),
+  isFinishAtStart: z.boolean().describe('The finish is the same place as the start'),
   isTransit: z.boolean().nullable().describe('Shot on the way: true yes, false declined, null not decided'),
   isAtCenter: z.boolean().describe('Places trip: assets filed to the centre, no exact place'),
 };
@@ -95,8 +111,8 @@ const TripImportSchema = z
           key: z.string().min(1).describe('Name of the stop within the document'),
           placeKey: z.string().nullable().describe('Key of the stop’s place'),
           ...stopFields,
-          localStart: isoDatetimeToDate.nullable().describe('Local start time'),
-          localEnd: isoDatetimeToDate.nullable().describe('Local end time'),
+          localStart: localTimeToDate.nullable().describe('Local start time'),
+          localEnd: localTimeToDate.nullable().describe('Local end time'),
         }),
       )
       .default([]),
@@ -106,6 +122,12 @@ const TripImportSchema = z
           assetId: z.uuidv4().describe('Asset ID; the asset must be in the album'),
           stopKey: z.string().nullable().describe('Key of the asset’s stop; null is Unplaced'),
           ...assetPointFields,
+          generatedCaption: z
+            .string()
+            .min(1)
+            .nullable()
+            .default(null)
+            .describe('The caption an LLM wrote, when the asset description is still that text'),
         }),
       )
       .default([]),
@@ -148,14 +170,24 @@ const TripImportSchema = z
     if (trip.isFavorites && trip.kind !== TripKind.Places) {
       issue('A Favorites trip is a Places trip');
     }
+    const endStopKeys = new Set(trip.stops.filter(({ role }) => role !== null).map(({ key }) => key));
+    if (endStopKeys.size > 0 && trip.kind !== TripKind.Route) {
+      issue('Only a Route trip has a start and a finish');
+    }
     for (const stop of trip.stops) {
       if (stop.placeKey !== null && !placeKeys.has(stop.placeKey)) {
         issue(`Stop ${stop.key} names an unknown place ${stop.placeKey}`);
+      }
+      if (stop.localStart && stop.localEnd && stop.localEnd < stop.localStart) {
+        issue(`Stop ${stop.key} ends before it starts`);
       }
     }
     for (const asset of trip.assets) {
       if (asset.stopKey !== null && !stopKeys.has(asset.stopKey)) {
         issue(`Asset ${asset.assetId} names an unknown stop ${asset.stopKey}`);
+      }
+      if (asset.stopKey !== null && endStopKeys.has(asset.stopKey)) {
+        issue(`Asset ${asset.assetId} is filed to a start or finish, which has no assets`);
       }
       if (
         (asset.pointSource === null) !== (asset.latitude === null) ||
@@ -167,6 +199,9 @@ const TripImportSchema = z
     for (const leg of trip.legs) {
       if (!stopKeys.has(leg.fromStopKey) || !stopKeys.has(leg.toStopKey)) {
         issue(`Leg ${leg.fromStopKey} → ${leg.toStopKey} names an unknown stop`);
+      }
+      if (leg.fromStopKey === leg.toStopKey) {
+        issue(`Leg ${leg.fromStopKey} → ${leg.toStopKey} leaves and reaches the same stop`);
       }
     }
   })

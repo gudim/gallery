@@ -13,7 +13,7 @@ import { TripPlaceTable } from 'src/trips/schema/tables/trip-place.table.js';
 import { TripTable } from 'src/trips/schema/tables/trip.table.js';
 
 @Table('trip_stop')
-@Check({ name: 'trip_stop_role_chk', expression: `"role" IN ('origin', 'finish')` })
+@Check({ name: 'trip_stop_role_chk', expression: `"role" IN ('start', 'finish')` })
 @Index({ name: 'trip_stop_albumId_role_idx', columns: ['albumId', 'role'], unique: true, where: '"role" IS NOT NULL' })
 @Index({ name: 'trip_stop_albumId_localStart_idx', columns: ['albumId', 'localStart'] })
 export class TripStopTable {
@@ -65,16 +65,16 @@ export class TripStopTable {
   @Column({ type: 'text', nullable: true })
   country!: string | null;
 
-  // A point the owner set by hand, not a cluster of assets.
+  // A stop the owner added by hand, not one made from a cluster of assets.
   @Column({ type: 'boolean', default: false })
-  isManualPoint!: Generated<boolean>;
+  isAddedByHand!: Generated<boolean>;
 
   // Start or finish of a route: a stop without assets.
   @Column({ type: 'text', nullable: true })
   role!: TripStopRole | null;
 
   @Column({ type: 'boolean', default: false })
-  isSameAsOrigin!: Generated<boolean>;
+  isFinishAtStart!: Generated<boolean>;
 
   // Shot on the way: true yes, false the owner declined, null not decided.
   @Column({ type: 'boolean', nullable: true })

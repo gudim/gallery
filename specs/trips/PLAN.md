@@ -167,6 +167,8 @@ Done when:
   naming.
 - Places clustering, and place hints from Immich's CLIP embeddings.
 - The clock-offset wizard per camera (D9).
+- Every edit checks that the stop, place or leg it references belongs to the same trip, with tests
+  (DECISIONS-LOG 2026-10-31: no composite foreign keys).
 - The Favorites trip mirrors its owner's stars: starring adds the asset to its album, unstarring
   removes it (D15).
 - Port from travel-album's `atlas/geo/*`, `atlas/ingest/{clock,reclock,unanchored,cameras}.py`,

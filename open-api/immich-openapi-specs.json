@@ -46571,6 +46571,13 @@
                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
                   "type": "string"
                 },
+                "generatedCaption": {
+                  "default": null,
+                  "description": "The caption an LLM wrote, when the asset description is still that text",
+                  "minLength": 1,
+                  "nullable": true,
+                  "type": "string"
+                },
                 "latitude": {
                   "description": "Inferred or manual latitude, in the trip only",
                   "format": "double",
@@ -46823,20 +46830,20 @@
                   "nullable": true,
                   "type": "string"
                 },
+                "isAddedByHand": {
+                  "description": "A stop the owner added by hand, not made from assets",
+                  "type": "boolean"
+                },
                 "isAtCenter": {
                   "description": "Places trip: assets filed to the centre, no exact place",
                   "type": "boolean"
                 },
-                "isManualPoint": {
-                  "description": "A point the owner set by hand",
+                "isFinishAtStart": {
+                  "description": "The finish is the same place as the start",
                   "type": "boolean"
                 },
                 "isPositionManual": {
                   "description": "The owner moved the pin",
-                  "type": "boolean"
-                },
-                "isSameAsOrigin": {
-                  "description": "The finish is the start",
                   "type": "boolean"
                 },
                 "isTransit": {
@@ -46859,18 +46866,18 @@
                 },
                 "localEnd": {
                   "description": "Local end time",
-                  "example": "2024-01-01T00:00:00.000Z",
+                  "example": "2026-05-01T10:00:00.000Z",
                   "format": "date-time",
                   "nullable": true,
-                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|))$",
                   "type": "string"
                 },
                 "localStart": {
                   "description": "Local start time",
-                  "example": "2024-01-01T00:00:00.000Z",
+                  "example": "2026-05-01T10:00:00.000Z",
                   "format": "date-time",
                   "nullable": true,
-                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|))$",
                   "type": "string"
                 },
                 "longitude": {
@@ -46939,9 +46946,9 @@
                 "storySource",
                 "region",
                 "country",
-                "isManualPoint",
+                "isAddedByHand",
                 "role",
-                "isSameAsOrigin",
+                "isFinishAtStart",
                 "isTransit",
                 "isAtCenter",
                 "localStart",
@@ -47286,20 +47293,20 @@
             "description": "Stop ID",
             "type": "string"
           },
+          "isAddedByHand": {
+            "description": "A stop the owner added by hand, not made from assets",
+            "type": "boolean"
+          },
           "isAtCenter": {
             "description": "Places trip: assets filed to the centre, no exact place",
             "type": "boolean"
           },
-          "isManualPoint": {
-            "description": "A point the owner set by hand",
+          "isFinishAtStart": {
+            "description": "The finish is the same place as the start",
             "type": "boolean"
           },
           "isPositionManual": {
             "description": "The owner moved the pin",
-            "type": "boolean"
-          },
-          "isSameAsOrigin": {
-            "description": "The finish is the start",
             "type": "boolean"
           },
           "isTransit": {
@@ -47383,10 +47390,10 @@
         "required": [
           "country",
           "id",
+          "isAddedByHand",
           "isAtCenter",
-          "isManualPoint",
+          "isFinishAtStart",
           "isPositionManual",
-          "isSameAsOrigin",
           "isTransit",
           "latitude",
           "localEnd",
@@ -47406,7 +47413,7 @@
       "TripStopRole": {
         "description": "Start or finish of a route",
         "enum": [
-          "origin",
+          "start",
           "finish"
         ],
         "type": "string"
