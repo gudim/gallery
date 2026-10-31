@@ -4722,7 +4722,7 @@ export type TripLegDto = {
     /** The owner picked the mode */
     isModeManual: boolean;
     mode: TripLegMode;
-    /** Encoded polyline of the line */
+    /** The line, as an encoded polyline of precision 6 (as Valhalla returns it) */
     polyline: string | null;
     status: TripLegStatus;
     /** Stop the leg reaches */
@@ -4861,7 +4861,7 @@ export type TripImportDto = {
         /** The owner picked the mode */
         isModeManual: boolean;
         mode: TripLegMode;
-        /** Encoded polyline of the line */
+        /** The line, as an encoded polyline of precision 6 (as Valhalla returns it) */
         polyline: string | null;
         status: TripLegStatus;
         /** Key of the stop the leg reaches */

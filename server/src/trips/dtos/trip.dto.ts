@@ -78,7 +78,7 @@ const legFields = {
   mode: TripLegModeSchema,
   isModeManual: z.boolean().describe('The owner picked the mode'),
   status: TripLegStatusSchema,
-  polyline: text('Encoded polyline of the line'),
+  polyline: text('The line, as an encoded polyline of precision 6 (as Valhalla returns it)'),
   distance: double('Length in metres'),
   duration: double('Duration in seconds'),
   departureName: text('Train departure station'),

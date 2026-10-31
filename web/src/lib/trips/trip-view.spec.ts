@@ -3,6 +3,7 @@ import {
   TripKind,
   TripLegMode,
   TripLegStatus,
+  TripStopRole,
   type AssetResponseDto,
   type TripLegDto,
   type TripResponseDto,
@@ -40,8 +41,8 @@ const leg = (id: string, fromStopId: string, toStopId: string, overrides: Partia
   mode: TripLegMode.Driving,
   isModeManual: false,
   status: TripLegStatus.Ok,
-  // (38.5, -120.2) → (40.7, -120.95) → (43.252, -126.453), the reference example of the encoding
-  polyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@',
+  // (38.5, -120.2) → (38.501, -120.2), at precision 6
+  polyline: '_izlhA~rlgdFo}@?',
   distance: 1000,
   duration: 60,
   departureName: null,
@@ -66,7 +67,7 @@ const trip = (): TripResponseDto => ({
   contentVersion: 1,
   places: [{ id: 'p', key: 'p', title: null, article: 'An article', articleSource: null }],
   stops: [
-    stop('start', { role: 'start' }),
+    stop('start', { role: TripStopRole.Start }),
     stop('a', {
       localStart: '2026-08-08T10:00:00.000Z',
       localEnd: '2026-08-08T11:00:00.000Z',
@@ -77,7 +78,7 @@ const trip = (): TripResponseDto => ({
     stop('b', { localStart: '2026-08-08T14:00:00.000Z', localEnd: '2026-08-08T14:00:00.000Z', region: 'Biržai' }),
     stop('c', { localStart: '2026-08-09T09:00:00.000Z', region: 'Riga', country: 'Latvia' }),
     stop('d', { localStart: '2026-08-09T12:00:00.000Z' }),
-    stop('finish', { role: 'finish' }),
+    stop('finish', { role: TripStopRole.Finish }),
   ],
   assets: [
     { assetId: 'a1', stopId: 'a', latitude: null, longitude: null, pointSource: null },
@@ -174,7 +175,8 @@ describe('buildTripView', () => {
 
 describe('helpers', () => {
   it('decodes an encoded polyline', () => {
-    expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')).toEqual([
+    expect(decodePolyline('_izlhA~rlgdF')).toEqual([[38.5, -120.2]]);
+    expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@', 5)).toEqual([
       [38.5, -120.2],
       [40.7, -120.95],
       [43.252, -126.453],

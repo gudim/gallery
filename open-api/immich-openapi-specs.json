@@ -48844,7 +48844,7 @@
                   "$ref": "#/components/schemas/TripLegMode"
                 },
                 "polyline": {
-                  "description": "Encoded polyline of the line",
+                  "description": "The line, as an encoded polyline of precision 6 (as Valhalla returns it)",
                   "nullable": true,
                   "type": "string"
                 },
@@ -49187,7 +49187,7 @@
             "$ref": "#/components/schemas/TripLegMode"
           },
           "polyline": {
-            "description": "Encoded polyline of the line",
+            "description": "The line, as an encoded polyline of precision 6 (as Valhalla returns it)",
             "nullable": true,
             "type": "string"
           },
