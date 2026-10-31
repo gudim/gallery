@@ -14,11 +14,19 @@ import {
   syncRouteLegs,
   unbuilt,
 } from 'src/trips/repositories/trip.repository.js';
+import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
 import { type LatLng, haversineM, pointOf } from 'src/trips/utils/geo.js';
+import { speedKmh } from 'src/trips/utils/layout.js';
 import { asUuid } from 'src/utils/database.js';
 
 // The stop editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the
 // trip it edits: there are no composite keys to check it (trips DECISIONS-LOG 2026-10-31).
+
+/** A point the owner picked, with its name; without one, naming gives it. */
+export type TripPoint = LatLng & { title: string | null };
+
+// travel-album `transit.FLIGHT_KMH`: a transit leg faster than this becomes a flight.
+const FLIGHT_KMH = 300;
 
 export type TripStopChanges = {
   title?: string | null;
@@ -240,6 +248,155 @@ export class TripEditorRepository {
   }
 
   /**
+   * A point added by hand (travel-album decision P4) right after `afterStopId`, or right after the start for null. Only
+   * a route has an order of way to put it in. Without a title, naming gives it one.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }, null] })
+  addPoint(albumId: string, point: TripPoint, afterStopId: string | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind) => {
+      if (kind !== TripKind.Route) {
+        return TripEditResult.NotRoute;
+      }
+      const id = randomUUID();
+      await trx
+        .insertInto('trip_stop')
+        .values({ id, albumId, ...pointValues(point), isAddedByHand: true, isPositionManual: true })
+        .execute();
+      return placePoint(trx, albumId, id, afterStopId);
+    });
+  }
+
+  /**
+   * Puts a point added by hand right after another stop (travel-album `move_point`). Stops of assets go by the time
+   * their assets were taken (decision P20) and are not moved in the order.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, null] })
+  movePoint(albumId: string, stopId: string, afterStopId: string | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx) => {
+      const stop = await getStop(trx, albumId, stopId);
+      if (!stop) {
+        return TripEditResult.StopMissing;
+      }
+      if (stop.role || !stop.isAddedByHand) {
+        return TripEditResult.StopNotPoint;
+      }
+      return placePoint(trx, albumId, stopId, afterStopId);
+    });
+  }
+
+  /**
+   * Sets, moves or removes the start of a route (travel-album `ends.set_origin`); a finish at the start follows it, and
+   * goes with it.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }] })
+  setStart(albumId: string, point: TripPoint | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind) => {
+      if (kind !== TripKind.Route) {
+        return TripEditResult.NotRoute;
+      }
+      await putEnd(trx, albumId, TripStopRole.Start, point);
+      const finish = await getEnd(trx, albumId, TripStopRole.Finish);
+      if (finish?.isFinishAtStart) {
+        await putEnd(trx, albumId, TripStopRole.Finish, point, true);
+      }
+    });
+  }
+
+  /**
+   * Sets, moves or removes the finish of a route (travel-album `ends.set_finish`). A finish at the start takes the
+   * start's point and title, and follows it from then on.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }, false] })
+  setFinish(albumId: string, point: TripPoint | null, isFinishAtStart: boolean): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind) => {
+      if (kind !== TripKind.Route) {
+        return TripEditResult.NotRoute;
+      }
+      if (isFinishAtStart) {
+        const start = await getEnd(trx, albumId, TripStopRole.Start);
+        if (!start) {
+          return TripEditResult.NoStart;
+        }
+        point = { latitude: start.latitude!, longitude: start.longitude!, title: start.title };
+      }
+      await putEnd(trx, albumId, TripStopRole.Finish, point, isFinishAtStart);
+    });
+  }
+
+  /**
+   * Marks stops as shot on the way (true), not (false: the suggestion is not made again) or undecided (null), as
+   * travel-album's `set_transit`. A transit stop lies on the leg between the real stops around it. That leg becomes a
+   * flight unless the owner set its mode, when one of the legs it replaces was a flight or the way between its ends
+   * was faster than a plane flies low.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], true] })
+  setTransit(albumId: string, stopIds: string[], isTransit: boolean | null): Promise<TripEdited> {
+    return this.edit(albumId, async (trx, kind) => {
+      if (kind !== TripKind.Route) {
+        return TripEditResult.NotRoute;
+      }
+      const ids = [...new Set(stopIds)];
+      const stops = await trx
+        .selectFrom('trip_stop')
+        .select(['id', 'role', 'isAddedByHand'])
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', 'in', ids)
+        .execute();
+      if (stops.length !== ids.length) {
+        return TripEditResult.StopMissing;
+      }
+      if (stops.some(({ role }) => role)) {
+        return TripEditResult.StopIsEnd;
+      }
+      if (stops.some(({ isAddedByHand }) => isAddedByHand)) {
+        return TripEditResult.StopIsPoint;
+      }
+      const flight = await trx
+        .selectFrom('trip_leg')
+        .select('id')
+        .where('albumId', '=', asUuid(albumId))
+        .where('mode', '=', TripLegMode.Flight)
+        .where((eb) => eb.or([eb('fromStopId', 'in', ids), eb('toStopId', 'in', ids)]))
+        .executeTakeFirst();
+      await trx.updateTable('trip_stop').set({ isTransit }).where('id', 'in', ids).execute();
+      if (!isTransit) {
+        return;
+      }
+      await syncRouteLegs(trx, albumId);
+      const order = await trx
+        .selectFrom('trip_stop')
+        .select([
+          'id',
+          'role',
+          'isAddedByHand',
+          'isTransit',
+          'localStart as start',
+          'localEnd as end',
+          'latitude',
+          'longitude',
+        ])
+        .where('albumId', '=', asUuid(albumId))
+        .orderBy(stopOrder('trip_stop'))
+        .execute();
+      const byId = new Map(order.map((stop) => [stop.id, stop]));
+      const spans = transitSpans(order);
+      const legs = new Map(ids.flatMap((id) => (spans.has(id) ? [[spans.get(id)!.join(','), spans.get(id)!]] : [])));
+      for (const [from, to] of legs.values()) {
+        const kmh = speedKmh(byId.get(from)!, byId.get(to)!);
+        if (flight || (kmh !== null && kmh >= FLIGHT_KMH)) {
+          await trx
+            .updateTable('trip_leg')
+            .set({ mode: TripLegMode.Flight, isModeManual: true, ...unbuilt, ...noStations })
+            .where('fromStopId', '=', from)
+            .where('toStopId', '=', to)
+            .where('isModeManual', '=', false)
+            .execute();
+        }
+      }
+    });
+  }
+
+  /**
    * A new stop of the chosen assets (travel-album `new_stop`): a split for any set of assets. It takes its place in
    * the trip by their times; a stop the move would empty is refused, as for a move.
    */
@@ -309,6 +466,72 @@ class Refused extends Error {
     super(result);
   }
 }
+
+const pointValues = ({ latitude, longitude, title }: TripPoint) => ({
+  latitude,
+  longitude,
+  title,
+  titleSource: title && 'manual',
+});
+
+// Writes the point's time and the order among stops of the same time; the point's row must exist.
+const placePoint = async (trx: Transaction<DB>, albumId: string, pointId: string, afterStopId: string | null) => {
+  const order = await trx
+    .selectFrom('trip_stop')
+    .select(['id', 'role', 'localStart', 'localEnd'])
+    .where('albumId', '=', asUuid(albumId))
+    .where('id', '!=', asUuid(pointId))
+    .orderBy(stopOrder('trip_stop'))
+    .execute();
+  const placement = placeAfter(order, pointId, afterStopId);
+  if (placement === 'missing') {
+    return TripEditResult.StopMissing;
+  }
+  if (placement === 'finish') {
+    return TripEditResult.AfterFinish;
+  }
+  const { localTime, sequences } = placement;
+  await trx
+    .updateTable('trip_stop')
+    .set({ localStart: localTime, localEnd: localTime })
+    .where('id', '=', asUuid(pointId))
+    .execute();
+  for (const { id, sequence } of sequences) {
+    await trx.updateTable('trip_stop').set({ sequence }).where('id', '=', asUuid(id)).execute();
+  }
+};
+
+const getEnd = (trx: Transaction<DB>, albumId: string, role: TripStopRole) =>
+  trx
+    .selectFrom('trip_stop')
+    .select(['id', 'latitude', 'longitude', 'title', 'isFinishAtStart'])
+    .where('albumId', '=', asUuid(albumId))
+    .where('role', '=', role)
+    .executeTakeFirst();
+
+// Writes a start or finish at `point`, or removes it with its legs; the legs of a moved one are routed again.
+const putEnd = async (
+  trx: Transaction<DB>,
+  albumId: string,
+  role: TripStopRole,
+  point: TripPoint | null,
+  isFinishAtStart = false,
+) => {
+  const end = await getEnd(trx, albumId, role);
+  if (!point) {
+    if (end) {
+      await trx.deleteFrom('trip_stop').where('id', '=', end.id).execute();
+    }
+    return;
+  }
+  const values = { ...pointValues(point), isFinishAtStart, region: null, country: null };
+  await (end
+    ? trx.updateTable('trip_stop').set(values).where('id', '=', end.id).execute()
+    : trx
+        .insertInto('trip_stop')
+        .values({ id: randomUUID(), albumId, role, isAddedByHand: true, ...values })
+        .execute());
+};
 
 const getStop = (trx: Transaction<DB>, albumId: string, stopId: string) =>
   trx

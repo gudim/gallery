@@ -4642,6 +4642,16 @@ export type TripAssetsMoveDto = {
     /** Stop of the same trip the assets go to */
     stopId: string;
 };
+export type TripFinishUpdateDto = {
+    /** The route ends where it began, and the finish follows the start */
+    isFinishAtStart?: boolean;
+    /** Latitude */
+    latitude?: number;
+    /** Longitude */
+    longitude?: number;
+    /** Name of the point; blank leaves it to naming through Nominatim */
+    title?: string | null;
+};
 export type TripLegModeUpdateDto = {
     /** The owner’s mode, kept from now on; null returns to the default by distance */
     mode: (TripLegMode) | null;
@@ -4671,6 +4681,16 @@ export type TripLegStationsDto = {
     /** Stations near the stop the leg leaves, nearest first */
     departure: TripStationDto[];
 };
+export type TripPointCreateDto = {
+    /** Stop of the same trip the point goes right after; null puts it right after the start */
+    afterStopId?: string | null;
+    /** Latitude */
+    latitude: number;
+    /** Longitude */
+    longitude: number;
+    /** Name of the point; blank leaves it to naming through Nominatim */
+    title?: string | null;
+};
 export type TripStopCreateDto = {
     /** Album asset IDs, outside the trash */
     assetIds: string[];
@@ -4689,9 +4709,19 @@ export type TripStopUpdateDto = {
     /** Stop title; blank clears it */
     title?: string | null;
 };
+export type TripPointOrderDto = {
+    /** Stop of the same trip the point goes right after; null puts it right after the start */
+    afterStopId: string | null;
+};
 export type TripStopSplitDto = {
     /** The stop’s asset that begins the new stop, with every later one */
     assetId: string;
+};
+export type TripTransitUpdateDto = {
+    /** Shot on the way; false declines the suggestion for good, null leaves it undecided */
+    isTransit: boolean | null;
+    /** Stops of the same trip, of assets */
+    stopIds: string[];
 };
 export type UserGroupMemberResponseDto = {
     /** Avatar color */
@@ -11260,6 +11290,36 @@ export function moveAssets({ id, tripAssetsMoveDto }: {
     })));
 }
 /**
+ * Remove the finish of a trip
+ */
+export function removeFinish({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/finish`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Set the finish of a trip
+ */
+export function setFinish({ id, tripFinishUpdateDto }: {
+    id: string;
+    tripFinishUpdateDto: TripFinishUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/finish`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripFinishUpdateDto
+    })));
+}
+/**
  * Retry trip legs
  */
 export function retryLegs({ id }: {
@@ -11377,6 +11437,52 @@ export function likeAsset({ assetId, id, key, slug }: {
     }));
 }
 /**
+ * Add a point to a trip
+ */
+export function addPoint({ id, tripPointCreateDto }: {
+    id: string;
+    tripPointCreateDto: TripPointCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/points`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripPointCreateDto
+    })));
+}
+/**
+ * Remove the start of a trip
+ */
+export function removeStart({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/start`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+/**
+ * Set the start of a trip
+ */
+export function setStart({ id, tripEndDto }: {
+    id: string;
+    tripEndDto: TripEndDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/start`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripEndDto
+    })));
+}
+/**
  * Create a trip stop
  */
 export function createStop({ id, tripStopCreateDto }: {
@@ -11440,6 +11546,23 @@ export function mergeNextStop({ id, stopId }: {
     }));
 }
 /**
+ * Move a trip point in the order
+ */
+export function movePoint({ id, stopId, tripPointOrderDto }: {
+    id: string;
+    stopId: string;
+    tripPointOrderDto: TripPointOrderDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops/${encodeURIComponent(stopId)}/order`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripPointOrderDto
+    })));
+}
+/**
  * Split a trip stop
  */
 export function splitStop({ id, stopId, tripStopSplitDto }: {
@@ -11454,6 +11577,22 @@ export function splitStop({ id, stopId, tripStopSplitDto }: {
         ...opts,
         method: "POST",
         body: tripStopSplitDto
+    })));
+}
+/**
+ * Mark trip stops as shot on the way
+ */
+export function setTransit({ id, tripTransitUpdateDto }: {
+    id: string;
+    tripTransitUpdateDto: TripTransitUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/transit`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripTransitUpdateDto
     })));
 }
 /**

@@ -11,17 +11,22 @@ import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.
 import {
   TripAssetsMoveDto,
   TripCreateDto,
+  TripEndDto,
+  TripFinishUpdateDto,
   TripImportDto,
   TripLegModeUpdateDto,
   TripLegParamDto,
   TripLegStationUpdateDto,
   TripLegStationsDto,
   TripLikeDto,
+  TripPointCreateDto,
+  TripPointOrderDto,
   TripResponseDto,
   TripStopCreateDto,
   TripStopParamDto,
   TripStopSplitDto,
   TripStopUpdateDto,
+  TripTransitUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { UUIDAssetIDParamDto, UUIDParamDto } from 'src/validation.js';
@@ -195,6 +200,106 @@ export class TripController {
   })
   deleteStop(@Auth() auth: AuthDto, @Param() { id, stopId }: TripStopParamDto): Promise<TripResponseDto> {
     return this.service.deleteStop(auth, id, stopId);
+  }
+
+  @Post(':id/points')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Add a point to a trip',
+    description:
+      'Adds a point by hand to a Route trip, right after a stop of the same trip or right after the start. Without a title, the point is named through Nominatim. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  addPoint(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripPointCreateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.addPoint(auth, id, dto);
+  }
+
+  @Put(':id/stops/:stopId/order')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Move a trip point in the order',
+    description:
+      'Puts a point added by hand right after another stop of the same trip, or right after the start. Stops of assets go by the time their assets were taken. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  movePoint(
+    @Auth() auth: AuthDto,
+    @Param() { id, stopId }: TripStopParamDto,
+    @Body() dto: TripPointOrderDto,
+  ): Promise<TripResponseDto> {
+    return this.service.movePoint(auth, id, stopId, dto);
+  }
+
+  @Put(':id/start')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Set the start of a trip',
+    description:
+      'Sets or moves where a Route trip begins; a finish at the start follows. Its legs are routed again. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setStart(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto, @Body() dto: TripEndDto): Promise<TripResponseDto> {
+    return this.service.setStart(auth, id, dto);
+  }
+
+  @Delete(':id/start')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Remove the start of a trip',
+    description:
+      'Removes the start of a Route trip with its leg, and a finish at the start with it. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  removeStart(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<TripResponseDto> {
+    return this.service.setStart(auth, id, null);
+  }
+
+  @Put(':id/finish')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Set the finish of a trip',
+    description:
+      'Sets or moves where a Route trip ends, or puts the finish at the start, which it follows from then on. Its legs are routed again. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setFinish(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripFinishUpdateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.setFinish(auth, id, dto);
+  }
+
+  @Delete(':id/finish')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Remove the finish of a trip',
+    description:
+      'Removes the finish of a Route trip with its leg. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  removeFinish(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<TripResponseDto> {
+    return this.service.setFinish(auth, id, null);
+  }
+
+  @Put(':id/transit')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Mark trip stops as shot on the way',
+    description:
+      'Marks stops of assets of a Route trip as shot on the way, not (the suggestion is not made again), or undecided. A stop on the way lies on the leg between the stops around it; that leg becomes a flight unless its mode was set, when a leg it replaces was a flight or the way was faster than 300 km/h. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setTransit(
+    @Auth() auth: AuthDto,
+    @Param() { id }: UUIDParamDto,
+    @Body() dto: TripTransitUpdateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.setTransit(auth, id, dto);
   }
 
   @Put(':id/assets/stop')
