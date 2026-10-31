@@ -38,8 +38,8 @@ All of these were settled with the owner on 2026-10-30. Do not reopen them witho
 ## 2. Stages
 
 Strictly in order. A stage is closed when every "Done when" item is checked and recorded in
-`specs/trips/PROGRESS.md`. Stage N is branch `trips-N`; while stage N−1 is not merged into
-`main`, `trips-N` grows from `trips-(N−1)`.
+`specs/trips/PROGRESS.md`. Stage N is branch `trips-N`, grown from `trips-all`; when stage N closes it is merged into
+`trips-all` (fast-forward), and stage N+1 grows from there.
 
 ### 2.0 Fork and skeleton
 

@@ -14,8 +14,9 @@ file adds what is specific to trips.
   reverse, surprising, and the result of a real trade-off gets an ADR in `adr/`.
 - Use the glossary's terms in code, UI and docs. A new domain term goes into `GLOSSARY.md`
   when it is settled; the glossary holds no implementation details.
-- Stage N is branch `trips-N`. One step, one commit; tests, lint and format must be green before
-  the commit. Push and PRs only with the owner's consent.
+- Stage N is branch `trips-N`, grown from `trips-all`. When the stage closes, merge it into
+  `trips-all` with `git merge --ff-only trips-N`; the next stage grows from `trips-all`. One step,
+  one commit; tests, lint and format must be green before the commit. Push and PRs only with the owner's consent.
 - Docs, commits and comments are in English. The owner talks in Russian.
 
 ## Environment
@@ -60,12 +61,13 @@ expects it). Node comes from `source ~/.nvm/nvm.sh && nvm use 24.22.1` when `mis
 
 1. `git fetch gallery --tags` and pick the newest `vX.Y.Z` tag.
 2. Before the rebase, see what comes in: in `docs/fork/trips-ownership.yml` set
-   `upstream_branch` to the new tag and `fork_branch` to the stage branch, then run
+   `upstream_branch` to the new tag and `fork_branch` to `trips-all`, then run
    `pnpm --filter @gallery/upstream-preflight run preflight --manifest docs/fork/trips-ownership.yml`
    (no `--` before the flag: pnpm would pass it on and the tool would fall back to Gallery's
    manifest). The report lands in `.git/upstream-preflight/`. Every incoming commit flagged
    "Touches trips upstream extension path" touches a hook file; read it first.
-3. `git rebase --onto <new tag> <old tag> <stage branch>`. Conflicts are expected only in the hook
+3. `git rebase --onto <new tag> <old tag> trips-all`, then rebase an open stage branch onto the
+   new `trips-all`. Conflicts are expected only in the hook
    files the manifest lists under `upstream_extension_paths`; keep each hook to its one line. For
    the generated `open-api/immich-openapi-specs.json` and `packages/sdk/src/fetch-client.ts`, take
    the tag's version and regenerate them (`pnpm build`, then `node ./dist/bin/sync-open-api.js` in

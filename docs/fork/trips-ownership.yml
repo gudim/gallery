@@ -10,7 +10,7 @@ version: 1
 # without creating any ref:
 #   - upstream = refs/tags/<Gallery release tag>; bump the tag to the target
 #     release before each rebase (`git fetch gallery --tags` first).
-#   - fork = refs/heads/<stage branch> (local branch, committed work only).
+#   - fork = refs/heads/trips-all (local branch, committed work only).
 # last_verified_fork_head must be a full SHA that is an ancestor of (or equal
 # to) the fork head. Set it to the release tag's commit on every rebase
 # (`git rev-parse <tag>^{commit}`): a rebase rewrites the trip SHAs, so an
@@ -20,7 +20,7 @@ metadata:
   upstream_remote: refs/tags
   upstream_branch: v5.9.0
   fork_remote: refs/heads
-  fork_branch: trips-1
+  fork_branch: trips-all
   last_verified_fork_head: 40c585e20109a9d9acbba10d2dbab3594c465cc1
 
 coverage_ignore:
