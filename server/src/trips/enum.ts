@@ -33,6 +33,12 @@ export enum TripLegStatus {
   Attention = 'attention',
 }
 
+// The two stations of a train leg.
+export enum TripStationSide {
+  Departure = 'departure',
+  Arrival = 'arrival',
+}
+
 export enum TripOverlayKind {
   Trail = 'trail',
   Mask = 'mask',

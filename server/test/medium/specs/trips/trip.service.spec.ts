@@ -10,6 +10,7 @@ import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripLegMode, TripLegStatus } from 'src/trips/enum.js';
+import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { newMediumService } from 'test/medium.factory.js';
@@ -183,7 +184,12 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
-  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db));
+  const sut = new TripService(
+    new AccessRepository(db),
+    job,
+    new TripRepository(db),
+    new TripGeoRepository(db, LoggingRepository.create()),
+  );
   const { user: owner } = await ctx.newUser();
   const assets = [];
   for (const [index, time] of [
@@ -490,6 +496,7 @@ describe(TripService.name, () => {
       const { album: plainAlbum } = await newAlbumOf(ctx, owner.id, [['10:00', null]]);
       const waiting = await add('11:00', P);
       await ctx.newAlbumAsset({ albumId: plainAlbum.id, assetId: waiting });
+      job.queue.mockClear();
 
       await sut.onAlbumUpdate({ id: tripAlbum.id, userIds: [], recipientIds: [] });
       await sut.onAlbumUpdate({ id: plainAlbum.id, userIds: [], recipientIds: [] });

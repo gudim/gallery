@@ -1061,9 +1061,10 @@ export enum JobName {
   AssetClassifyQueueAll = 'AssetClassifyQueueAll',
   AssetClassify = 'AssetClassify',
 
-  // Trips: filing new album assets into stops (trips PLAN D12)
+  // Trips: filing new album assets into stops (trips PLAN D12) and routing legs (PLAN §2.5)
   TripFile = 'TripFile',
   TripFileSweep = 'TripFileSweep',
+  TripRouteLegs = 'TripRouteLegs',
 }
 
 export const JobNameSchema = z.enum(JobName).describe('Job name').meta({ id: 'JobName' });
