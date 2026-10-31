@@ -1,13 +1,6 @@
 import { TripKind, TripLegMode } from 'src/trips/enum.js';
 import { type LatLng, type Located, defaultMode, haversineM, pointOf, round6 } from 'src/trips/utils/geo.js';
-import {
-  type Shot,
-  daySections,
-  inferPlacePoints,
-  inferRoutePoints,
-  placeGroups,
-  routeGroups,
-} from 'src/trips/utils/grouping.js';
+import { type Shot, daySections, inferPoints, placeGroups, routeGroups } from 'src/trips/utils/grouping.js';
 
 // The first layout of a trip (travel-album's locate + full_cluster): every album asset filed into a new stop, or left
 // Unplaced. Pure: the caller reads the assets and writes the result.
@@ -33,12 +26,7 @@ const toStop = (index: number, items: Array<{ time: Date }>, centre: LatLng | nu
 export const layOutTrip = (kind: TripKind, assets: LayoutAsset[], start: LatLng | null = null): TripLayout => {
   const shots: Shot[] = assets.map((asset) => ({ time: asset.time, anchor: pointOf(asset) }));
   const stopOf = new Map<string, number>();
-  const points =
-    kind === TripKind.Route
-      ? inferRoutePoints(shots, start)
-      : kind === TripKind.Places
-        ? inferPlacePoints(shots)
-        : shots.map(() => null);
+  const points = inferPoints(kind, shots, start);
   const located = assets.flatMap((asset, i) => {
     const point = points[i];
     return point ? [{ ...point, id: asset.id, time: asset.time }] : [];

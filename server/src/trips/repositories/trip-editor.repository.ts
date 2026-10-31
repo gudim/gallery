@@ -18,7 +18,7 @@ import {
 } from 'src/trips/repositories/trip.repository.js';
 import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
 import { type LatLng, haversineM, pointOf } from 'src/trips/utils/geo.js';
-import { inferPlacePoints, inferRoutePoints, speedKmh } from 'src/trips/utils/grouping.js';
+import { inferPoints, speedKmh } from 'src/trips/utils/grouping.js';
 import { asUuid } from 'src/utils/database.js';
 
 // The stop editor (trips PLAN §2.5, travel-album `atlas/albums/editor.py`). Every id an edit takes must belong to the
@@ -255,10 +255,7 @@ export class TripEditorRepository {
    */
   @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }, null] })
   addPoint(albumId: string, point: TripPoint, afterStopId: string | null): Promise<TripEdited> {
-    return this.edit(albumId, async (trx, kind) => {
-      if (kind !== TripKind.Route) {
-        return TripEditResult.NotRoute;
-      }
+    return this.editRoute(albumId, async (trx) => {
       const id = randomUUID();
       await trx
         .insertInto('trip_stop')
@@ -292,10 +289,7 @@ export class TripEditorRepository {
    */
   @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }] })
   setStart(albumId: string, point: TripPoint | null): Promise<TripEdited> {
-    return this.edit(albumId, async (trx, kind, touch) => {
-      if (kind !== TripKind.Route) {
-        return TripEditResult.NotRoute;
-      }
+    return this.editRoute(albumId, async (trx, kind, touch) => {
       await putEnd(trx, albumId, TripStopRole.Start, point);
       const finish = await getEnd(trx, albumId, TripStopRole.Finish);
       if (finish?.isFinishAtStart) {
@@ -315,10 +309,7 @@ export class TripEditorRepository {
    */
   @GenerateSql({ params: [DummyValue.UUID, { latitude: 54.68, longitude: 25.28, title: null }, false] })
   setFinish(albumId: string, point: TripPoint | null, isFinishAtStart: boolean): Promise<TripEdited> {
-    return this.edit(albumId, async (trx, kind) => {
-      if (kind !== TripKind.Route) {
-        return TripEditResult.NotRoute;
-      }
+    return this.editRoute(albumId, async (trx) => {
       if (isFinishAtStart) {
         const start = await getEnd(trx, albumId, TripStopRole.Start);
         if (!start) {
@@ -338,10 +329,7 @@ export class TripEditorRepository {
    */
   @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], true] })
   setTransit(albumId: string, stopIds: string[], isTransit: boolean | null): Promise<TripEdited> {
-    return this.edit(albumId, async (trx, kind) => {
-      if (kind !== TripKind.Route) {
-        return TripEditResult.NotRoute;
-      }
+    return this.editRoute(albumId, async (trx) => {
       const ids = [...new Set(stopIds)];
       const stops = await trx
         .selectFrom('trip_stop')
@@ -546,6 +534,13 @@ export class TripEditorRepository {
    * back. Stops it did not touch keep their times and centres: an imported trip's may differ from what its assets
    * give, and a text edit must not move them.
    */
+  // An edit only a route has; another kind of trip refuses it.
+  private editRoute(albumId: string, edit: Edit): Promise<TripEdited> {
+    return this.edit(albumId, (trx, kind, touch) =>
+      kind === TripKind.Route ? edit(trx, kind, touch) : Promise.resolve(TripEditResult.NotRoute),
+    );
+  }
+
   private edit(albumId: string, edit: Edit): Promise<TripEdited> {
     return this.db
       .transaction()
@@ -707,8 +702,7 @@ const relocate = async (
         ? pointOf(asset)
         : pointOf({ latitude: asset.gpsLatitude, longitude: asset.gpsLongitude }),
   }));
-  const points =
-    kind === TripKind.Route ? inferRoutePoints(shots, start ? pointOf(start) : null) : inferPlacePoints(shots);
+  const points = inferPoints(kind, shots, start ? pointOf(start) : null);
   for (const [i, asset] of assets.entries()) {
     if (asset.pointSource === TripPointSource.Manual) {
       continue;

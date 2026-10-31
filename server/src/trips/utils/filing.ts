@@ -1,13 +1,6 @@
 import { TripKind, TripLegMode } from 'src/trips/enum.js';
 import { type LatLng, type Located, haversineM, pointOf, round6 } from 'src/trips/utils/geo.js';
-import {
-  GAP_MS,
-  RADIUS_M,
-  daySections,
-  inferPlacePoints,
-  inferRoutePoints,
-  placeGroups,
-} from 'src/trips/utils/grouping.js';
+import { GAP_MS, RADIUS_M, daySections, inferPoints, placeGroups } from 'src/trips/utils/grouping.js';
 import { routeLegs } from 'src/trips/utils/lay-out.js';
 
 // Filing assets the trip has not seen yet into its stops (trips PLAN D12; travel-album's assign and sync_legs). The
@@ -45,12 +38,7 @@ export const fileAssets = (
   assets: FilingAsset[],
   { start = null, newId }: { start?: LatLng | null; newId: () => string },
 ): Filing => {
-  const points =
-    kind === TripKind.Route
-      ? inferRoutePoints(assets, start)
-      : kind === TripKind.Places
-        ? inferPlacePoints(assets)
-        : assets.map(() => null);
+  const points = inferPoints(kind, assets, start);
   const fresh = assets.flatMap((asset, i) => (asset.isNew ? [{ ...asset, point: points[i] }] : []));
   const touched = new Map<string, FiledStop>();
   const stopOf = new Map<string, string>();
