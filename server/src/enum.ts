@@ -1077,6 +1077,7 @@ export enum JobName {
   TripFile = 'TripFile',
   TripFileSweep = 'TripFileSweep',
   TripRouteLegs = 'TripRouteLegs',
+  TripName = 'TripName',
 }
 
 export const JobNameSchema = z.enum(JobName).describe('Job name').meta({ id: 'JobName' });

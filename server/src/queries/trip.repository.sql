@@ -281,3 +281,48 @@ where
 for update of
   "trip"
 commit
+
+-- TripRepository.getStopsToName
+select
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+
+-- TripRepository.nameStops
+begin
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit
+
+-- TripRepository.getAlbumIdsToName
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "album"."deletedAt" is null
+  and "trip"."kind" != $1
+  and exists (
+    select
+      "trip_stop"."id"
+    from
+      "trip_stop"
+    where
+      "trip_stop"."albumId" = "trip"."albumId"
+      and "trip_stop"."latitude" is not null
+      and "trip_stop"."longitude" is not null
+      and coalesce(btrim("trip_stop"."title"), '') = $2
+  )

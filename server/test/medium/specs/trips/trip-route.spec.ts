@@ -421,20 +421,22 @@ describe('leg routing', () => {
 
   it('is queued when a route is made, imported with pending legs, or split by filing', async () => {
     const { ctx, job, sut, owner, auth, importRoute, album, places } = await setup();
+    // Making a trip queues naming too; this test is about routing.
+    const routing = () => job.queue.mock.calls.filter(([item]) => item.name === JobName.TripRouteLegs);
     await importRoute([places.WARSAW, places.FAR]);
-    expect(job.queue.mock.calls).toEqual([[routeJob(album.id)]]);
+    expect(routing()).toEqual([[routeJob(album.id)]]);
 
     const { asset } = await ctx.newAsset({ ownerId: owner.id, localDateTime: new Date('2026-05-01T10:00:00.000Z') });
     await ctx.newExif({ assetId: asset.id, ...places.WARSAW });
     const { album: other } = await ctx.newAlbum({ ownerId: owner.id }, [asset.id]);
     job.queue.mockClear();
     await sut.create(auth, TripCreateDto.schema.parse({ albumId: other.id, kind: 'route', start: places.FAR }));
-    expect(job.queue.mock.calls).toEqual([[routeJob(other.id)]]);
+    expect(routing()).toEqual([[routeJob(other.id)]]);
 
     const { album: placesAlbum } = await ctx.newAlbum({ ownerId: owner.id }, [asset.id]);
     job.queue.mockClear();
     await sut.create(auth, TripCreateDto.schema.parse({ albumId: placesAlbum.id, kind: 'places' }));
-    expect(job.queue).not.toHaveBeenCalled();
+    expect(routing()).toEqual([]);
 
     // A later asset far from both stops opens a stop between them, which splits the leg.
     await db.updateTable('trip_leg').set({ status: TripLegStatus.Ok }).where('albumId', '=', other.id).execute();
@@ -446,7 +448,7 @@ describe('leg routing', () => {
     await db.insertInto('asset_job_status').values({ assetId: later.id, metadataExtractedAt: new Date() }).execute();
     await ctx.newAlbumAsset({ albumId: other.id, assetId: later.id });
     await sut.handleFile({ id: other.id });
-    expect(job.queue.mock.calls).toEqual([[routeJob(other.id)]]);
+    expect(routing()).toEqual([[routeJob(other.id)]]);
   });
 });
 

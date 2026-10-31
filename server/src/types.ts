@@ -652,7 +652,8 @@ export type JobItem =
   // Trips (trips PLAN D12, §2.5)
   | { name: JobName.TripFile; data: IEntityJob }
   | { name: JobName.TripFileSweep; data?: IBaseJob }
-  | { name: JobName.TripRouteLegs; data: IEntityJob };
+  | { name: JobName.TripRouteLegs; data: IEntityJob }
+  | { name: JobName.TripName; data: IEntityJob };
 
 export type VectorExtension = (typeof VECTOR_EXTENSIONS)[number];
 

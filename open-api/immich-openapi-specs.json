@@ -35698,7 +35698,8 @@
           "AssetAnalyzeQuality",
           "TripFile",
           "TripFileSweep",
-          "TripRouteLegs"
+          "TripRouteLegs",
+          "TripName"
         ],
         "type": "string"
       },
@@ -49240,7 +49241,7 @@
             "type": "number"
           },
           "title": {
-            "description": "Name of the point; blank names it by its coordinates",
+            "description": "Name of the point; blank leaves it to naming through Nominatim",
             "nullable": true,
             "type": "string"
           }

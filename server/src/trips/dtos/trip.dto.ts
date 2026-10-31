@@ -288,7 +288,7 @@ const TripEndSchema = z
   .object({
     latitude: latitudeSchema.describe('Latitude'),
     longitude: longitudeSchema.describe('Longitude'),
-    title: editedText('Name of the point; blank names it by its coordinates'),
+    title: editedText('Name of the point; blank leaves it to naming through Nominatim'),
   })
   .meta({ id: 'TripEndDto' });
 

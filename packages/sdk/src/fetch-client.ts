@@ -4692,7 +4692,7 @@ export type TripEndDto = {
     latitude: number;
     /** Longitude */
     longitude: number;
-    /** Name of the point; blank names it by its coordinates */
+    /** Name of the point; blank leaves it to naming through Nominatim */
     title?: string | null;
 };
 export type TripCreateDto = {
@@ -12975,7 +12975,8 @@ export enum JobName {
     AssetAnalyzeQuality = "AssetAnalyzeQuality",
     TripFile = "TripFile",
     TripFileSweep = "TripFileSweep",
-    TripRouteLegs = "TripRouteLegs"
+    TripRouteLegs = "TripRouteLegs",
+    TripName = "TripName"
 }
 export enum QueueJobStatus {
     Active = "active",
