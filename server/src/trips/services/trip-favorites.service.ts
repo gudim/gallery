@@ -8,7 +8,8 @@ import { JobRepository } from 'src/repositories/job.repository.js';
 import { TripFavoritesRepository } from 'src/trips/repositories/trip-favorites.repository.js';
 import { resolveTripNamingLanguages } from 'src/trips/utils/naming.js';
 
-// Gallery's own `favorites` string in its ten maintained locales (i18n/<locale>.json), keyed by language tag.
+// Gallery's own `favorites` string in its ten maintained locales (i18n/<locale>.json), keyed by language tag; the spec
+// fails when a translation there changes.
 const ALBUM_NAMES: Record<string, string> = {
   en: 'Favorites',
   ru: 'Избранное',
