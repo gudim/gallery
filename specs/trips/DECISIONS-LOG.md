@@ -42,3 +42,6 @@ One line per choice the plan does not dictate. Newest last. `(owner)` marks a ch
 - 2026-10-31 The start and finish of a travel-album album that is not a Route (its Places album "Разное" has a start) are dropped with their legs: the trip model gives them only to a Route.
 - 2026-10-31 Imported likes go to the trip of the asset's own album, not to the Favorites trip, which only links to it.
 - 2026-10-31 The migration waits for Gallery's queues (metadata, thumbnails, face detection and recognition) through `GET /queues`, which is admin-only, so it needs the key of at least one Gallery admin.
+- 2026-10-31 (owner) The guest trip viewer opens at the album's own shared link, `/share/<key>` and `/s/<slug>`: when the album has a trip, the shared-link page shows the trip viewer, with a way to the stock album view. Links the migration printed work as they are. One hook in Gallery's shared-link page.
+- 2026-10-31 (owner) The trip map uses Gallery's map styles from the admin settings (light and dark), not travel-album's raster `TILE_URL`; the trip layer has no map setting of its own.
+- 2026-10-31 (owner) A guest's like is keyed by a random browser key the server sets in an httpOnly cookie on the first like, as travel-album's `atlas_viewer`; the page script never sees it.
