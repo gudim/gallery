@@ -1,5 +1,16 @@
 # Trips: progress
 
+## Stage 2.2: migration from travel-album (branch `trips-2`, from `trips-all`): closed 2026-10-31
+
+The script is `python -m atlas.to_gallery` in travel-album, branch `to-gallery` (`b895076` code, `26bc77f` docs), not pushed. Checked on a dev Gallery: the fork's `ghcr.io/gudim/gallery-server:v5.9.1` with stock `gallery-ml:v5.9.0`, travel-album's server dump of 2026-10-03 and the store of albums 1 and 2. Counts were read back from Gallery's API, not from the script's report.
+
+- [x] `birzhay-2026` and Poland 2026 migrate in full, and the counts match travel-album:
+  - `birzhay-2026`: assets 79 → 79, stops 10 → 10, legs 9 → 9, captions 79 → 79, named people 4 → 4 (13 of 13 faces), album thumbnail and shared link `birzhay-2026`.
+  - Poland 2026: assets 1116 of 1120 (4 sit in hidden stops), stops 48 of 55 (7 hidden), legs 54 → 47 (the 14 legs through hidden stops glued into 7; Wieliczka → hidden Turówka → Żupny castle became one 2677 m foot leg, 1275 + 1402), captions 1116, 15 dates corrected, 83 overlays, named people 11 of 11 (64 of 65 faces: Gallery did not detect one).
+- [x] A second run against the same Gallery refuses the album that already has a trip ("в Gallery уже есть его поездка") and adds nothing.
+
+Also checked: the trip documents of all 25 albums of the dump pass the server's `TripImportDto` (offline, against the `trips-all` build); that check caught travel-album's overlay arrays, now converted to GeoJSON. travel-album's suite without e2e is green (823), plus 10 tests of the script against a fake Gallery. The dev stack's docker network had to move off 172.20/16, which this machine's corporate VPN routes into its tunnel.
+
 ## Stage 2.1: trip model (branch `trips-1`, from `trips-0`): closed 2026-10-31
 
 - [x] The owner, an editor, a viewer and the album's shared link can read a trip; anyone else gets 404, as for a missing album. `test/medium/specs/trips/trip.service.spec.ts` "read access": all four read; a stranger, a shared link of another album, and an album without a trip get `NotFoundException`. `GET trips/:id` is on the shared-link route allowlist in `src/controllers/index.spec.ts`.
