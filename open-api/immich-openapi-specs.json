@@ -25149,6 +25149,62 @@
         "x-immich-state": "Stable"
       }
     },
+    "/trips": {
+      "post": {
+        "description": "Makes a trip of an album and lays its assets out into stops by the trip kind; assets that fit no stop are Unplaced. A Route trip may take a start and a finish. Only the album owner can make a trip, and only of an album without one (409 otherwise). Returns the whole trip.",
+        "operationId": "createTrip",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripCreateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Create a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}": {
       "get": {
         "description": "Returns the whole trip of an album: stops, places, legs, overlays, likes and where each album asset is filed. The trip has its album’s ID. Responds 404 when the album has no trip or the caller cannot read the album.",
@@ -46797,6 +46853,75 @@
           "longitude",
           "pointSource",
           "stopId"
+        ],
+        "type": "object"
+      },
+      "TripCreateDto": {
+        "properties": {
+          "albumId": {
+            "description": "Album ID; the trip takes it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+            "type": "string"
+          },
+          "finish": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripEndDto"
+              }
+            ],
+            "description": "Where a route ends",
+            "nullable": true
+          },
+          "isFinishAtStart": {
+            "default": false,
+            "description": "The route ends where it began",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TripKind"
+          },
+          "start": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripEndDto"
+              }
+            ],
+            "description": "Where a route begins",
+            "nullable": true
+          }
+        },
+        "required": [
+          "albumId",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "TripEndDto": {
+        "properties": {
+          "latitude": {
+            "description": "Latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
+          "title": {
+            "description": "Name of the point; blank names it by its coordinates",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
         ],
         "type": "object"
       },

@@ -283,12 +283,41 @@ const TripStopUpdateSchema = z
   .refine((dto) => Object.values(dto).some((value) => value !== undefined), { error: 'Nothing to change' })
   .meta({ id: 'TripStopUpdateDto' });
 
+const TripEndSchema = z
+  .object({
+    latitude: latitudeSchema.describe('Latitude'),
+    longitude: longitudeSchema.describe('Longitude'),
+    title: editedText('Name of the point; blank names it by its coordinates'),
+  })
+  .meta({ id: 'TripEndDto' });
+
+const TripCreateSchema = z
+  .object({
+    albumId: z.uuidv4().describe('Album ID; the trip takes it'),
+    kind: TripKindSchema,
+    start: TripEndSchema.nullable().default(null).describe('Where a route begins'),
+    finish: TripEndSchema.nullable().default(null).describe('Where a route ends'),
+    isFinishAtStart: z.boolean().default(false).describe('The route ends where it began'),
+  })
+  .superRefine((trip, ctx) => {
+    const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if ((trip.start || trip.finish || trip.isFinishAtStart) && trip.kind !== TripKind.Route) {
+      issue('Only a Route trip has a start and a finish');
+    }
+    if (trip.isFinishAtStart && (!trip.start || trip.finish)) {
+      issue('A finish at the start needs a start and no finish of its own');
+    }
+  })
+  .meta({ id: 'TripCreateDto' });
+
 const TripStopParamSchema = z.object({
   id: z.uuidv4(),
   stopId: z.uuidv4(),
 });
 
 export class TripImportDto extends createZodDto(TripImportSchema) {}
+export class TripCreateDto extends createZodDto(TripCreateSchema) {}
+export class TripEndDto extends createZodDto(TripEndSchema) {}
 export class TripStopUpdateDto extends createZodDto(TripStopUpdateSchema) {}
 export class TripStopParamDto extends createZodDto(TripStopParamSchema) {}
 export class TripResponseDto extends createZodDto(TripResponseSchema) {}

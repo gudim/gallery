@@ -9,6 +9,23 @@ where
   "album_asset"."albumId" = $1::uuid
   and "album_asset"."assetId" in ($2)
 
+-- TripRepository.getLayoutAssets
+select
+  "asset"."id",
+  "asset"."localDateTime" as "time",
+  "asset_exif"."latitude",
+  "asset_exif"."longitude"
+from
+  "album_asset"
+  inner join "asset" on "asset"."id" = "album_asset"."assetId"
+  left join "asset_exif" on "asset_exif"."assetId" = "asset"."id"
+where
+  "album_asset"."albumId" = $1::uuid
+  and "asset"."deletedAt" is null
+order by
+  "asset"."localDateTime",
+  "asset"."id"
+
 -- TripRepository.get
 begin
 select
