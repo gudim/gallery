@@ -219,6 +219,55 @@ describe(TripFavoritesService.name, () => {
     await expect(stars()).resolves.toEqual([added]);
   });
 
+  it('drops the place an asset Gallery took out of the album leaves empty, and moves the centre of one it thins', async () => {
+    const { job, sut, user, newAsset, star, favoritesTrip, filing, mirror } = await setup();
+    const own = await newAsset(user.id, VILNIUS);
+    const near = await newAsset(user.id, { latitude: 54.682, longitude: 25.282 });
+    const far = await newAsset(user.id, KAUNAS);
+    await star(user.id, own, near, far);
+    await mirror(true);
+    const [{ albumId }] = await favoritesTrip();
+    const filed = await filing(albumId);
+    const kaunasStop = filed.find(({ assetId }) => assetId === far)!.stopId!;
+    job.queue.mockClear();
+
+    // Gallery's "Remove from album": the album rows go first, then the event.
+    await db.deleteFrom('album_asset').where('albumId', '=', albumId).where('assetId', 'in', [near, far]).execute();
+    await sut.onAlbumAssetsRemove({ albumId, assetIds: [near, far] });
+    expect(job.queue).toHaveBeenCalledWith({ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } });
+    const { contentVersion } = await db
+      .selectFrom('trip')
+      .select('contentVersion')
+      .where('albumId', '=', albumId)
+      .executeTakeFirstOrThrow();
+    await mirror();
+
+    const stops = await db.selectFrom('trip_stop').selectAll().where('albumId', '=', albumId).execute();
+    expect(stops.map(({ id }) => id)).not.toContain(kaunasStop);
+    expect(stops).toEqual([expect.objectContaining(VILNIUS)]);
+    await expect(
+      db.selectFrom('trip').select('contentVersion').where('albumId', '=', albumId).executeTakeFirstOrThrow(),
+    ).resolves.toEqual({ contentVersion: contentVersion + 1 });
+  });
+
+  it('brings back an asset added to the album that a mirroring took out before its star was written', async () => {
+    const { ctx, job, sut, user, newAsset, star, favoritesTrip, albumAssetIds, mirror } = await setup();
+    const first = await newAsset(user.id, VILNIUS);
+    await star(user.id, first);
+    await mirror(true);
+    const [{ albumId }] = await favoritesTrip();
+    const added = await newAsset(user.id, KAUNAS);
+
+    await ctx.newAlbumAsset({ albumId, assetId: added });
+    await mirror();
+    await expect(albumAssetIds(albumId)).resolves.toEqual([first]);
+    await sut.onAlbumAssetsAdd({ albumId, assetIds: [added] });
+    expect(job.queue).toHaveBeenCalledWith({ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } });
+    await mirror();
+
+    await expect(albumAssetIds(albumId)).resolves.toEqual([first, added].toSorted());
+  });
+
   it('stars the album of an imported Favorites trip and queues its mirroring, and the nightly sweep mirrors every one', async () => {
     const { ctx, job, trips, user, newAsset, favoritesTrip } = await setup();
     const assetId = await newAsset(user.id, VILNIUS);

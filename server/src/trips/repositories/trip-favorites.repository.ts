@@ -29,9 +29,10 @@ export class TripFavoritesRepository {
   /**
    * Makes the album of the user's Favorites trip hold their stars. Stars are the truth: a starred asset the user could
    * add to an album by hand (their own, or a partner's, as Immich's `AssetShare` allows) outside the trash joins the
-   * album and is filed, and an album asset the user no longer stars leaves it. A place left without assets goes, unless
-   * it is the centre, and the other places it touched follow their assets (travel-album `favorites.refresh`). With
-   * `newTrip`, a user without a Favorites trip who has such a star gets a new album and Places trip.
+   * album and is filed, and an album asset the user no longer stars leaves it. Then, as travel-album's
+   * `favorites.refresh`, a place without assets goes unless it is the centre, and every other place follows its assets,
+   * so an asset Gallery took out of the album is caught up too. With `newTrip`, a user without a Favorites trip who has
+   * such a star gets a new album and Places trip.
    */
   @GenerateSql({ params: [DummyValue.UUID, { albumName: DummyValue.STRING, language: DummyValue.STRING }] })
   mirror(userId: string, newTrip: TripFavoritesNew | null): Promise<TripFavoritesMirrored> {
@@ -49,7 +50,8 @@ export class TripFavoritesRepository {
         return { albumId: null, stops: 0 };
       }
 
-      const leaving = await removeUnstarred(trx, albumId, userId);
+      const before = await placesOf(trx, albumId);
+      const removed = await removeUnstarred(trx, albumId, userId);
       const added = await trx
         .insertInto('album_asset')
         .columns(['albumId', 'assetId'])
@@ -70,14 +72,16 @@ export class TripFavoritesRepository {
         .onConflict((oc) => oc.doNothing())
         .returning('assetId')
         .execute();
-      if (leaving.length === 0 && added.length === 0) {
-        return { albumId, stops: 0 };
-      }
-
-      await dropEmptiedPlaces(trx, albumId, leaving);
       const filed = await fileTripAssets(trx, albumId, trip.kind, { isUnplacedRefiled: false });
-      await touchAlbum(trx, albumId);
-      await bumpContentVersion(trx, albumId);
+      await refreshPlaces(trx, albumId);
+
+      const isAlbumChanged = removed > 0 || added.length > 0;
+      if (isAlbumChanged) {
+        await touchAlbum(trx, albumId);
+      }
+      if (isAlbumChanged || (await placesOf(trx, albumId)) !== before) {
+        await bumpContentVersion(trx, albumId);
+      }
       return { albumId, stops: filed.stops };
     });
   }
@@ -132,7 +136,7 @@ const createFavoritesTrip = async (trx: Transaction<DB>, userId: string, { album
   return albumId;
 };
 
-// Takes the assets the user no longer stars out of the album; returns the stops they leave.
+// Takes the assets the user no longer stars out of the album; returns how many left.
 const removeUnstarred = async (trx: Transaction<DB>, albumId: string, userId: string) => {
   const rows = await trx
     .selectFrom('album_asset')
@@ -141,7 +145,7 @@ const removeUnstarred = async (trx: Transaction<DB>, albumId: string, userId: st
         .onRef('trip_asset.albumId', '=', 'album_asset.albumId')
         .onRef('trip_asset.assetId', '=', 'album_asset.assetId'),
     )
-    .select(['album_asset.assetId', 'trip_asset.stopId'])
+    .select('album_asset.assetId')
     .where('album_asset.albumId', '=', asUuid(albumId))
     .where(({ not, exists, selectFrom }) =>
       not(
@@ -165,17 +169,14 @@ const removeUnstarred = async (trx: Transaction<DB>, albumId: string, userId: st
       )
       .execute();
   }
-  return [...new Set(rows.flatMap(({ stopId }) => (stopId ? [stopId] : [])))];
+  return rows.length;
 };
 
-const dropEmptiedPlaces = async (trx: Transaction<DB>, albumId: string, stopIds: string[]) => {
-  if (stopIds.length === 0) {
-    return;
-  }
+// Drops the places left without assets, the centre aside, and moves the others' times and centres to their assets.
+const refreshPlaces = async (trx: Transaction<DB>, albumId: string) => {
   await trx
     .deleteFrom('trip_stop')
     .where('albumId', '=', asUuid(albumId))
-    .where('id', 'in', stopIds)
     .where('role', 'is', null)
     .where('isAtCenter', '=', false)
     .where(({ not, exists, selectFrom }) =>
@@ -186,13 +187,24 @@ const dropEmptiedPlaces = async (trx: Transaction<DB>, albumId: string, stopIds:
       ),
     )
     .execute();
-  const kept = await trx.selectFrom('trip_stop').select('id').where('id', 'in', stopIds).execute();
+  const kept = await trx.selectFrom('trip_stop').select('id').where('albumId', '=', asUuid(albumId)).execute();
   await refreshStops(
     trx,
     albumId,
     TripKind.Places,
     kept.map(({ id }) => id),
   );
+};
+
+// The trip's places as they stand, to tell whether mirroring changed them.
+const placesOf = async (trx: Transaction<DB>, albumId: string) => {
+  const rows = await trx
+    .selectFrom('trip_stop')
+    .select(['id', 'latitude', 'longitude', 'localStart', 'localEnd'])
+    .where('albumId', '=', asUuid(albumId))
+    .orderBy('id')
+    .execute();
+  return JSON.stringify(rows);
 };
 
 // The album changed: its cover stays while it is still in the album, else the newest asset takes it.

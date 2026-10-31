@@ -47,21 +47,31 @@ export class TripFavoritesService {
     await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: userId, canCreate: isFavorite } });
   }
 
-  // Adding to the Favorites trip's album stars the asset for its owner, removing unstars it (trips GLOSSARY).
+  // Adding to the Favorites trip's album stars the asset for its owner, removing unstars it (trips GLOSSARY). Mirroring
+  // follows: a removal drops the places it empties, and an asset that a mirroring running before its star took out of
+  // the album comes back.
   @OnEvent({ name: 'AlbumAssetsAdd' })
   async onAlbumAssetsAdd({ albumId, assetIds }: ArgOf<'AlbumAssetsAdd'>) {
     const ownerId = await this.tripFavoritesRepository.getFavoritesOwnerId(albumId);
-    if (ownerId) {
-      await this.assetFavoriteRepository.addAll(ownerId, assetIds);
+    if (!ownerId) {
+      return;
     }
+    await this.assetFavoriteRepository.addAll(ownerId, assetIds);
+    await this.queueMirror(ownerId);
   }
 
   @OnEvent({ name: 'AlbumAssetsRemove' })
   async onAlbumAssetsRemove({ albumId, assetIds }: ArgOf<'AlbumAssetsRemove'>) {
     const ownerId = await this.tripFavoritesRepository.getFavoritesOwnerId(albumId);
-    if (ownerId) {
-      await this.assetFavoriteRepository.removeAll(ownerId, assetIds);
+    if (!ownerId) {
+      return;
     }
+    await this.assetFavoriteRepository.removeAll(ownerId, assetIds);
+    await this.queueMirror(ownerId);
+  }
+
+  private async queueMirror(userId: string) {
+    await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: userId, canCreate: false } });
   }
 
   @OnJob({ name: JobName.TripFavorites, queue: QueueName.BackgroundTask })
