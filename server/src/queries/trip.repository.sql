@@ -56,3 +56,17 @@ from
 where
   "albumId" = $2::uuid
   and "assetId" = $3::uuid
+
+-- TripRepository.updateStop
+begin
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit

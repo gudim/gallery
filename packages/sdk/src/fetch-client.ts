@@ -4933,6 +4933,14 @@ export type TripImportDto = {
         titleSource: string | null;
     }[];
 };
+export type TripStopUpdateDto = {
+    /** Place of the stop, in the same trip; null for none */
+    placeId?: string | null;
+    /** Stop story; blank clears it */
+    story?: string | null;
+    /** Stop title; blank clears it */
+    title?: string | null;
+};
 export type UserGroupMemberResponseDto = {
     /** Avatar color */
     avatarColor?: string;
@@ -11691,6 +11699,23 @@ export function likeAsset({ assetId, id, key, slug }: {
         ...opts,
         method: "PUT"
     }));
+}
+/**
+ * Update a trip stop
+ */
+export function updateStop({ id, stopId, tripStopUpdateDto }: {
+    id: string;
+    stopId: string;
+    tripStopUpdateDto: TripStopUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/stops/${encodeURIComponent(stopId)}`, oazapfts.json({
+        ...opts,
+        method: "PATCH",
+        body: tripStopUpdateDto
+    })));
 }
 /**
  * Get all user groups

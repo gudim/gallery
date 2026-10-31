@@ -29,6 +29,15 @@ const isLiker = (liker: TripLiker | undefined) =>
       ? sql<boolean>`coalesce(bool_or("trip_like"."userId" = ${asUuid(liker.userId)}), false)`
       : sql<boolean>`coalesce(bool_or("trip_like"."viewerKey" = ${liker.viewerKey}), false)`;
 
+export type TripStopChanges = { title?: string | null; story?: string | null; placeId?: string | null };
+
+export enum TripEditResult {
+  Updated = 'updated',
+  TripMissing = 'trip-missing',
+  StopMissing = 'stop-missing',
+  PlaceForeign = 'place-foreign',
+}
+
 export enum TripCreateResult {
   Created = 'created',
   AlbumMissing = 'album-missing',
@@ -174,6 +183,55 @@ export class TripRepository {
   }
 
   /**
+   * Sets a stop's texts and place. Every id must belong to this trip: there are no composite keys to check it (trips
+   * DECISIONS-LOG 2026-10-31). A text set by hand is `manual`, a cleared one has no source. A finish that is the same
+   * place as the start takes the start's title (travel-album decision P20).
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, { title: DummyValue.STRING }] })
+  updateStop(albumId: string, stopId: string, { title, story, placeId }: TripStopChanges): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const stop = await trx
+        .selectFrom('trip_stop')
+        .select('role')
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', '=', asUuid(stopId))
+        .executeTakeFirst();
+      if (!stop) {
+        return TripEditResult.StopMissing;
+      }
+      if (placeId) {
+        const place = await trx
+          .selectFrom('trip_place')
+          .select('id')
+          .where('albumId', '=', asUuid(albumId))
+          .where('id', '=', asUuid(placeId))
+          .executeTakeFirst();
+        if (!place) {
+          return TripEditResult.PlaceForeign;
+        }
+      }
+      await trx
+        .updateTable('trip_stop')
+        .set({
+          ...(title !== undefined && { title, titleSource: title && 'manual' }),
+          ...(story !== undefined && { story, storySource: story && 'manual' }),
+          ...(placeId !== undefined && { placeId }),
+        })
+        .where('id', '=', asUuid(stopId))
+        .execute();
+      if (title !== undefined && stop.role === TripStopRole.Start) {
+        await trx
+          .updateTable('trip_stop')
+          .set({ title, titleSource: title && 'manual' })
+          .where('albumId', '=', asUuid(albumId))
+          .where('role', '=', TripStopRole.Finish)
+          .where('isFinishAtStart', '=', true)
+          .execute();
+      }
+    });
+  }
+
+  /**
    * Writes a new trip in one transaction. A lock on the owner serialises imports, so "the album already has a trip"
    * and "the owner already has a Favorites trip" are checked against committed state.
    */
@@ -229,6 +287,39 @@ export class TripRepository {
     });
   }
 }
+
+/**
+ * Runs one edit of a trip in a transaction that holds the trip row, so edits of one trip queue up, and bumps its
+ * `contentVersion`. A trip whose album is in the trash is missing. `edit` returns why it refused, or nothing.
+ */
+const editTrip = (
+  db: Kysely<DB>,
+  albumId: string,
+  edit: (trx: Transaction<DB>) => Promise<TripEditResult | void>,
+): Promise<TripEditResult> =>
+  db.transaction().execute(async (trx) => {
+    const trip = await trx
+      .selectFrom('trip')
+      .innerJoin('album', 'album.id', 'trip.albumId')
+      .select('trip.albumId')
+      .where('trip.albumId', '=', asUuid(albumId))
+      .where('album.deletedAt', 'is', null)
+      .forUpdate('trip')
+      .executeTakeFirst();
+    if (!trip) {
+      return TripEditResult.TripMissing;
+    }
+    const refused = await edit(trx);
+    if (refused) {
+      return refused;
+    }
+    await trx
+      .updateTable('trip')
+      .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
+      .where('albumId', '=', asUuid(albumId))
+      .execute();
+    return TripEditResult.Updated;
+  });
 
 /** Whether the user already owns a Favorites trip (trips PLAN D15: one per album owner). */
 const hasFavoritesTrip = async (trx: Transaction<DB>, ownerId: string) => {
