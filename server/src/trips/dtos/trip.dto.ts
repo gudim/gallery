@@ -6,6 +6,7 @@ import {
   TripLegStatus,
   TripOverlayKind,
   TripPointSource,
+  TripStationSide,
   TripStopRole,
 } from 'src/trips/enum.js';
 import { latitudeSchema, longitudeSchema } from 'src/validation.js';
@@ -315,10 +316,52 @@ const TripStopParamSchema = z.object({
   stopId: z.uuidv4(),
 });
 
+const TripLegParamSchema = z.object({
+  id: z.uuidv4(),
+  legId: z.uuidv4(),
+});
+
+// Leg editing (travel-album `set_leg_mode`, `set_leg_station`): a trail comes only from an import, so it is not offered.
+const TripLegModeUpdateSchema = z
+  .object({
+    mode: TripLegModeSchema.nullable().describe(
+      'The owner’s mode, kept from now on; null returns to the default by distance',
+    ),
+  })
+  .refine(({ mode }) => mode !== TripLegMode.Trail, { error: 'A trail comes only from an import' })
+  .meta({ id: 'TripLegModeUpdateDto' });
+
+const TripStationSideSchema = z.enum(TripStationSide).describe('End of a train leg').meta({ id: 'TripStationSide' });
+
+const stationFields = {
+  name: z.string().describe('Station name, as OpenStreetMap has it; may be empty'),
+  latitude: latitudeSchema.describe('Station latitude'),
+  longitude: longitudeSchema.describe('Station longitude'),
+};
+
+const TripStationSchema = z
+  .object({ ...stationFields, distance: z.int32().describe('Metres from the stop') })
+  .meta({ id: 'TripStationDto' });
+
+const TripLegStationsSchema = z
+  .object({
+    departure: z.array(TripStationSchema).describe('Stations near the stop the leg leaves, nearest first'),
+    arrival: z.array(TripStationSchema).describe('Stations near the stop the leg reaches, nearest first'),
+  })
+  .meta({ id: 'TripLegStationsDto' });
+
+const TripLegStationUpdateSchema = z
+  .object({ side: TripStationSideSchema, ...stationFields })
+  .meta({ id: 'TripLegStationUpdateDto' });
+
 export class TripImportDto extends createZodDto(TripImportSchema) {}
 export class TripCreateDto extends createZodDto(TripCreateSchema) {}
 export class TripEndDto extends createZodDto(TripEndSchema) {}
 export class TripStopUpdateDto extends createZodDto(TripStopUpdateSchema) {}
 export class TripStopParamDto extends createZodDto(TripStopParamSchema) {}
+export class TripLegParamDto extends createZodDto(TripLegParamSchema) {}
+export class TripLegModeUpdateDto extends createZodDto(TripLegModeUpdateSchema) {}
+export class TripLegStationsDto extends createZodDto(TripLegStationsSchema) {}
+export class TripLegStationUpdateDto extends createZodDto(TripLegStationUpdateSchema) {}
 export class TripResponseDto extends createZodDto(TripResponseSchema) {}
 export class TripLikeDto extends createZodDto(TripLikeSchema) {}

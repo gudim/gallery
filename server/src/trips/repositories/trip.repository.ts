@@ -2,13 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { Insertable, Kysely, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { randomUUID } from 'node:crypto';
+import type { BuiltLeg } from 'src/trips/utils/route-leg.js';
+import type { Station } from 'src/trips/utils/routing.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { AlbumUserRole } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
-import { TripKind, TripPointSource, TripStopRole } from 'src/trips/enum.js';
+import {
+  TripKind,
+  TripLegMode,
+  TripLegStatus,
+  TripPointSource,
+  TripStationSide,
+  TripStopRole,
+} from 'src/trips/enum.js';
 import { TripsDB } from 'src/trips/schema/index.js';
 import { fileAssets, syncLegs } from 'src/trips/utils/filing.js';
-import { pointOf } from 'src/trips/utils/geo.js';
+import { defaultMode, haversineM, pointOf } from 'src/trips/utils/geo.js';
 import { asUuid } from 'src/utils/database.js';
 
 export type TripRows = {
@@ -39,6 +48,10 @@ export enum TripEditResult {
   TripMissing = 'trip-missing',
   StopMissing = 'stop-missing',
   PlaceForeign = 'place-foreign',
+  LegMissing = 'leg-missing',
+  LegNotTrain = 'leg-not-train',
+  LegNotAttention = 'leg-not-attention',
+  NoLegsToRetry = 'no-legs-to-retry',
 }
 
 export enum TripCreateResult {
@@ -527,7 +540,288 @@ export class TripRepository {
       return filing.assets.length;
     });
   }
+
+  /** Whether the trip has legs waiting for their line. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async hasPendingLegs(albumId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('trip_leg')
+      .select('id')
+      .where('albumId', '=', asUuid(albumId))
+      .where('status', '=', TripLegStatus.Pending)
+      .where('mode', '!=', TripLegMode.Trail)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /**
+   * The legs the routing job builds, in trip order: pending, not a trail, both stops with a point, in a trip outside
+   * the trash. Each row is also what the job's write compares against (`writeRoutedLegs`).
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getRoutingLegs(albumId: string) {
+    return this.db
+      .selectFrom('trip_leg')
+      .innerJoin('album', 'album.id', 'trip_leg.albumId')
+      .innerJoin('trip_stop as from_stop', 'from_stop.id', 'trip_leg.fromStopId')
+      .innerJoin('trip_stop as to_stop', 'to_stop.id', 'trip_leg.toStopId')
+      .select([
+        'trip_leg.id',
+        'trip_leg.mode',
+        'trip_leg.isModeManual',
+        ...stationColumns.map((column) => `trip_leg.${column}` as const),
+        'from_stop.latitude as fromLatitude',
+        'from_stop.longitude as fromLongitude',
+        'to_stop.latitude as toLatitude',
+        'to_stop.longitude as toLongitude',
+      ])
+      .where('trip_leg.albumId', '=', asUuid(albumId))
+      .where('album.deletedAt', 'is', null)
+      .where('trip_leg.status', '=', TripLegStatus.Pending)
+      .where('trip_leg.mode', '!=', TripLegMode.Trail)
+      .where('from_stop.latitude', 'is not', null)
+      .where('from_stop.longitude', 'is not', null)
+      .where('to_stop.latitude', 'is not', null)
+      .where('to_stop.longitude', 'is not', null)
+      .orderBy(stopOrder('from_stop'))
+      .orderBy('trip_leg.id')
+      .execute();
+  }
+
+  /**
+   * Writes the lines the routing job built, each only if its leg is as the job read it: still pending, with the same
+   * mode, choice of mode and stations, and both stops still at the points the line was built for. A leg the owner
+   * changed meanwhile stays pending for the job that change queued. Bumps `contentVersion` when a leg was written, and
+   * returns how many were.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, []] })
+  writeRoutedLegs(albumId: string, legs: Array<{ read: RoutingLegRow; built: BuiltLeg }>): Promise<number> {
+    return this.db.transaction().execute(async (trx) => {
+      if (!(await lockTrip(trx, albumId))) {
+        return 0;
+      }
+      let written = 0;
+      for (const { read, built } of legs) {
+        const result = await trx
+          .updateTable('trip_leg')
+          .set({
+            mode: built.mode,
+            status: built.status,
+            polyline: built.polyline,
+            distance: built.distance,
+            duration: built.duration,
+            ...(built.departure && stationValues(TripStationSide.Departure, built.departure)),
+            ...(built.arrival && stationValues(TripStationSide.Arrival, built.arrival)),
+          })
+          .where('trip_leg.id', '=', read.id)
+          .where('trip_leg.albumId', '=', asUuid(albumId))
+          .where('trip_leg.status', '=', TripLegStatus.Pending)
+          .where('trip_leg.mode', '=', read.mode)
+          .where('trip_leg.isModeManual', '=', read.isModeManual)
+          .where((eb) =>
+            eb.and([
+              ...stationColumns.map((column) => eb(`trip_leg.${column}`, 'is not distinct from', read[column])),
+              eb.exists(
+                eb
+                  .selectFrom('trip_stop')
+                  .select('trip_stop.id')
+                  .whereRef('trip_stop.id', '=', 'trip_leg.fromStopId')
+                  .where('trip_stop.latitude', '=', read.fromLatitude)
+                  .where('trip_stop.longitude', '=', read.fromLongitude),
+              ),
+              eb.exists(
+                eb
+                  .selectFrom('trip_stop')
+                  .select('trip_stop.id')
+                  .whereRef('trip_stop.id', '=', 'trip_leg.toStopId')
+                  .where('trip_stop.latitude', '=', read.toLatitude)
+                  .where('trip_stop.longitude', '=', read.toLongitude),
+              ),
+            ]),
+          )
+          .executeTakeFirst();
+        written += Number(result.numUpdatedRows);
+      }
+      if (written > 0) {
+        await bumpContentVersion(trx, albumId);
+      }
+      return written;
+    });
+  }
+
+  /** A leg of this trip with its mode and both stops' points; nothing when the leg belongs to another trip. */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  getLegEnds(albumId: string, legId: string) {
+    return this.db
+      .selectFrom('trip_leg')
+      .innerJoin('trip_stop as from_stop', 'from_stop.id', 'trip_leg.fromStopId')
+      .innerJoin('trip_stop as to_stop', 'to_stop.id', 'trip_leg.toStopId')
+      .select([
+        'trip_leg.mode',
+        'from_stop.latitude as fromLatitude',
+        'from_stop.longitude as fromLongitude',
+        'to_stop.latitude as toLatitude',
+        'to_stop.longitude as toLongitude',
+      ])
+      .where('trip_leg.albumId', '=', asUuid(albumId))
+      .where('trip_leg.id', '=', asUuid(legId))
+      .executeTakeFirst();
+  }
+
+  /**
+   * The owner's mode for a leg (travel-album `set_leg_mode`): kept by every later build and by filing. `null` gives the
+   * leg back to the default by distance. Either way the leg is built again from scratch, its stations forgotten.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, TripLegMode.Train] })
+  setLegMode(albumId: string, legId: string, mode: TripLegMode | null): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .innerJoin('trip_stop as from_stop', 'from_stop.id', 'trip_leg.fromStopId')
+        .innerJoin('trip_stop as to_stop', 'to_stop.id', 'trip_leg.toStopId')
+        .select([
+          'from_stop.latitude as fromLatitude',
+          'from_stop.longitude as fromLongitude',
+          'to_stop.latitude as toLatitude',
+          'to_stop.longitude as toLongitude',
+        ])
+        .where('trip_leg.albumId', '=', asUuid(albumId))
+        .where('trip_leg.id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      await trx
+        .updateTable('trip_leg')
+        .set({
+          mode: mode ?? automaticMode(leg),
+          isModeManual: mode !== null,
+          ...unbuilt,
+          ...noStations,
+        })
+        .where('id', '=', asUuid(legId))
+        .execute();
+    });
+  }
+
+  /**
+   * The owner's station at one end of a train leg (travel-album `set_leg_station`); the leg is built again. The
+   * caller checks that it is one of the stations offered at that end.
+   */
+  @GenerateSql({
+    params: [
+      DummyValue.UUID,
+      DummyValue.UUID,
+      TripStationSide.Departure,
+      { name: DummyValue.STRING, latitude: 54.68, longitude: 25.28 },
+    ],
+  })
+  setLegStation(albumId: string, legId: string, side: TripStationSide, station: Station): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .select('mode')
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      if (leg.mode !== TripLegMode.Train) {
+        return TripEditResult.LegNotTrain;
+      }
+      await trx
+        .updateTable('trip_leg')
+        .set({ ...stationValues(side, station), ...unbuilt })
+        .where('id', '=', asUuid(legId))
+        .execute();
+    });
+  }
+
+  /** A leg that needs attention goes back to the routing queue as it is (travel-album `retry_leg`). */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  retryLeg(albumId: string, legId: string): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const leg = await trx
+        .selectFrom('trip_leg')
+        .select('status')
+        .where('albumId', '=', asUuid(albumId))
+        .where('id', '=', asUuid(legId))
+        .executeTakeFirst();
+      if (!leg) {
+        return TripEditResult.LegMissing;
+      }
+      if (leg.status !== TripLegStatus.Attention) {
+        return TripEditResult.LegNotAttention;
+      }
+      await trx.updateTable('trip_leg').set(unbuilt).where('id', '=', asUuid(legId)).execute();
+    });
+  }
+
+  /** Every leg of the trip that needs attention goes back to the routing queue (travel-album `retry_legs`). */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  retryLegs(albumId: string): Promise<TripEditResult> {
+    return editTrip(this.db, albumId, async (trx) => {
+      const { numUpdatedRows } = await trx
+        .updateTable('trip_leg')
+        .set(unbuilt)
+        .where('albumId', '=', asUuid(albumId))
+        .where('status', '=', TripLegStatus.Attention)
+        .executeTakeFirst();
+      if (numUpdatedRows === 0n) {
+        return TripEditResult.NoLegsToRetry;
+      }
+    });
+  }
 }
+
+const stationColumns = [
+  'departureName',
+  'departureLatitude',
+  'departureLongitude',
+  'arrivalName',
+  'arrivalLatitude',
+  'arrivalLongitude',
+] as const;
+
+export type RoutingLegRow = Awaited<ReturnType<TripRepository['getRoutingLegs']>>[number];
+
+const stationValues = (side: TripStationSide, { name, latitude, longitude }: Station) =>
+  side === TripStationSide.Departure
+    ? { departureName: name, departureLatitude: latitude, departureLongitude: longitude }
+    : { arrivalName: name, arrivalLatitude: latitude, arrivalLongitude: longitude };
+
+// A leg waiting for its line: what the routing job builds.
+const unbuilt = { status: TripLegStatus.Pending, polyline: null, distance: null, duration: null };
+const noStations = Object.fromEntries(stationColumns.map((column) => [column, null])) as Record<
+  (typeof stationColumns)[number],
+  null
+>;
+
+// The mode a leg without the owner's choice has until it is built: by its straight length, by car without points.
+const automaticMode = (leg: Record<'fromLatitude' | 'fromLongitude' | 'toLatitude' | 'toLongitude', number | null>) => {
+  const from = pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude });
+  const to = pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude });
+  return from && to ? defaultMode(haversineM(from, to)) : TripLegMode.Driving;
+};
+
+// Holds the trip row, so writes to one trip queue up. Nothing when the trip is missing or its album is in the trash.
+const lockTrip = (trx: Transaction<DB>, albumId: string) =>
+  trx
+    .selectFrom('trip')
+    .innerJoin('album', 'album.id', 'trip.albumId')
+    .select('trip.albumId')
+    .where('trip.albumId', '=', asUuid(albumId))
+    .where('album.deletedAt', 'is', null)
+    .forUpdate('trip')
+    .executeTakeFirst();
+
+const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
+  trx
+    .updateTable('trip')
+    .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
+    .where('albumId', '=', asUuid(albumId))
+    .execute();
 
 /**
  * Runs one edit of a trip in a transaction that holds the trip row, so edits of one trip queue up, and bumps its
@@ -539,14 +833,7 @@ const editTrip = (
   edit: (trx: Transaction<DB>) => Promise<TripEditResult | void>,
 ): Promise<TripEditResult> =>
   db.transaction().execute(async (trx) => {
-    const trip = await trx
-      .selectFrom('trip')
-      .innerJoin('album', 'album.id', 'trip.albumId')
-      .select('trip.albumId')
-      .where('trip.albumId', '=', asUuid(albumId))
-      .where('album.deletedAt', 'is', null)
-      .forUpdate('trip')
-      .executeTakeFirst();
+    const trip = await lockTrip(trx, albumId);
     if (!trip) {
       return TripEditResult.TripMissing;
     }
@@ -554,11 +841,7 @@ const editTrip = (
     if (refused) {
       return refused;
     }
-    await trx
-      .updateTable('trip')
-      .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
-      .where('albumId', '=', asUuid(albumId))
-      .execute();
+    await bumpContentVersion(trx, albumId);
     return TripEditResult.Updated;
   });
 

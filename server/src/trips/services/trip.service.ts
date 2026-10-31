@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -17,13 +18,42 @@ import {
   TripCreateDto,
   TripEndDto,
   TripImportDto,
+  TripLegModeUpdateDto,
+  TripLegStationUpdateDto,
+  TripLegStationsDto,
   TripLikeDto,
   TripResponseDto,
   TripStopUpdateDto,
 } from 'src/trips/dtos/trip.dto.js';
-import { TripKind, TripPointSource, TripStopRole } from 'src/trips/enum.js';
-import { TripCreateResult, TripEditResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
+import {
+  TripKind,
+  TripLegMode,
+  TripLegStatus,
+  TripPointSource,
+  TripStationSide,
+  TripStopRole,
+} from 'src/trips/enum.js';
+import { TripGeoError, TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
+import {
+  RoutingLegRow,
+  TripCreateResult,
+  TripEditResult,
+  TripLiker,
+  TripRepository,
+} from 'src/trips/repositories/trip.repository.js';
+import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
+import { type LegRouter, type RoutingLeg, buildLeg } from 'src/trips/utils/route-leg.js';
+import {
+  type StationCandidate,
+  brouterRequest,
+  isOffered,
+  parseBRouter,
+  parseStations,
+  parseValhalla,
+  stationsRequest,
+  valhallaRequest,
+} from 'src/trips/utils/routing.js';
 import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
@@ -36,7 +66,14 @@ export class TripService {
     private accessRepository: AccessRepository,
     private jobRepository: JobRepository,
     private tripRepository: TripRepository,
+    private tripGeoRepository: TripGeoRepository,
   ) {}
+
+  private readonly router: LegRouter = {
+    valhalla: (costing, a, b) => this.tripGeoRepository.fetchJson(valhallaRequest(costing, a, b), parseValhalla),
+    brouter: (profile, a, b) => this.tripGeoRepository.fetchJson(brouterRequest(profile, a, b), parseBRouter),
+    stations: (point) => this.tripGeoRepository.fetchJson(stationsRequest(point), parseStations(point)),
+  };
 
   // Assets added to a trip's album, by anyone and from any client, are filed into stops (trips PLAN D12).
   @OnEvent({ name: 'AlbumUpdate' })
@@ -55,7 +92,30 @@ export class TripService {
 
   @OnJob({ name: JobName.TripFile, queue: QueueName.BackgroundTask })
   async handleFile({ id }: JobOf<JobName.TripFile>): Promise<JobStatus> {
-    await this.tripRepository.fileNewAssets(id);
+    const filed = await this.tripRepository.fileNewAssets(id);
+    // A new stop of a route splits a leg into pending ones.
+    if (filed > 0 && (await this.tripRepository.hasPendingLegs(id))) {
+      await this.queueRouting(id);
+    }
+    return JobStatus.Success;
+  }
+
+  /**
+   * Builds the line of every pending leg (trips PLAN §2.5, travel-album `route_legs`). The services are asked outside
+   * any transaction, which may take minutes at one request per second per host; each line is then written only if
+   * its leg did not change meanwhile.
+   */
+  @OnJob({ name: JobName.TripRouteLegs, queue: QueueName.BackgroundTask })
+  async handleRouteLegs({ id }: JobOf<JobName.TripRouteLegs>): Promise<JobStatus> {
+    const legs = await this.tripRepository.getRoutingLegs(id);
+    if (legs.length === 0) {
+      return JobStatus.Skipped;
+    }
+    const built = [];
+    for (const read of legs) {
+      built.push({ read, built: await buildLeg(routingLeg(read), this.router) });
+    }
+    await this.tripRepository.writeRoutedLegs(id, built);
     return JobStatus.Success;
   }
 
@@ -137,7 +197,11 @@ export class TripService {
         generatedCaption === null ? [] : [{ assetId, text: generatedCaption }],
       ),
     });
-    return this.created(auth, albumId, result);
+    const trip = await this.created(auth, albumId, result);
+    if (dto.legs.some(({ mode, status }) => status === TripLegStatus.Pending && mode !== TripLegMode.Trail)) {
+      await this.queueRouting(albumId);
+    }
+    return trip;
   }
 
   /**
@@ -162,6 +226,10 @@ export class TripService {
       localEnd: end,
     }));
     const route = [startStop, ...stops, finishStop].filter((stop) => !!stop);
+    const legs =
+      kind === TripKind.Route
+        ? routeLegs(route).map(({ from, to, mode }) => ({ albumId, fromStopId: from.id, toStopId: to.id, mode }))
+        : [];
     const result = await this.tripRepository.create(auth.user.id, {
       trip: { albumId, kind, contentVersion: 1 },
       places: [],
@@ -174,34 +242,117 @@ export class TripService {
         longitude: point?.longitude ?? null,
         pointSource: point && TripPointSource.Inferred,
       })),
-      legs:
-        kind === TripKind.Route
-          ? routeLegs(route).map(({ from, to, mode }) => ({ albumId, fromStopId: from.id, toStopId: to.id, mode }))
-          : [],
+      legs,
       overlays: [],
       likes: [],
       generatedCaptions: [],
     });
-    return this.created(auth, albumId, result);
+    const trip = await this.created(auth, albumId, result);
+    if (legs.length > 0) {
+      await this.queueRouting(albumId);
+    }
+    return trip;
   }
 
   /** Sets a stop's title, story or place. The album's owner and editors edit (trips PLAN D7). */
   async updateStop(auth: AuthDto, albumId: string, stopId: string, dto: TripStopUpdateDto): Promise<TripResponseDto> {
     await this.requireEdit(auth, albumId);
-    switch (await this.tripRepository.updateStop(albumId, stopId, dto)) {
-      case TripEditResult.TripMissing: {
-        throw new NotFoundException('Trip not found');
-      }
-      case TripEditResult.StopMissing: {
-        throw new NotFoundException('Stop not found in the trip');
-      }
-      case TripEditResult.PlaceForeign: {
-        throw new BadRequestException('The place is not in the trip');
-      }
-      case TripEditResult.Updated: {
-        return this.read(auth, albumId);
-      }
+    const result = await this.tripRepository.updateStop(albumId, stopId, dto);
+    if (result !== TripEditResult.Updated) {
+      throw refusal(result);
     }
+    return this.read(auth, albumId);
+  }
+
+  /**
+   * Sets a leg's mode, or gives it back to the default by distance (`mode: null`). The leg is built again, its train
+   * stations forgotten. The album's owner and editors edit.
+   */
+  async setLegMode(auth: AuthDto, albumId: string, legId: string, dto: TripLegModeUpdateDto): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.legEdited(auth, albumId, await this.tripRepository.setLegMode(albumId, legId, dto.mode));
+  }
+
+  /** Up to five stations near each end of a leg, nearest first (travel-album `leg_stations`). Editors only. */
+  async getLegStations(auth: AuthDto, albumId: string, legId: string): Promise<TripLegStationsDto> {
+    await this.requireEdit(auth, albumId);
+    const leg = await this.requireLeg(albumId, legId);
+    return {
+      departure: await this.stationsNear(pointOf({ latitude: leg.fromLatitude, longitude: leg.fromLongitude })),
+      arrival: await this.stationsNear(pointOf({ latitude: leg.toLatitude, longitude: leg.toLongitude })),
+    };
+  }
+
+  /**
+   * Picks the station at one end of a train leg; the leg is built again. Only a station `getLegStations` offers at
+   * that end is taken, so the name is OpenStreetMap's and not any text (travel-album `set_leg_station`).
+   */
+  async setLegStation(
+    auth: AuthDto,
+    albumId: string,
+    legId: string,
+    { side, ...station }: TripLegStationUpdateDto,
+  ): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    const leg = await this.requireLeg(albumId, legId);
+    if (leg.mode !== TripLegMode.Train) {
+      throw refusal(TripEditResult.LegNotTrain);
+    }
+    const end =
+      side === TripStationSide.Departure
+        ? { latitude: leg.fromLatitude, longitude: leg.fromLongitude }
+        : { latitude: leg.toLatitude, longitude: leg.toLongitude };
+    if (!isOffered(station, await this.stationsNear(pointOf(end)))) {
+      throw new BadRequestException('The station is not one offered at that end of the leg');
+    }
+    return this.legEdited(auth, albumId, await this.tripRepository.setLegStation(albumId, legId, side, station));
+  }
+
+  /** Sends a leg that needs attention back to routing, mode unchanged. */
+  async retryLeg(auth: AuthDto, albumId: string, legId: string): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.legEdited(auth, albumId, await this.tripRepository.retryLeg(albumId, legId));
+  }
+
+  /** Sends every leg of the trip that needs attention back to routing. */
+  async retryLegs(auth: AuthDto, albumId: string): Promise<TripResponseDto> {
+    await this.requireEdit(auth, albumId);
+    return this.legEdited(auth, albumId, await this.tripRepository.retryLegs(albumId));
+  }
+
+  private async legEdited(auth: AuthDto, albumId: string, result: TripEditResult): Promise<TripResponseDto> {
+    if (result !== TripEditResult.Updated) {
+      throw refusal(result);
+    }
+    await this.queueRouting(albumId);
+    return this.read(auth, albumId);
+  }
+
+  private async requireLeg(albumId: string, legId: string) {
+    const leg = await this.tripRepository.getLegEnds(albumId, legId);
+    if (!leg) {
+      throw refusal(TripEditResult.LegMissing);
+    }
+    return leg;
+  }
+
+  // A stop without a point has no stations near it. A service that does not answer is 502, as in travel-album.
+  private async stationsNear(point: LatLng | null): Promise<StationCandidate[]> {
+    if (!point) {
+      return [];
+    }
+    try {
+      return await this.router.stations(point);
+    } catch (error) {
+      if (error instanceof TripGeoError) {
+        throw new BadGatewayException('The station search did not answer; try again later');
+      }
+      throw error;
+    }
+  }
+
+  private async queueRouting(albumId: string) {
+    await this.jobRepository.queue({ name: JobName.TripRouteLegs, data: { id: albumId } });
   }
 
   private async created(auth: AuthDto, albumId: string, result: TripCreateResult): Promise<TripResponseDto> {
@@ -272,6 +423,46 @@ export class TripService {
     return mapTrip(trip, { showAssetPoints: auth.sharedLink?.showExif ?? true });
   }
 }
+
+// The HTTP answer to an edit the repository refused.
+const refusal = (result: Exclude<TripEditResult, TripEditResult.Updated>) => {
+  switch (result) {
+    case TripEditResult.TripMissing: {
+      return new NotFoundException('Trip not found');
+    }
+    case TripEditResult.StopMissing: {
+      return new NotFoundException('Stop not found in the trip');
+    }
+    case TripEditResult.LegMissing: {
+      return new NotFoundException('Leg not found in the trip');
+    }
+    case TripEditResult.PlaceForeign: {
+      return new BadRequestException('The place is not in the trip');
+    }
+    case TripEditResult.LegNotTrain: {
+      return new BadRequestException('Only a train leg has stations');
+    }
+    case TripEditResult.LegNotAttention: {
+      return new BadRequestException('Only a leg that needs attention is retried');
+    }
+    case TripEditResult.NoLegsToRetry: {
+      return new BadRequestException('No leg of the trip needs attention');
+    }
+  }
+};
+
+const stationOf = (name: string | null, latitude: number | null, longitude: number | null) =>
+  latitude === null || longitude === null ? null : { name: name ?? '', latitude, longitude };
+
+// A pending leg as `buildLeg` takes it. The routing query leaves out legs whose stops have no point.
+const routingLeg = (row: RoutingLegRow): RoutingLeg => ({
+  mode: row.mode,
+  isModeManual: row.isModeManual,
+  from: { latitude: row.fromLatitude!, longitude: row.fromLongitude! },
+  to: { latitude: row.toLatitude!, longitude: row.toLongitude! },
+  departure: stationOf(row.departureName, row.departureLatitude, row.departureLongitude),
+  arrival: stationOf(row.arrivalName, row.arrivalLatitude, row.arrivalLongitude),
+});
 
 // A start or finish of a route: a stop without assets, named by its coordinates until the owner names it.
 const endStop = (albumId: string, role: TripStopRole, { latitude, longitude, title }: TripEndDto) => ({

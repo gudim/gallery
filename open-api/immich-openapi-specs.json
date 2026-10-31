@@ -26092,6 +26092,351 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/legs/retry": {
+      "post": {
+        "description": "Routes every leg of the trip that needs attention again. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "retryLegs",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retry trip legs",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/legs/{legId}/mode": {
+      "put": {
+        "description": "Sets how a leg was travelled; the mode is kept from then on. A null mode gives the leg back to the default by distance. The leg is routed again, and a train leg forgets its stations. The album owner and editors edit the trip; a viewer gets 403. Returns the whole trip.",
+        "operationId": "setLegMode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "legId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripLegModeUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Set a trip leg mode",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/legs/{legId}/retry": {
+      "post": {
+        "description": "Routes a leg that needs attention again, with its mode unchanged. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "retryLeg",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "legId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retry a trip leg",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/legs/{legId}/station": {
+      "put": {
+        "description": "Picks the departure or arrival station of a train leg among those the station list offers at that end; the leg is routed again. The album owner and editors edit the trip. Returns the whole trip.",
+        "operationId": "setLegStation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "legId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripLegStationUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Set a trip leg station",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/legs/{legId}/stations": {
+      "get": {
+        "description": "Lists up to five railway stations within 3 km of each end of a leg, nearest first, from OpenStreetMap. Responds 502 when the station search does not answer. The album owner and editors only.",
+        "operationId": "getLegStations",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "legId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripLegStationsDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "List stations of a trip leg",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/likes/{assetId}": {
       "delete": {
         "description": "Takes back the caller’s like of an asset in a trip. Returns the asset’s likes.",
@@ -35352,7 +35697,8 @@
           "AssetAnalyzeQualityQueueAll",
           "AssetAnalyzeQuality",
           "TripFile",
-          "TripFileSweep"
+          "TripFileSweep",
+          "TripRouteLegs"
         ],
         "type": "string"
       },
@@ -49437,6 +49783,78 @@
         ],
         "type": "string"
       },
+      "TripLegModeUpdateDto": {
+        "properties": {
+          "mode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripLegMode"
+              }
+            ],
+            "description": "The owner’s mode, kept from now on; null returns to the default by distance",
+            "nullable": true
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "TripLegStationUpdateDto": {
+        "properties": {
+          "latitude": {
+            "description": "Station latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Station longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
+          "name": {
+            "description": "Station name, as OpenStreetMap has it; may be empty",
+            "type": "string"
+          },
+          "side": {
+            "$ref": "#/components/schemas/TripStationSide"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "name",
+          "side"
+        ],
+        "type": "object"
+      },
+      "TripLegStationsDto": {
+        "properties": {
+          "arrival": {
+            "description": "Stations near the stop the leg reaches, nearest first",
+            "items": {
+              "$ref": "#/components/schemas/TripStationDto"
+            },
+            "type": "array"
+          },
+          "departure": {
+            "description": "Stations near the stop the leg leaves, nearest first",
+            "items": {
+              "$ref": "#/components/schemas/TripStationDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "arrival",
+          "departure"
+        ],
+        "type": "object"
+      },
       "TripLegStatus": {
         "description": "Leg status",
         "enum": [
@@ -49632,6 +50050,49 @@
           "stops"
         ],
         "type": "object"
+      },
+      "TripStationDto": {
+        "properties": {
+          "distance": {
+            "description": "Metres from the stop",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "latitude": {
+            "description": "Station latitude",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Station longitude",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
+          "name": {
+            "description": "Station name, as OpenStreetMap has it; may be empty",
+            "type": "string"
+          }
+        },
+        "required": [
+          "distance",
+          "latitude",
+          "longitude",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TripStationSide": {
+        "description": "End of a train leg",
+        "enum": [
+          "departure",
+          "arrival"
+        ],
+        "type": "string"
       },
       "TripStopDto": {
         "properties": {

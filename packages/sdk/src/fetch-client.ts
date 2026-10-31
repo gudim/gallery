@@ -4952,6 +4952,35 @@ export type TripImportDto = {
         titleSource: string | null;
     }[];
 };
+export type TripLegModeUpdateDto = {
+    /** The owner’s mode, kept from now on; null returns to the default by distance */
+    mode: (TripLegMode) | null;
+};
+export type TripLegStationUpdateDto = {
+    /** Station latitude */
+    latitude: number;
+    /** Station longitude */
+    longitude: number;
+    /** Station name, as OpenStreetMap has it; may be empty */
+    name: string;
+    side: TripStationSide;
+};
+export type TripStationDto = {
+    /** Metres from the stop */
+    distance: number;
+    /** Station latitude */
+    latitude: number;
+    /** Station longitude */
+    longitude: number;
+    /** Station name, as OpenStreetMap has it; may be empty */
+    name: string;
+};
+export type TripLegStationsDto = {
+    /** Stations near the stop the leg reaches, nearest first */
+    arrival: TripStationDto[];
+    /** Stations near the stop the leg leaves, nearest first */
+    departure: TripStationDto[];
+};
 export type TripStopUpdateDto = {
     /** Place of the stop, in the same trip; null for none */
     placeId?: string | null;
@@ -11695,6 +11724,83 @@ export function importTrip({ id, tripImportDto }: {
     })));
 }
 /**
+ * Retry trip legs
+ */
+export function retryLegs({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/legs/retry`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
+ * Set a trip leg mode
+ */
+export function setLegMode({ id, legId, tripLegModeUpdateDto }: {
+    id: string;
+    legId: string;
+    tripLegModeUpdateDto: TripLegModeUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/legs/${encodeURIComponent(legId)}/mode`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripLegModeUpdateDto
+    })));
+}
+/**
+ * Retry a trip leg
+ */
+export function retryLeg({ id, legId }: {
+    id: string;
+    legId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/legs/${encodeURIComponent(legId)}/retry`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
+ * Set a trip leg station
+ */
+export function setLegStation({ id, legId, tripLegStationUpdateDto }: {
+    id: string;
+    legId: string;
+    tripLegStationUpdateDto: TripLegStationUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripResponseDto;
+    }>(`/trips/${encodeURIComponent(id)}/legs/${encodeURIComponent(legId)}/station`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripLegStationUpdateDto
+    })));
+}
+/**
+ * List stations of a trip leg
+ */
+export function getLegStations({ id, legId }: {
+    id: string;
+    legId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripLegStationsDto;
+    }>(`/trips/${encodeURIComponent(id)}/legs/${encodeURIComponent(legId)}/stations`, {
+        ...opts
+    }));
+}
+/**
  * Unlike an asset in a trip
  */
 export function unlikeAsset({ assetId, id, key, slug }: {
@@ -12868,7 +12974,8 @@ export enum JobName {
     AssetAnalyzeQualityQueueAll = "AssetAnalyzeQualityQueueAll",
     AssetAnalyzeQuality = "AssetAnalyzeQuality",
     TripFile = "TripFile",
-    TripFileSweep = "TripFileSweep"
+    TripFileSweep = "TripFileSweep",
+    TripRouteLegs = "TripRouteLegs"
 }
 export enum QueueJobStatus {
     Active = "active",
@@ -13134,6 +13241,10 @@ export enum TripOverlayKind {
 export enum TripStopRole {
     Start = "start",
     Finish = "finish"
+}
+export enum TripStationSide {
+    Departure = "departure",
+    Arrival = "arrival"
 }
 export enum WorkflowResult {
     Completed = "completed",

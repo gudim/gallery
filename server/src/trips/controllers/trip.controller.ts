@@ -11,6 +11,10 @@ import { Auth, Authenticated, GetLoginDetails } from 'src/middleware/auth.guard.
 import {
   TripCreateDto,
   TripImportDto,
+  TripLegModeUpdateDto,
+  TripLegParamDto,
+  TripLegStationUpdateDto,
+  TripLegStationsDto,
   TripLikeDto,
   TripResponseDto,
   TripStopParamDto,
@@ -132,5 +136,73 @@ export class TripController {
     @Body() dto: TripStopUpdateDto,
   ): Promise<TripResponseDto> {
     return this.service.updateStop(auth, id, stopId, dto);
+  }
+
+  @Put(':id/legs/:legId/mode')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Set a trip leg mode',
+    description:
+      'Sets how a leg was travelled; the mode is kept from then on. A null mode gives the leg back to the default by distance. The leg is routed again, and a train leg forgets its stations. The album owner and editors edit the trip; a viewer gets 403. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setLegMode(
+    @Auth() auth: AuthDto,
+    @Param() { id, legId }: TripLegParamDto,
+    @Body() dto: TripLegModeUpdateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.setLegMode(auth, id, legId, dto);
+  }
+
+  @Get(':id/legs/:legId/stations')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'List stations of a trip leg',
+    description:
+      'Lists up to five railway stations within 3 km of each end of a leg, nearest first, from OpenStreetMap. Responds 502 when the station search does not answer. The album owner and editors only.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  getLegStations(@Auth() auth: AuthDto, @Param() { id, legId }: TripLegParamDto): Promise<TripLegStationsDto> {
+    return this.service.getLegStations(auth, id, legId);
+  }
+
+  @Put(':id/legs/:legId/station')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Set a trip leg station',
+    description:
+      'Picks the departure or arrival station of a train leg among those the station list offers at that end; the leg is routed again. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  setLegStation(
+    @Auth() auth: AuthDto,
+    @Param() { id, legId }: TripLegParamDto,
+    @Body() dto: TripLegStationUpdateDto,
+  ): Promise<TripResponseDto> {
+    return this.service.setLegStation(auth, id, legId, dto);
+  }
+
+  @Post(':id/legs/:legId/retry')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Retry a trip leg',
+    description:
+      'Routes a leg that needs attention again, with its mode unchanged. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  retryLeg(@Auth() auth: AuthDto, @Param() { id, legId }: TripLegParamDto): Promise<TripResponseDto> {
+    return this.service.retryLeg(auth, id, legId);
+  }
+
+  @Post(':id/legs/retry')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Retry trip legs',
+    description:
+      'Routes every leg of the trip that needs attention again. The album owner and editors edit the trip. Returns the whole trip.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  retryLegs(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<TripResponseDto> {
+    return this.service.retryLegs(auth, id);
   }
 }
