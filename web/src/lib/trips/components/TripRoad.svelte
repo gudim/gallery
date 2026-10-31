@@ -407,7 +407,8 @@
       sans-serif;
     background: var(--trip-bg);
     min-height: 100dvh;
-    overflow-x: hidden;
+    /* clip, not hidden: hidden would make this a scroll container and unstick the row of views */
+    overflow-x: clip;
   }
   .head {
     padding: 22px 22px 4px;
