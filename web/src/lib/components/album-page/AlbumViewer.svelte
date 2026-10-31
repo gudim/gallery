@@ -1,6 +1,6 @@
 <script lang="ts">
   import { shortcut } from '$lib/actions/shortcut';
-  import AlbumMap from '$lib/components/album-page/AlbumMap.svelte';
+  import TripMapButton from '$lib/trips/components/TripMapButton.svelte';
   import DownloadAction from '$lib/components/timeline/actions/DownloadAction.svelte';
   import SelectAllAssets from '$lib/components/timeline/actions/SelectAllAction.svelte';
   import AssetSelectControlBar from '$lib/components/timeline/AssetSelectControlBar.svelte';
@@ -145,9 +145,7 @@
             icon={mdiDownload}
           />
         {/if}
-        {#if sharedLink.showMetadata && featureFlagsManager.value.map}
-          <AlbumMap {album} />
-        {/if}
+        <TripMapButton {album} showAlbumMap={sharedLink.showMetadata && featureFlagsManager.value.map} />
         <ThemeButton />
       {/snippet}
     </ControlAppBar>

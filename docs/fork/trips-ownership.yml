@@ -33,6 +33,8 @@ fork_surface:
     web:
       - web/src/lib/trips/**
       - web/src/routes/(user)/trips/**
+      - web/src/routes/(user)/share/[key]/trip/**
+      - web/src/routes/(user)/s/[slug]/trip/**
     database:
       - server/src/schema/migrations-trips/**
     ci:
@@ -55,6 +57,8 @@ features:
       - server/test/medium/specs/trips/**
       - server/src/queries/trip*.sql
       - web/src/routes/(user)/trips/**
+      - web/src/routes/(user)/share/[key]/trip/**
+      - web/src/routes/(user)/s/[slug]/trip/**
     # Gallery files that carry one trips hook each; keep every hunk minimal.
     upstream_extension_paths:
       - server/src/schema/gallery-migration-ledger.ts
@@ -74,9 +78,10 @@ features:
       - server/src/services/cli.service.spec.ts
       - server/src/controllers/index.spec.ts
       - server/test/medium/specs/services/database-migration.service.spec.ts
-      # web: the shared link and album pages open the trip viewer
-      - web/src/lib/components/pages/SharedLinkPage.svelte
+      # web: the album's map button opens the trip, and Gallery's map takes the trip's layers
       - web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte
+      - web/src/lib/components/album-page/AlbumViewer.svelte
+      - web/src/lib/components/shared-components/map/Map.svelte
       - AGENTS.md
       # trip strings under the `trips_` prefix: en plus the nine maintained locales
       - i18n/gallery/en.json

@@ -2,14 +2,12 @@
 
 ## Stage 2.3: guest trip viewer (branch `trips-3`, from `trips-all`): open
 
-The viewer is in `web/src/lib/trips/`; the shared-link page opens it for an album with a trip, signed-in users at `/trips/{albumId}`. Likes: `PUT`/`DELETE /trips/{id}/likes/{assetId}`. Checked against the dev Gallery of stage 2.2 running the server built from `trips-3` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`, the way travel-album's reference test measures.
+Revised by the owner on 2026-10-31 (PLAN §2.3): the trip is built into Gallery's map and design. The album's map button opens the trip page: Gallery's map with the route and the stops as Gallery's markers, a panel of stops with the legs between them, a stop's assets in Gallery's timeline; on a phone also the road. Likes: `PUT`/`DELETE /trips/{id}/likes/{assetId}`. Checked against the dev Gallery of stage 2.2 running the server built from `trips-3` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`.
 
-- [x] On migrated `birzhay-2026`, the reference numbers match (`tests/e2e/reference/birzhay-2026.json`), in both themes:
-  - 1440 px: 10 stop markers, 9 lines, 3 mode avatars, stats 79 · 3 · 8 · 1 · 487, range "8 августа — 8 августа 2026 · 1 день в дороге", the same ten stops in the list, 1 day.
-  - 390 px: 8 stations, 1 day badge, "1 день·8 остановок·79 кадров·487 км", road 2845 px high.
-- [ ] The owner has seen 390 and 1440 px screenshots, in both themes, next to travel-album's.
+- [x] On migrated `birzhay-2026`, the reference data match, in both themes: 10 stop markers (8 stops with assets as Gallery markers, the start and finish as circles), 9 lines, "79 кадров · 3 видео · 8 остановок · 1 день · 487 км", "8 августа — 8 августа 2026 · 1 день в дороге", the same ten stops in order, 1 day; the road has 8 stations and one day badge.
+- [ ] The owner has seen 390 and 1440 px screenshots, in both themes, next to Gallery's own map and album pages.
 
-Also checked: the lightbox pages the whole trip and keeps the opened stop when it closes; a like counts once per browser and goes back on unlike; Grid shows 79 assets, Photos 8 sections; `?album` opens Gallery's album view; Places and Plain trips (made on the dev Gallery from birzhay's assets) render on both widths. Web unit suite green (415 files, 6690 tests).
+Also checked: a guest gets the map button on the shared album and the trip through `/s/birzhay-2026/trip`; a stop opens its assets in the timeline and the lightbox; a like counts once per browser; Places and Plain trips (made on the dev Gallery from birzhay's assets) render. Web unit suite green (415 files, 6690 tests).
 
 ## Stage 2.2: migration from travel-album (branch `trips-2`, from `trips-all`): closed 2026-10-31
 

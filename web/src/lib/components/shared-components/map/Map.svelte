@@ -70,6 +70,8 @@
     showSimpleControls?: boolean;
     autoFitBounds?: boolean;
     spaceId?: string;
+    /** Extra layers inside the map, e.g. a trip's route (trips PLAN §2.3) */
+    layers?: import('svelte').Snippet<[{ map: Map }]>;
   }
 
   let {
@@ -93,6 +95,7 @@
     showSimpleControls = true,
     autoFitBounds = true,
     spaceId,
+    layers,
   }: Props = $props();
 
   // Calculate initial bounds from markers once during initialization
@@ -504,6 +507,7 @@
           {/snippet}
         </MarkerLayer>
       </GeoJSON>
+      {@render layers?.({ map })}
     {/snippet}
   </MapLibre>
 
