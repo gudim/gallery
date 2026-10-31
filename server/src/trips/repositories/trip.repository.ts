@@ -337,7 +337,10 @@ export class TripRepository {
     return !!row;
   }
 
-  /** Trips, outside the trash, with album assets waiting to be filed. */
+  /**
+   * Trips, outside the trash, with album assets waiting to be filed, or whose local time changed since the trip placed
+   * them (what `TripEditorRepository.retime` follows), so a missed `AssetMetadataExtracted` is caught up.
+   */
   @GenerateSql()
   async getAlbumIdsToFile(): Promise<string[]> {
     const rows = await this.db
@@ -360,7 +363,15 @@ export class TripRepository {
             .whereRef('album_asset.albumId', '=', 'trip.albumId')
             .where('asset.deletedAt', 'is', null)
             .where('asset_job_status.metadataExtractedAt', 'is not', null)
-            .where('trip_asset.assetId', 'is', null),
+            .where((eb) =>
+              eb.or([
+                eb('trip_asset.assetId', 'is', null),
+                eb.and([
+                  eb('trip_asset.localDateTime', 'is not', null),
+                  sql<boolean>`"trip_asset"."localDateTime" IS DISTINCT FROM "asset"."localDateTime"`,
+                ]),
+              ]),
+            ),
         ),
       )
       .execute();

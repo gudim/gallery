@@ -116,7 +116,13 @@ where
       "album_asset"."albumId" = "trip"."albumId"
       and "asset"."deletedAt" is null
       and "asset_job_status"."metadataExtractedAt" is not null
-      and "trip_asset"."assetId" is null
+      and (
+        "trip_asset"."assetId" is null
+        or (
+          "trip_asset"."localDateTime" is not null
+          and "trip_asset"."localDateTime" IS DISTINCT FROM "asset"."localDateTime"
+        )
+      )
   )
 
 -- TripRepository.fileNewAssets
