@@ -136,19 +136,27 @@ Done when:
 
 ### 2.3 Guest trip viewer
 
-- A Svelte trip viewer behind the shared link (`web/src/lib/trips/`, route next to
-  `/share/[key]`): Map, Road and Assets views, the three trip kinds, the lightbox across the
-  whole trip, `?stop=`, likes, theme and language, phone layout. Signed-in users with album
-  access open the same viewer from the album page.
-- Port from travel-album's `static/viewer/*.js` and `atlas/albums/payload.py`, and from
-  `PLAN §5.4, §5.12, §5.17` of its plan.
-- Reference: travel-album's `tests/e2e/reference/birzhay-2026.json` and `docs/reference/`
-  screenshots. The album's data is in travel-album's `.ref/birzhay-2026/` (outside git).
+Revised by the owner on 2026-10-31: the trip lives in Gallery's own map and design, not in a port of
+travel-album's viewer.
+
+- A trip is shown on Gallery's map, extended with the trip's route (legs, stop markers, overlays)
+  and a panel of stops; a stop opens its assets in Gallery's timeline and asset viewer, with likes.
+  The album keeps Gallery's album view; its map button opens the trip. The same works through the
+  album's shared link and for signed-in users with album access. The three trip kinds, `?stop=`,
+  phone layout. Gallery's colours, fonts and components (`@immich/ui`); day colours only as the
+  colour of route data.
+- The road (travel-album's winding phone feed of stops) stays as the one view of its own, in
+  Gallery's colours and fonts.
+- Behaviour comes from travel-album's `static/viewer/*.js`, `atlas/albums/payload.py` and
+  `PLAN §5.4, §5.12, §5.17`; its look does not.
+- Reference data: travel-album's `tests/e2e/reference/birzhay-2026.json`. The album's data is in
+  travel-album's `.ref/birzhay-2026/` (outside git).
 
 Done when:
-- On migrated `birzhay-2026`, the reference numbers match: stop and day counts, pins, lines, road
-  height.
-- The owner has seen 390 and 1440 px screenshots, in both themes, next to travel-album's.
+- On migrated `birzhay-2026`, the reference data match: 10 stop markers, 9 lines, stats 79 · 3 ·
+  8 · 1 · 487, the same ten stops in order, one day.
+- The owner has seen 390 and 1440 px screenshots, in both themes, next to Gallery's own map and
+  album pages.
 
 ### 2.4 First rollout
 
