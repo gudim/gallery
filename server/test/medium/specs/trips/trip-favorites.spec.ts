@@ -100,8 +100,8 @@ describe(TripFavoritesService.name, () => {
   it('queues mirroring on a star or an unstar by hand, and only a star may make the trip', async () => {
     const { job, sut, user } = await setup();
 
-    await sut.onAssetFavoritesUpdate({ userId: user.id, assetIds: [], isFavorite: true });
-    await sut.onAssetFavoritesUpdate({ userId: user.id, assetIds: [], isFavorite: false });
+    await sut.onAssetFavoritesUpdate({ userId: user.id, ids: [], isFavorite: true });
+    await sut.onAssetFavoritesUpdate({ userId: user.id, ids: [], isFavorite: false });
 
     expect(job.queue.mock.calls).toEqual([
       [{ name: JobName.TripFavorites, data: { id: user.id, canCreate: true } }],

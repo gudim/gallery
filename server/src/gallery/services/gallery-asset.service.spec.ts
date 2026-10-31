@@ -72,7 +72,7 @@ describe(GalleryAssetService.name, () => {
       expect(mocks.assetFavorite.removeAll).not.toHaveBeenCalled();
       expect(mocks.event.emit).toHaveBeenCalledWith('AssetFavoritesUpdate', {
         userId: auth.user.id,
-        assetIds: ['asset-1', 'asset-2'],
+        ids: ['asset-1', 'asset-2'],
         isFavorite: true,
       });
     });
@@ -87,7 +87,7 @@ describe(GalleryAssetService.name, () => {
       expect(mocks.assetFavorite.addAll).not.toHaveBeenCalled();
       expect(mocks.event.emit).toHaveBeenCalledWith('AssetFavoritesUpdate', {
         userId: auth.user.id,
-        assetIds: ['asset-1'],
+        ids: ['asset-1'],
         isFavorite: false,
       });
     });
