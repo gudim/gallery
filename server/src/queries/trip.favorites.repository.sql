@@ -47,7 +47,7 @@ where
   )
 commit
 
--- TripFavoritesRepository.setStars
+-- TripFavoritesRepository.getFavoritesOwnerId
 select
   "album_user"."userId"
 from
