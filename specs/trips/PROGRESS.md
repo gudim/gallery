@@ -1,5 +1,14 @@
 # Trips: progress
 
+## Stage 2.1: trip model (branch `trips-1`, from `trips-0`): closed 2026-10-31
+
+- [x] The owner, an editor, a viewer and the album's shared link can read a trip; anyone else gets 404, as for a missing album. `test/medium/specs/trips/trip.service.spec.ts` "read access": all four read; a stranger, a shared link of another album, and an album without a trip get `NotFoundException`. `GET trips/:id` is on the shared-link route allowlist in `src/controllers/index.spec.ts`.
+- [x] Removing an asset from the album, or deleting it, removes it from its stop. Same spec, "cascades": removal from the album and a permanent delete drop the filing and likes (FK onto `album_asset`); a trashed asset is hidden and comes back to its stop when restored.
+- [x] Deleting the album deletes the trip. Same spec: no row left in any of the seven trip tables.
+- [x] A document import of a fixture trip round-trips through the read API. Same spec, "import": a Route fixture with start, finish, place, filed and unplaced assets, legs, overlay and likes reads back equal; refusals for a second import, an editor, an asset outside the album and a second Favorites trip.
+
+Also checked 2026-10-31: the migration applies, reverts (`gallery-migrations.js revert`) and re-applies on a scratch database, and `revert-to-immich.sql` then leaves no trip table or trip `migration_overrides` row; the schema-drift medium spec passes. Server unit suite green; web `tsc` green with the regenerated SDK. Medium: 38 failures, the baseline's environmental set except that `face-person-verdict` and `face-repair` passed and the two known flakes (rbac-oracle legacy search, favorite-cross-scope perf budget) failed under load; both pass alone. Not done: the Dart client was not regenerated (needs Java; it is gitignored and built in CI), and the endpoints were not called over HTTP against a running server.
+
 ## Stage 2.0: fork and skeleton (branch `trips-0`, from `v5.9.0`): closed 2026-10-31
 
 - [x] An empty trips module is registered through one hook line. One spread per upstream registry (three), see DECISIONS-LOG 2026-10-30.
