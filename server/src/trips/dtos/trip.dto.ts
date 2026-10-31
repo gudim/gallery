@@ -417,6 +417,20 @@ const TripGeoPlacesSchema = z
   .object({ places: z.array(TripGeoPlaceSchema).describe('Places found, at most five') })
   .meta({ id: 'TripGeoPlacesDto' });
 
+const TripPlaceHintSchema = z
+  .object({
+    stopId: z.string().describe('Stop ID of the place'),
+    assetIds: z.array(z.string()).describe('Unplaced asset IDs like an asset of the place, most similar first'),
+  })
+  .meta({ id: 'TripPlaceHintDto' });
+
+const TripPlaceHintsSchema = z
+  .object({
+    places: z.array(TripPlaceHintSchema).describe('Places offered, the one with most assets first'),
+    center: z.array(z.string()).describe('Unplaced asset IDs like no asset of a place, offered the centre'),
+  })
+  .meta({ id: 'TripPlaceHintsDto' });
+
 const TripCreateSchema = z
   .object({
     albumId: z.uuidv4().describe('Album ID; the trip takes it'),
@@ -493,6 +507,7 @@ export class TripAssetsCenterDto extends createZodDto(TripAssetsCenterSchema) {}
 export class TripGeoSearchDto extends createZodDto(TripGeoSearchSchema) {}
 export class TripGeoReverseQueryDto extends createZodDto(TripGeoReverseSchema) {}
 export class TripGeoPlacesDto extends createZodDto(TripGeoPlacesSchema) {}
+export class TripPlaceHintsDto extends createZodDto(TripPlaceHintsSchema) {}
 export class TripStopSplitDto extends createZodDto(TripStopSplitSchema) {}
 export class TripStopCreateDto extends createZodDto(TripStopCreateSchema) {}
 export class TripAssetsMoveDto extends createZodDto(TripAssetsMoveSchema) {}

@@ -123,6 +123,10 @@ const nominatimPlace = (name: string) => ({
   address: { city: 'Vilnius', country: 'Lithuania' },
 });
 
+// A unit CLIP embedding along axis `i`, turned towards axis `j` so that `cos` is its similarity to axis `i`.
+const embedding = (i: number, cos = 1, j = 511) =>
+  JSON.stringify(Array.from({ length: 512 }, (_, k) => (k === i ? cos : k === j ? Math.sqrt(1 - cos ** 2) : 0)));
+
 const fakeNominatim = (respond: (url: URL) => Response) => {
   const urls: URL[] = [];
   vi.stubGlobal(
@@ -679,6 +683,64 @@ describe('stop editor', () => {
           TripAssetsCenterDto.schema.parse({ assetIds: [route.assetIds[1]], centre: CENTRE }),
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('place hints', () => {
+    // Places A (two assets) and C (one), then three assets without GPS that a Places trip leaves Unplaced.
+    const LOOSE: Shot[] = [
+      ['10:00', A],
+      ['10:10', A],
+      ['12:00', C],
+      ['15:00', null],
+      ['18:00', null],
+      ['21:00', null],
+    ];
+    const CENTRE = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
+
+    const setupHints = async () => {
+      const found = await setup(LOOSE, 'places');
+      const vectors = [
+        embedding(0),
+        embedding(0),
+        embedding(1),
+        embedding(1, 0.95),
+        embedding(0, 0.8),
+        embedding(1, 0.92),
+      ];
+      await db
+        .insertInto('smart_search')
+        .values(found.assetIds.map((assetId, index) => ({ assetId, embedding: vectors[index] })))
+        .execute();
+      return found;
+    };
+
+    it('offers an Unplaced asset the place of the anchor most like it, and the centre once there is one', async () => {
+      const { sut, auth, album, assetIds, trip } = await setupHints();
+      const placeOf = (index: number) => trip.assets.find(({ assetId }) => assetId === assetIds[index])!.stopId;
+
+      expect(await sut.getPlaceHints(auth, album.id)).toEqual({
+        places: [{ stopId: placeOf(2), assetIds: [assetIds[3], assetIds[5]] }],
+        center: [],
+      });
+
+      await sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[5]], centre: CENTRE }));
+      expect(await sut.getPlaceHints(auth, album.id)).toEqual({
+        places: [{ stopId: placeOf(2), assetIds: [assetIds[3]] }],
+        center: [assetIds[4]],
+      });
+    });
+
+    it('gives a route no hints, and answers 403 to a viewer', async () => {
+      const { ctx, sut, album } = await setupHints();
+      const route = await setup(LOOSE);
+      const { user: viewer } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: viewer.id, role: AlbumUserRole.Viewer });
+
+      await expect(route.sut.getPlaceHints(route.auth, route.album.id)).resolves.toEqual({ places: [], center: [] });
+      await expect(sut.getPlaceHints(factory.auth({ user: viewer }), album.id)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
   });
 

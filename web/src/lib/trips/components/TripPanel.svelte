@@ -1,6 +1,7 @@
 <script lang="ts">
   import Timeline from '$lib/components/timeline/Timeline.svelte';
   import TripLegEdit from '$lib/trips/components/TripLegEdit.svelte';
+  import TripPlaceHints from '$lib/trips/components/TripPlaceHints.svelte';
   import TripPointModal from '$lib/trips/components/TripPointModal.svelte';
   import TripStopEdit from '$lib/trips/components/TripStopEdit.svelte';
   import type { TripEditor } from '$lib/trips/trip-editor.svelte';
@@ -341,6 +342,9 @@
         </p>
       {:else if openItem.type === 'unplaced'}
         <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{$t('trips_unplaced_note')}</p>
+        {#if editor && isPlaces}
+          <TripPlaceHints {editor} />
+        {/if}
       {/if}
       {#if editor && openItem.photos.length > 0}
         <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{$t('trips_select_hint')}</p>

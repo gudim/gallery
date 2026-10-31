@@ -395,6 +395,80 @@ export class TripRepository {
     return row?.language ?? null;
   }
 
+  /**
+   * The Unplaced assets with a CLIP embedding, outside the trash and in time order, each with the place of its most
+   * similar anchor (`placeHints`): an asset with its own GPS or a manual point, in a stop that is not the start, the
+   * finish or the centre. The anchors are materialized so the nearest one is found exactly, not by the vector index,
+   * which would filter them after an approximate scan. Also whether the trip has a centre. Null for a trip that is not
+   * Places, or no trip.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async getPlaceHintRows(albumId: string) {
+    const id = asUuid(albumId);
+    const trip = await this.db
+      .selectFrom('trip')
+      .select((eb) =>
+        eb
+          .exists(
+            eb
+              .selectFrom('trip_stop')
+              .select('trip_stop.id')
+              .whereRef('trip_stop.albumId', '=', 'trip.albumId')
+              .where('trip_stop.isAtCenter', '=', true),
+          )
+          .as('hasCenter'),
+      )
+      .where('trip.albumId', '=', id)
+      .where('trip.kind', '=', TripKind.Places)
+      .executeTakeFirst();
+    if (!trip) {
+      return null;
+    }
+    const rows = await this.db
+      .with(
+        (cte) => cte('anchor').materialized(),
+        (qb) =>
+          qb
+            .selectFrom('trip_asset')
+            .innerJoin('trip_stop', 'trip_stop.id', 'trip_asset.stopId')
+            .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+            .innerJoin('smart_search', 'smart_search.assetId', 'trip_asset.assetId')
+            .leftJoin('asset_exif', 'asset_exif.assetId', 'trip_asset.assetId')
+            .select(['trip_asset.stopId', 'smart_search.embedding'])
+            .where('trip_asset.albumId', '=', id)
+            .where('asset.deletedAt', 'is', null)
+            .where('trip_stop.role', 'is', null)
+            .where('trip_stop.isAtCenter', '=', false)
+            .where((eb) =>
+              eb.or([
+                eb('trip_asset.pointSource', '=', TripPointSource.Manual),
+                eb.and([eb('trip_asset.pointSource', 'is', null), eb('asset_exif.latitude', 'is not', null)]),
+              ]),
+            ),
+      )
+      .selectFrom('trip_asset')
+      .innerJoin('asset', 'asset.id', 'trip_asset.assetId')
+      .innerJoin('smart_search', 'smart_search.assetId', 'trip_asset.assetId')
+      .leftJoinLateral(
+        (eb) =>
+          eb
+            .selectFrom('anchor')
+            .select(['anchor.stopId', sql<number>`anchor.embedding <=> smart_search.embedding`.as('distance')])
+            .orderBy('distance')
+            .limit(1)
+            .as('nearest'),
+        (join) => join.onTrue(),
+      )
+      .select(['trip_asset.assetId', 'nearest.stopId', sql<number | null>`1 - nearest.distance`.as('similarity')])
+      .where('trip_asset.albumId', '=', id)
+      .where('trip_asset.stopId', 'is', null)
+      .where('asset.deletedAt', 'is', null)
+      .orderBy('asset.localDateTime')
+      .orderBy('asset.id')
+      .execute();
+    return { rows, hasCenter: Boolean(trip.hasCenter) };
+  }
+
   /** Whether the trip has legs waiting for their line. */
   @GenerateSql({ params: [DummyValue.UUID] })
   async hasPendingLegs(albumId: string): Promise<boolean> {

@@ -1335,6 +1335,8 @@
   "trips_empty_stop": "Bij deze stop zijn geen foto's — hij markeert de route.",
   "trips_finish": "Eindpunt",
   "trips_finish_at_start": "Eindpunt bij het startpunt",
+  "trips_hints_like_none": "Lijken op geen enkele plaats",
+  "trips_hints_title": "Lijken op foto's van deze plaatsen",
   "trips_kind": "Soort reis",
   "trips_kind_places": "Plaatsen",
   "trips_kind_places_hint": "Elke stop is een plaats; bezoeken uit verschillende jaren komen op dezelfde plaats.",

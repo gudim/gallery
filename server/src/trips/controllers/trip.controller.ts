@@ -24,6 +24,7 @@ import {
   TripLegStationUpdateDto,
   TripLegStationsDto,
   TripLikeDto,
+  TripPlaceHintsDto,
   TripPointCreateDto,
   TripPointOrderDto,
   TripResponseDto,
@@ -397,6 +398,18 @@ export class TripController {
     @Query() dto: TripGeoReverseQueryDto,
   ): Promise<TripGeoPlacesDto> {
     return this.service.reversePlace(auth, id, dto);
+  }
+
+  @Get(':id/place-hints')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Get place hints for a trip',
+    description:
+      'Offers each Unplaced asset of a Places trip the place of the asset most like it by CLIP among those with their own GPS or a point set by hand, and the centre to those like none of them when the trip has a centre. Nothing is moved. Other kinds get no hints. The album owner and editors only.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  getTripPlaceHints(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<TripPlaceHintsDto> {
+    return this.service.getPlaceHints(auth, id);
   }
 
   @Put(':id/legs/:legId/mode')

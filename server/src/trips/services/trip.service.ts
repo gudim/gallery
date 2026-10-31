@@ -29,6 +29,7 @@ import {
   TripLegStationUpdateDto,
   TripLegStationsDto,
   TripLikeDto,
+  TripPlaceHintsDto,
   TripPointCreateDto,
   TripPointOrderDto,
   TripResponseDto,
@@ -64,6 +65,7 @@ import {
   resolveTripNamingLanguages,
   tripNamingLanguages,
 } from 'src/trips/utils/naming.js';
+import { placeHints } from 'src/trips/utils/place-hints.js';
 import { type LegRouter, type RoutingLeg, buildLeg } from 'src/trips/utils/route-leg.js';
 import {
   type StationCandidate,
@@ -423,6 +425,16 @@ export class TripService {
       albumId,
       await this.tripEditorRepository.toCenter(albumId, dto.assetIds, dto.centre && pointOfEnd(dto.centre)),
     );
+  }
+
+  /**
+   * Places offered to the Unplaced assets of a Places trip by their CLIP embeddings (travel-album `place_hints`); none
+   * for another kind. Editors only: the hints serve filing.
+   */
+  async getPlaceHints(auth: AuthDto, albumId: string): Promise<TripPlaceHintsDto> {
+    await this.requireEdit(auth, albumId);
+    const found = await this.tripRepository.getPlaceHintRows(albumId);
+    return found ? placeHints(found.rows, found.hasCenter) : { places: [], center: [] };
   }
 
   /**

@@ -1353,6 +1353,8 @@
   "trips_empty_stop": "这一站没有照片 — 它标记着路线。",
   "trips_finish": "终点",
   "trips_finish_at_start": "终点即起点",
+  "trips_hints_like_none": "与任何地点都不相似",
+  "trips_hints_title": "与这些地点的照片相似",
   "trips_kind": "旅行类型",
   "trips_kind_places": "地点",
   "trips_kind_places_hint": "每一站是一个地点；不同年份的造访归入同一地点。",

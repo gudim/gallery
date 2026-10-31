@@ -1341,6 +1341,8 @@
   "trips_empty_stop": "No photos at this stop — it marks the route.",
   "trips_finish": "Finish",
   "trips_finish_at_start": "Finish at the start",
+  "trips_hints_like_none": "Like no place",
+  "trips_hints_title": "Look like photos of these places",
   "trips_kind": "Kind of trip",
   "trips_kind_places": "Places",
   "trips_kind_places_hint": "Each stop is a place; visits years apart land in the same place.",

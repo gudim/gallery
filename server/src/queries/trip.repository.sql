@@ -142,6 +142,23 @@ from
 where
   "albumId" = $1::uuid
 
+-- TripRepository.getPlaceHintRows
+select
+  exists (
+    select
+      "trip_stop"."id"
+    from
+      "trip_stop"
+    where
+      "trip_stop"."albumId" = "trip"."albumId"
+      and "trip_stop"."isAtCenter" = $1
+  ) as "hasCenter"
+from
+  "trip"
+where
+  "trip"."albumId" = $2::uuid
+  and "trip"."kind" = $3
+
 -- TripRepository.hasPendingLegs
 select
   "id"

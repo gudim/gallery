@@ -1337,6 +1337,8 @@
   "trips_empty_stop": "Aucune photo à cette étape — elle marque l’itinéraire.",
   "trips_finish": "Arrivée",
   "trips_finish_at_start": "Arrivée au départ",
+  "trips_hints_like_none": "Ne ressemblent à aucun lieu",
+  "trips_hints_title": "Ressemblent aux photos de ces lieux",
   "trips_kind": "Type de voyage",
   "trips_kind_places": "Lieux",
   "trips_kind_places_hint": "Chaque étape est un lieu ; des visites à des années d’écart tombent dans le même lieu.",

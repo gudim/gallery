@@ -1338,6 +1338,8 @@
   "trips_empty_stop": "An diesem Halt gibt es keine Fotos — er markiert die Route.",
   "trips_finish": "Ziel",
   "trips_finish_at_start": "Ziel am Start",
+  "trips_hints_like_none": "Ähneln keinem Ort",
+  "trips_hints_title": "Ähneln Fotos dieser Orte",
   "trips_kind": "Art der Reise",
   "trips_kind_places": "Orte",
   "trips_kind_places_hint": "Jeder Halt ist ein Ort; Besuche aus verschiedenen Jahren landen am selben Ort.",

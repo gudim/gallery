@@ -26393,6 +26393,63 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/place-hints": {
+      "get": {
+        "description": "Offers each Unplaced asset of a Places trip the place of the asset most like it by CLIP among those with their own GPS or a point set by hand, and the centre to those like none of them when the trip has a centre. Nothing is moved. Other kinds get no hints. The album owner and editors only.",
+        "operationId": "getTripPlaceHints",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripPlaceHintsDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Get place hints for a trip",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/points": {
       "post": {
         "description": "Adds a point by hand to a Route trip, right after a stop of the same trip or right after the start. Without a title, the point is named through Nominatim. The album owner and editors edit the trip. Returns the whole trip.",
@@ -49303,6 +49360,49 @@
           "id",
           "key",
           "title"
+        ],
+        "type": "object"
+      },
+      "TripPlaceHintDto": {
+        "properties": {
+          "assetIds": {
+            "description": "Unplaced asset IDs like an asset of the place, most similar first",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "stopId": {
+            "description": "Stop ID of the place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assetIds",
+          "stopId"
+        ],
+        "type": "object"
+      },
+      "TripPlaceHintsDto": {
+        "properties": {
+          "center": {
+            "description": "Unplaced asset IDs like no asset of a place, offered the centre",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "places": {
+            "description": "Places offered, the one with most assets first",
+            "items": {
+              "$ref": "#/components/schemas/TripPlaceHintDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "center",
+          "places"
         ],
         "type": "object"
       },

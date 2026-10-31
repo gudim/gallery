@@ -4711,6 +4711,18 @@ export type TripLegStationsDto = {
     /** Stations near the stop the leg leaves, nearest first */
     departure: TripStationDto[];
 };
+export type TripPlaceHintDto = {
+    /** Unplaced asset IDs like an asset of the place, most similar first */
+    assetIds: string[];
+    /** Stop ID of the place */
+    stopId: string;
+};
+export type TripPlaceHintsDto = {
+    /** Unplaced asset IDs like no asset of a place, offered the centre */
+    center: string[];
+    /** Places offered, the one with most assets first */
+    places: TripPlaceHintDto[];
+};
 export type TripPointCreateDto = {
     /** Stop of the same trip the point goes right after; null puts it right after the start */
     afterStopId?: string | null;
@@ -11546,6 +11558,19 @@ export function likeAsset({ assetId, id, key, slug }: {
     }))}`, {
         ...opts,
         method: "PUT"
+    }));
+}
+/**
+ * Get place hints for a trip
+ */
+export function getTripPlaceHints({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripPlaceHintsDto;
+    }>(`/trips/${encodeURIComponent(id)}/place-hints`, {
+        ...opts
     }));
 }
 /**
