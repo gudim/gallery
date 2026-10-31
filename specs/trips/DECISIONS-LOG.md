@@ -14,3 +14,5 @@ One line per choice the plan does not dictate. Newest last. `(owner)` marks a ch
 - 2026-10-30 CI: `.github/workflows/trips-release-server.yml` builds only the server image to `ghcr.io/<owner>/gallery-server`; Gallery's release workflows stay as they are and are not run in this fork.
 - 2026-10-31 (owner) The fork's default branch on GitHub is `trips-0`, so `workflow_dispatch` sees `trips-release-server.yml`; Gallery's `main` is left as it is. Every workflow inherited from Gallery is disabled in the Actions tab; only `Release Trips Server` is active.
 - 2026-10-31 `ghcr.io/gudim/gallery-server` is public (anonymous pull works), so the home server pulls without a registry login.
+- 2026-10-31 (owner) "Test suites are green" means no failure that clean Gallery at the base tag does not also have, run back to back on the same machine; a test that differs must pass when run alone on both.
+- 2026-10-31 (owner) Accepted: the trips registry is one spread in each of upstream's three registries, not a single hook line.
