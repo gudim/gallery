@@ -1,27 +1,40 @@
 <script lang="ts">
   import Timeline from '$lib/components/timeline/Timeline.svelte';
+  import TripLegEdit from '$lib/trips/components/TripLegEdit.svelte';
+  import TripPointModal from '$lib/trips/components/TripPointModal.svelte';
+  import TripStopEdit from '$lib/trips/components/TripStopEdit.svelte';
+  import type { TripEditor } from '$lib/trips/trip-editor.svelte';
   import { assetMultiSelectManager } from '$lib/managers/asset-multi-select-manager.svelte';
   import { authManager } from '$lib/managers/auth-manager.svelte';
   import { TimelineManager } from '$lib/managers/timeline-manager/timeline-manager.svelte';
   import { dayLabel, itemTitle, rangeLine, yearSpan } from '$lib/trips/trip-text';
+  import { timeSpan, tripStats, type TripItem, type TripView, type TripViewStop } from '$lib/trips/trip-view';
   import {
-    timeSpan,
-    tripStats,
-    type TripItem,
-    type TripView,
-    type TripViewLeg,
-    type TripViewStop,
-  } from '$lib/trips/trip-view';
-  import { AssetOrder, TripKind, TripLegMode } from '@immich/sdk';
-  import { Button, CloseButton, Icon } from '@immich/ui';
+    addPoint,
+    AssetOrder,
+    retryLegs,
+    setFinish,
+    setStart,
+    TripKind,
+    TripLegMode,
+    TripLegStatus,
+    TripStopRole,
+    type TripLegDto,
+  } from '@immich/sdk';
+  import { Button, CloseButton, Icon, LoadingSpinner, modalManager } from '@immich/ui';
   import {
     mdiAirplane,
+    mdiAlertCircleOutline,
     mdiArrowLeft,
     mdiBike,
     mdiBus,
     mdiCar,
     mdiFerry,
+    mdiFlagCheckered,
     mdiHiking,
+    mdiHomeMapMarker,
+    mdiMapMarkerPlusOutline,
+    mdiRefresh,
     mdiTrain,
     mdiVectorLine,
     mdiWalk,
@@ -30,19 +43,29 @@
 
   // The panel beside a trip's map (trips PLAN §2.3), in the place of the map page's timeline panel: the trip's
   // numbers, its stops by day with the legs between them, and an opened stop with its assets in Gallery's timeline.
+  // In edit mode (§2.5) an opened stop or leg shows what can be changed, and the route's ends and points can be added.
 
   interface Props {
     view: TripView;
+    /** Set for owners and editors in edit mode */
+    editor?: TripEditor;
     /** The stop or item opened */
     openId?: string;
     /** Stops picked on the map (a cluster of markers) */
     pickedIds?: string[];
+    /** The leg opened in edit mode */
+    openLegId?: string;
     onOpen: (item: TripItem) => void;
+    onOpenLeg: (legId: string) => void;
     onBack: () => void;
     onClearPicked: () => void;
+    onMovePin: (stop: TripViewStop) => void;
   }
 
-  let { view, openId, pickedIds, onOpen, onBack, onClearPicked }: Props = $props();
+  let { view, editor, openId, pickedIds, openLegId, onOpen, onOpenLeg, onBack, onClearPicked, onMovePin }: Props =
+    $props();
+
+  const isEditing = $derived(!!editor);
 
   const lang = $derived($locale ?? 'en');
   const isPlaces = $derived(view.kind === TripKind.Places);
@@ -53,6 +76,23 @@
   const openItem = $derived(
     openId ? (view.order.find(({ id }) => id === openId) ?? view.stops.find(({ id }) => id === openId)) : undefined,
   );
+  // Every leg, drawn or not: a leg still being routed has no line yet.
+  const openLeg = $derived(openLegId && editor ? editor.trip!.legs.find(({ id }) => id === openLegId) : undefined);
+  const stopName = (id: string) => {
+    const stop = view.stops.find((candidate) => candidate.id === id);
+    return stop ? rowTitle(stop) : '…';
+  };
+
+  /** A stop's name in lists; the start, the finish and a point not named yet still read as something. */
+  const rowTitle = (stop: TripViewStop) => {
+    if (stop.title || stop.region) {
+      return stop.title || stop.region;
+    }
+    if (stop.stop.role) {
+      return stop.stop.role === TripStopRole.Start ? $t('trips_start') : $t('trips_finish');
+    }
+    return $t('trips_untitled_stop');
+  };
 
   const statsLine = $derived(
     [
@@ -78,7 +118,7 @@
     [TripLegMode.Boat]: mdiFerry,
   };
 
-  const legLine = (leg: TripViewLeg) => {
+  const legLine = (leg: TripLegDto) => {
     const parts = [$t(`trips_mode_${leg.mode}`)];
     if (leg.distance) {
       const km = leg.distance / 1000;
@@ -99,7 +139,9 @@
     return parts.join(' · ');
   };
 
-  const legsFrom = (stopId: string) => view.legs.filter(({ fromStopId }) => fromStopId === stopId);
+  // In edit mode every leg is listed, a leg still being routed included.
+  const legsFrom = (stopId: string) =>
+    (editor?.trip?.legs ?? view.legs).filter(({ fromStopId }) => fromStopId === stopId);
 
   const days = $derived(
     view.days.map((day, index) => ({
@@ -111,7 +153,7 @@
 
   let placeSort = $state<'frames' | 'name'>('frames');
   const places = $derived.by(() => {
-    const list = view.stops.filter(({ photos }) => photos.length > 0);
+    const list = view.stops.filter(({ photos }) => isEditing || photos.length > 0);
     return placeSort === 'name'
       ? list.sort((a, b) => a.title.localeCompare(b.title, lang))
       : list.sort((a, b) => b.photos.length - a.photos.length || a.id.localeCompare(b.id));
@@ -152,6 +194,49 @@
     return $t('trips_empty_stop');
   };
 
+  const hasStart = $derived(view.stops.some(({ stop }) => stop.role === TripStopRole.Start));
+  const hasFinish = $derived(view.stops.some(({ stop }) => stop.role === TripStopRole.Finish));
+  const attentionCount = $derived(
+    editor?.trip?.legs.filter(({ status }) => status === TripLegStatus.Attention).length ?? 0,
+  );
+  const firstPoint = $derived.by(() => {
+    const stop = view.stops.find(({ latitude, longitude }) => latitude !== null && longitude !== null);
+    return stop ? { latitude: stop.latitude!, longitude: stop.longitude! } : undefined;
+  });
+
+  const onEnd = async (role: TripStopRole) => {
+    const picked = await modalManager.show(TripPointModal, {
+      albumId: view.albumId,
+      title: role === TripStopRole.Start ? $t('trips_start') : $t('trips_finish'),
+      point: firstPoint,
+      isNamed: true,
+    });
+    if (picked && editor) {
+      const end = { latitude: picked.latitude, longitude: picked.longitude, title: picked.title || null };
+      await editor.run(
+        (id) =>
+          role === TripStopRole.Start ? setStart({ id, tripEndDto: end }) : setFinish({ id, tripFinishUpdateDto: end }),
+        $t('trips_edit_failed'),
+      );
+    }
+  };
+
+  /** A point from the overview goes right after the start; it can be moved after any stop from its own card. */
+  const onAddPoint = async () => {
+    const picked = await modalManager.show(TripPointModal, {
+      albumId: view.albumId,
+      title: $t('trips_add_point'),
+      point: firstPoint,
+      isNamed: true,
+    });
+    if (picked && editor) {
+      await editor.run(
+        (id) => addPoint({ id, tripPointCreateDto: { ...picked, title: picked.title || null, afterStopId: null } }),
+        $t('trips_edit_failed'),
+      );
+    }
+  };
+
   let timelineManager = $state<TimelineManager>() as TimelineManager;
   const timelineOptions = $derived(
     openItem && openItem.photos.length > 0
@@ -174,26 +259,62 @@
     {#if isRoute}
       <span class="w-11 shrink-0 text-xs text-gray-500 tabular-nums dark:text-gray-400">{stop.t0}</span>
     {/if}
-    <span class={['flex-1 text-sm', stop.photos.length <= 3 && 'text-gray-600 dark:text-gray-300']}
-      >{stop.title || stop.region}</span
+    <span
+      class={[
+        'flex-1 text-sm',
+        stop.photos.length <= 3 && 'text-gray-600 dark:text-gray-300',
+        !stop.title && !stop.region && 'italic',
+      ]}>{rowTitle(stop)}</span
     >
     <span class="text-xs text-gray-500 dark:text-gray-400">{stop.photos.length || ''}</span>
   </button>
 {/snippet}
 
-{#snippet legRow(leg: TripViewLeg)}
-  <div class="flex items-center gap-3 px-4 py-1 text-xs text-gray-500 dark:text-gray-400">
-    <span class="flex w-11 shrink-0 justify-center"><Icon icon={MODE_ICONS[leg.mode]} size="16" /></span>
-    <span>{legLine(leg)}</span>
-  </div>
+{#snippet legRow(leg: TripLegDto)}
+  {#if isEditing}
+    <button
+      type="button"
+      class="flex w-full items-center gap-3 px-4 py-1 text-start text-xs text-gray-500 hover:bg-subtle dark:text-gray-400"
+      onclick={() => onOpenLeg(leg.id)}
+      data-testid="trip-leg-row"
+    >
+      <span class="flex w-11 shrink-0 justify-center"><Icon icon={MODE_ICONS[leg.mode]} size="16" /></span>
+      <span class="flex-1">{legLine(leg)}</span>
+      {#if leg.status === TripLegStatus.Pending}
+        <LoadingSpinner size="tiny" />
+      {:else if leg.status === TripLegStatus.Attention}
+        <Icon icon={mdiAlertCircleOutline} size="16" class="text-warning" aria-label={$t('trips_leg_attention')} />
+      {/if}
+    </button>
+  {:else}
+    <div class="flex items-center gap-3 px-4 py-1 text-xs text-gray-500 dark:text-gray-400">
+      <span class="flex w-11 shrink-0 justify-center"><Icon icon={MODE_ICONS[leg.mode]} size="16" /></span>
+      <span>{legLine(leg)}</span>
+    </div>
+  {/if}
 {/snippet}
 
 <aside
   class="flex size-full flex-col overflow-hidden bg-immich-bg text-immich-fg dark:bg-immich-dark-bg dark:text-immich-dark-fg"
   data-testid="trip-panel"
 >
-  {#if openItem}
-    <div class="border-b border-gray-200 px-4 py-3 dark:border-immich-dark-gray" data-testid="trip-stop">
+  {#if openLeg && editor}
+    <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-testid="trip-leg">
+      <Button size="small" variant="ghost" color="secondary" leadingIcon={mdiArrowLeft} onclick={onBack} class="-ms-2">
+        {$t('trips_back_route')}
+      </Button>
+      <h2 class="mt-1 text-lg font-medium">{stopName(openLeg.fromStopId)} → {stopName(openLeg.toStopId)}</h2>
+      <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{legLine(openLeg)}</p>
+      <TripLegEdit {editor} leg={openLeg} />
+    </div>
+  {:else if openItem}
+    <div
+      class={[
+        'border-b border-gray-200 px-4 py-3 dark:border-immich-dark-gray',
+        isEditing && 'max-h-[60%] overflow-y-auto',
+      ]}
+      data-testid="trip-stop"
+    >
       <div class="flex items-center gap-2">
         <Button
           size="small"
@@ -206,16 +327,25 @@
           {isPlaces ? $t('trips_back_places') : $t('trips_back_route')}
         </Button>
       </div>
-      <h2 class="mt-1 text-lg font-medium">{itemTitle(openItem, view, $t, lang)}</h2>
+      <h2 class="mt-1 text-lg font-medium">
+        {openItem.type === 'stop' ? rowTitle(openItem) : itemTitle(openItem, view, $t, lang)}
+      </h2>
       <p class="text-xs text-gray-500 dark:text-gray-400">{meta(openItem).join(' · ')}</p>
-      {#if openItem.type === 'stop' && openItem.story}
+      {#if editor && openItem.type !== 'unplaced'}
+        <div class="mt-3">
+          <TripStopEdit {editor} item={openItem} {onMovePin} onGone={onBack} />
+        </div>
+      {:else if openItem.type === 'stop' && openItem.story}
         <p class="mt-2 line-clamp-6 text-sm whitespace-pre-line text-gray-700 dark:text-gray-300">
           {openItem.story}
         </p>
       {:else if openItem.type === 'unplaced'}
         <p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{$t('trips_unplaced_note')}</p>
       {/if}
-      {#if openItem.type === 'stop' && openItem.article}
+      {#if editor && openItem.photos.length > 0}
+        <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{$t('trips_select_hint')}</p>
+      {/if}
+      {#if !editor && openItem.type === 'stop' && openItem.article}
         <details class="mt-2 text-sm">
           <summary class="cursor-pointer text-primary">{$t('trips_about_place')}</summary>
           <div class="max-h-[30vh] overflow-y-auto">
@@ -245,6 +375,49 @@
     <div class="border-b border-gray-200 px-4 py-3 dark:border-immich-dark-gray">
       <p class="text-sm" data-testid="trip-range">{rangeLine(view, $t, lang)}</p>
       <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="trip-stats">{statsLine.join(' · ')}</p>
+      {#if editor && isRoute}
+        <div class="mt-3 flex flex-wrap gap-2" data-testid="trip-route-actions">
+          {#if !hasStart}
+            <Button
+              size="small"
+              shape="round"
+              color="secondary"
+              variant="outline"
+              leadingIcon={mdiHomeMapMarker}
+              onclick={() => onEnd(TripStopRole.Start)}>{$t('trips_set_start')}</Button
+            >
+          {/if}
+          {#if !hasFinish}
+            <Button
+              size="small"
+              shape="round"
+              color="secondary"
+              variant="outline"
+              leadingIcon={mdiFlagCheckered}
+              onclick={() => onEnd(TripStopRole.Finish)}>{$t('trips_set_finish')}</Button
+            >
+          {/if}
+          <Button
+            size="small"
+            shape="round"
+            color="secondary"
+            variant="outline"
+            leadingIcon={mdiMapMarkerPlusOutline}
+            onclick={onAddPoint}>{$t('trips_add_point')}</Button
+          >
+          {#if attentionCount > 0}
+            <Button
+              size="small"
+              shape="round"
+              color="secondary"
+              variant="outline"
+              leadingIcon={mdiRefresh}
+              onclick={() => editor.run((id) => retryLegs({ id }), $t('trips_edit_failed'))}
+              >{$t('trips_retry_legs', { values: { count: attentionCount } })}</Button
+            >
+          {/if}
+        </div>
+      {/if}
     </div>
     <div class="min-h-0 flex-1 overflow-y-auto py-1" data-testid="trip-list">
       {#if picked}
@@ -292,7 +465,7 @@
           </button>
         {/if}
       {:else if view.kind === TripKind.Plain}
-        {#each view.stops.filter(({ photos }) => photos.length > 0) as stop (stop.id)}
+        {#each view.stops.filter(({ photos }) => isEditing || photos.length > 0) as stop (stop.id)}
           {@render stopRow(stop)}
         {/each}
       {:else}
