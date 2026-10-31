@@ -69,7 +69,7 @@ features:
       - server/src/schema/index.ts
       - server/src/schema/gallery-upstream-fks.json
       - server/src/schema/gallery-upstream-fks.spec.ts
-      # the filing and routing jobs (trips PLAN D12, §2.5): three JobName values, their JobItem lines, the nightly sweep
+      # the filing, routing and naming jobs (trips PLAN D12, D13, §2.5): four JobName values, their JobItem lines, the nightly sweep
       - server/src/enum.ts
       - server/src/types.ts
       - server/src/services/queue.service.ts

@@ -94,8 +94,11 @@ export class TripService {
   async handleFile({ id }: JobOf<JobName.TripFile>): Promise<JobStatus> {
     const filed = await this.tripRepository.fileNewAssets(id);
     // A new stop of a route splits a leg into pending ones.
-    if (filed > 0 && (await this.tripRepository.hasPendingLegs(id))) {
+    if (filed.assets > 0 && (await this.tripRepository.hasPendingLegs(id))) {
       await this.queueRouting(id);
+    }
+    if (filed.stops > 0) {
+      await this.queueNaming(id);
     }
     return JobStatus.Success;
   }
@@ -119,11 +122,18 @@ export class TripService {
     return JobStatus.Success;
   }
 
-  // Nightly: files what no event reached, such as assets added while the worker was down.
+  // Nightly: files what no event reached, such as assets added while the worker was down, and names again the stops a
+  // failed or interrupted naming left without a title.
   @OnJob({ name: JobName.TripFileSweep, queue: QueueName.BackgroundTask })
   async handleFileSweep(): Promise<JobStatus> {
-    const albumIds = await this.tripRepository.getAlbumIdsToFile();
-    await this.jobRepository.queueAll(albumIds.map((id) => ({ name: JobName.TripFile, data: { id } })));
+    const [toFile, toName] = await Promise.all([
+      this.tripRepository.getAlbumIdsToFile(),
+      this.tripRepository.getAlbumIdsToName(),
+    ]);
+    await this.jobRepository.queueAll([
+      ...toFile.map((id) => ({ name: JobName.TripFile, data: { id } }) as const),
+      ...toName.map((id) => ({ name: JobName.TripName, data: { id } }) as const),
+    ]);
     return JobStatus.Success;
   }
 
@@ -197,7 +207,8 @@ export class TripService {
         generatedCaption === null ? [] : [{ assetId, text: generatedCaption }],
       ),
     });
-    const trip = await this.created(auth, albumId, result);
+    // Names untitled stops, and fetches the second language of the names the document brought.
+    const trip = await this.created(auth, albumId, result, dto.kind);
     if (dto.legs.some(({ mode, status }) => status === TripLegStatus.Pending && mode !== TripLegMode.Trail)) {
       await this.queueRouting(albumId);
     }
@@ -247,7 +258,7 @@ export class TripService {
       likes: [],
       generatedCaptions: [],
     });
-    const trip = await this.created(auth, albumId, result);
+    const trip = await this.created(auth, albumId, result, kind);
     if (legs.length > 0) {
       await this.queueRouting(albumId);
     }
@@ -260,6 +271,10 @@ export class TripService {
     const result = await this.tripRepository.updateStop(albumId, stopId, dto);
     if (result !== TripEditResult.Updated) {
       throw refusal(result);
+    }
+    // A cleared title is named again (travel-album `editor.edited`).
+    if (dto.title === null) {
+      await this.queueNaming(albumId);
     }
     return this.read(auth, albumId);
   }
@@ -355,7 +370,16 @@ export class TripService {
     await this.jobRepository.queue({ name: JobName.TripRouteLegs, data: { id: albumId } });
   }
 
-  private async created(auth: AuthDto, albumId: string, result: TripCreateResult): Promise<TripResponseDto> {
+  private async queueNaming(albumId: string) {
+    await this.jobRepository.queue({ name: JobName.TripName, data: { id: albumId } });
+  }
+
+  private async created(
+    auth: AuthDto,
+    albumId: string,
+    result: TripCreateResult,
+    kind: TripKind,
+  ): Promise<TripResponseDto> {
     switch (result) {
       case TripCreateResult.AlbumMissing: {
         throw new NotFoundException('Trip not found');
@@ -367,6 +391,10 @@ export class TripService {
         throw new ConflictException('The owner already has a Favorites trip');
       }
       case TripCreateResult.Created: {
+        // A Plain trip has no map, so nothing to name (travel-album PLAN §5.12).
+        if (kind !== TripKind.Plain) {
+          await this.queueNaming(albumId);
+        }
         return this.read(auth, albumId);
       }
     }
@@ -464,15 +492,15 @@ const routingLeg = (row: RoutingLegRow): RoutingLeg => ({
   arrival: stationOf(row.arrivalName, row.arrivalLatitude, row.arrivalLongitude),
 });
 
-// A start or finish of a route: a stop without assets, named by its coordinates until the owner names it.
+// A start or finish of a route: a stop without assets. A title the owner gave is manual; without one, naming gives it.
 const endStop = (albumId: string, role: TripStopRole, { latitude, longitude, title }: TripEndDto) => ({
   id: randomUUID(),
   albumId,
   role,
   latitude,
   longitude,
-  title: title ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-  titleSource: 'manual',
+  title,
+  titleSource: title && 'manual',
   isAddedByHand: true,
 });
 
