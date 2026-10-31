@@ -78,6 +78,9 @@ features:
       - server/src/repositories/event.repository.ts
       - server/src/gallery/services/gallery-asset.service.ts
       - server/src/gallery/services/gallery-asset.service.spec.ts
+      # a Space contributes nothing to a Favorites trip's album (trips DECISIONS-LOG)
+      - server/src/repositories/shared-space.repository.ts
+      - server/src/queries/shared.space.repository.sql
       # generated: regenerate on a rebase, never merge by hand
       - open-api/immich-openapi-specs.json
       - packages/sdk/src/fetch-client.ts

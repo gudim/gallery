@@ -1,10 +1,11 @@
 import { Kysely } from 'kysely';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AssetVisibility, JobName } from 'src/enum.js';
+import { AssetVisibility, JobName, SharedSpaceRole } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
+import { SharedSpaceRepository } from 'src/repositories/shared-space.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto } from 'src/trips/dtos/trip.dto.js';
@@ -266,6 +267,28 @@ describe(TripFavoritesService.name, () => {
     await mirror();
 
     await expect(albumAssetIds(albumId)).resolves.toEqual([first, added].toSorted());
+  });
+
+  it('lets a Space contribute nothing to the Favorites album', async () => {
+    const { ctx, user, newAsset, star, favoritesTrip, mirror } = await setup();
+    await star(user.id, await newAsset(user.id, VILNIUS));
+    await mirror(true);
+    const [{ albumId }] = await favoritesTrip();
+    const { album } = await ctx.newAlbum({ ownerId: user.id });
+    const { user: editor } = await ctx.newUser();
+    const { user: other } = await ctx.newUser();
+    const { space } = await ctx.newSharedSpace({ createdById: user.id });
+    await ctx.newSharedSpaceMember({ spaceId: space.id, userId: editor.id, role: SharedSpaceRole.Editor });
+    const pooled = await newAsset(other.id, KAUNAS);
+    await ctx.newSharedSpaceAsset({ spaceId: space.id, assetId: pooled });
+    await ctx.newSharedSpaceAlbum({ spaceId: space.id, albumId });
+    await ctx.newSharedSpaceAlbum({ spaceId: space.id, albumId: album.id });
+    const spaces = new SharedSpaceRepository(db);
+
+    await expect(spaces.getContributableAssetSpaces(editor.id, albumId, [pooled])).resolves.toEqual([]);
+    await expect(spaces.getContributableAssetSpaces(editor.id, album.id, [pooled])).resolves.toEqual([
+      { assetId: pooled, spaceId: space.id },
+    ]);
   });
 
   it('stars the album of an imported Favorites trip and queues its mirroring, and the nightly sweep mirrors every one', async () => {
