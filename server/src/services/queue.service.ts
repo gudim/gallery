@@ -327,6 +327,8 @@ export class QueueService extends BaseService {
         // with the other cleanup/maintenance jobs so disabling nightlyTasks.databaseCleanup
         // opts out of this too, matching the existing all-maintenance-off admin contract.
         { name: JobName.SharedSpaceAlbumGrantReconcileSweep },
+        // Trips: files album assets that no event reached (trips PLAN D12).
+        { name: JobName.TripFileSweep },
       );
     }
 

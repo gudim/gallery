@@ -1073,6 +1073,9 @@ export enum JobName {
   // Library Cleanup
   AssetAnalyzeQualityQueueAll = 'AssetAnalyzeQualityQueueAll',
   AssetAnalyzeQuality = 'AssetAnalyzeQuality',
+  // Trips: filing new album assets into stops (trips PLAN D12)
+  TripFile = 'TripFile',
+  TripFileSweep = 'TripFileSweep',
 }
 
 export const JobNameSchema = z.enum(JobName).describe('Job name').meta({ id: 'JobName' });

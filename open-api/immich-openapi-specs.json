@@ -35350,7 +35350,9 @@
           "AssetClassifyQueueAll",
           "AssetClassify",
           "AssetAnalyzeQualityQueueAll",
-          "AssetAnalyzeQuality"
+          "AssetAnalyzeQuality",
+          "TripFile",
+          "TripFileSweep"
         ],
         "type": "string"
       },

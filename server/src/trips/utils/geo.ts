@@ -3,6 +3,14 @@ import { TripLegMode } from 'src/trips/enum.js';
 // Geometry for trip layout, ported from travel-album's atlas/geo/{cluster,valhalla}.py. Pure: no I/O.
 
 export type LatLng = { latitude: number; longitude: number };
+// A row that may have a point, such as a stop or an asset.
+export type Located = { latitude: number | null; longitude: number | null };
+
+export const pointOf = ({ latitude, longitude }: Located): LatLng | null =>
+  latitude === null || longitude === null ? null : { latitude, longitude };
+
+// Stored coordinates keep 6 decimals, about 0.1 m.
+export const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 
 const EARTH_RADIUS_M = 6_371_000;
 // ROUTE_FOOT_MAX_M (travel-album PLAN §5.11): a leg shorter than this in a straight line is walked by default.

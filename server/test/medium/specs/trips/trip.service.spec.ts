@@ -1,13 +1,15 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AlbumUserRole, SharedLinkType } from 'src/enum.js';
+import { AlbumUserRole, JobName, SharedLinkType } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AlbumRepository } from 'src/repositories/album.repository.js';
+import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto, TripResponseDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
+import { TripLegMode, TripLegStatus } from 'src/trips/enum.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { newMediumService } from 'test/medium.factory.js';
@@ -177,8 +179,11 @@ const asDocument = async (trip: TripResponseDto, stopKeys: string[]) => {
 const guest = (sharedLinkId: string, user: { id: string }) => factory.auth({ user, sharedLink: { id: sharedLinkId } });
 
 const setup = async () => {
-  const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository] });
-  const sut = new TripService(new AccessRepository(db), new TripRepository(db));
+  const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository, JobRepository] });
+  const job = ctx.getMock(JobRepository);
+  job.queue.mockResolvedValue();
+  job.queueAll.mockResolvedValue();
+  const sut = new TripService(new AccessRepository(db), job, new TripRepository(db));
   const { user: owner } = await ctx.newUser();
   const assets = [];
   for (const [index, time] of [
@@ -197,7 +202,7 @@ const setup = async () => {
   const { album } = await ctx.newAlbum({ ownerId: owner.id }, assetIds);
   const document = fixture(assetIds);
   const importTrip = () => sut.import(factory.auth({ user: owner }), album.id, TripImportDto.schema.parse(document));
-  return { ctx, sut, owner, album, assetIds, document, importTrip };
+  return { ctx, job, sut, owner, album, assetIds, document, importTrip };
 };
 
 type Shot = [time: string, point: { latitude: number; longitude: number } | null];
@@ -365,6 +370,138 @@ describe(TripService.name, () => {
       await expect(sut.create(factory.auth({ user: stranger }), dto)).rejects.toBeInstanceOf(NotFoundException);
       await importTrip();
       await expect(sut.create(factory.auth({ user: owner }), dto)).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('file new assets', () => {
+    const P = { latitude: 54.68, longitude: 25.28 };
+    const FAR = { latitude: 55, longitude: 25 };
+
+    // A trip of two stops, 10:00 at P and 18:00 at FAR; on a route, the owner set the leg to the train.
+    const routeTrip = async (kind = 'route') => {
+      const context = await setup();
+      const { ctx, sut, owner } = context;
+      const { album } = await newAlbumOf(ctx, owner.id, [
+        ['10:00', P],
+        ['18:00', FAR],
+      ]);
+      const auth = factory.auth({ user: owner });
+      const trip = await sut.create(auth, TripCreateDto.schema.parse({ albumId: album.id, kind }));
+      await sut.updateStop(auth, album.id, trip.stops[0].id, changes({ title: 'Old Town', story: 'We walked.' }));
+      await db
+        .updateTable('trip_leg')
+        .set({ mode: TripLegMode.Train, isModeManual: true, status: TripLegStatus.Ok })
+        .execute();
+      // An asset added later, its metadata read unless `isExtracted` is false.
+      const add = async (time: string, point: typeof P | null, isExtracted = true) => {
+        const { asset } = await ctx.newAsset({
+          ownerId: owner.id,
+          localDateTime: new Date(`2026-05-01T${time}:00.000Z`),
+        });
+        if (point) {
+          await ctx.newExif({ assetId: asset.id, ...point });
+        }
+        await db
+          .insertInto('asset_job_status')
+          .values({ assetId: asset.id, metadataExtractedAt: isExtracted ? new Date() : null })
+          .onConflict((oc) =>
+            oc.column('assetId').doUpdateSet({ metadataExtractedAt: isExtracted ? new Date() : null }),
+          )
+          .execute();
+        await ctx.newAlbumAsset({ albumId: album.id, assetId: asset.id });
+        return asset.id;
+      };
+      return { ...context, auth, album, stops: trip.stops, add };
+    };
+
+    it('files into existing stops without touching their texts, and opens new ones between them', async () => {
+      const { sut, auth, album, stops, add } = await routeTrip();
+      const near = await add('10:20', { latitude: 54.6805, longitude: 25.28 });
+      const between = await add('14:00', { latitude: 54.8, longitude: 25.1 });
+
+      await sut.handleFile({ id: album.id });
+
+      const trip = await sut.get(auth, album.id);
+      expect(trip.contentVersion).toBe(3);
+      expect(trip.stops).toHaveLength(3);
+      const [first, middle, last] = trip.stops;
+      expect(first).toMatchObject({
+        id: stops[0].id,
+        title: 'Old Town',
+        story: 'We walked.',
+        localEnd: '2026-05-01T10:20:00.000Z',
+      });
+      expect(last.id).toBe(stops[1].id);
+      expect(trip.assets.find(({ assetId }) => assetId === near)?.stopId).toBe(first.id);
+      expect(trip.assets.find(({ assetId }) => assetId === between)?.stopId).toBe(middle.id);
+      // the owner's train runs on through the new stop
+      expect(
+        trip.legs.map(({ fromStopId, toStopId, mode, isModeManual, status }) => [
+          fromStopId,
+          toStopId,
+          mode,
+          isModeManual,
+          status,
+        ]),
+      ).toEqual([
+        [first.id, middle.id, 'train', true, 'pending'],
+        [middle.id, last.id, 'train', true, 'pending'],
+      ]);
+    });
+
+    it('waits for metadata, files once, and leaves the trip alone when there is nothing new', async () => {
+      const { sut, auth, album, add } = await routeTrip();
+      const waiting = await add('10:10', P, false);
+
+      await sut.handleFile({ id: album.id });
+      const before = await sut.get(auth, album.id);
+      expect(before.contentVersion).toBe(2);
+      expect(before.assets.find(({ assetId }) => assetId === waiting)?.stopId).toBeNull();
+
+      await db
+        .updateTable('asset_job_status')
+        .set({ metadataExtractedAt: new Date() })
+        .where('assetId', '=', waiting)
+        .execute();
+      await sut.handleFile({ id: album.id });
+      await sut.handleFile({ id: album.id });
+
+      const trip = await sut.get(auth, album.id);
+      expect(trip.contentVersion).toBe(3);
+      expect(trip.assets.find(({ assetId }) => assetId === waiting)?.stopId).toBe(trip.stops[0].id);
+    });
+
+    it('leaves an asset that fits no stop Unplaced, and does not file it again', async () => {
+      const { sut, auth, album, add } = await routeTrip('places');
+      // a Places trip never interpolates: two hours from any anchor, the asset has no point
+      const nowhere = await add('12:00', null);
+
+      await sut.handleFile({ id: album.id });
+      await sut.handleFile({ id: album.id });
+
+      const trip = await sut.get(auth, album.id);
+      expect(trip.contentVersion).toBe(3);
+      expect(trip.stops).toHaveLength(2);
+      expect(trip.assets.find(({ assetId }) => assetId === nowhere)).toMatchObject({ stopId: null, pointSource: null });
+    });
+
+    it('queues filing for trip albums only, on album updates, extracted metadata and the nightly sweep', async () => {
+      const { ctx, job, sut, owner, album: tripAlbum, add } = await routeTrip();
+      const { album: plainAlbum } = await newAlbumOf(ctx, owner.id, [['10:00', null]]);
+      const waiting = await add('11:00', P);
+      await ctx.newAlbumAsset({ albumId: plainAlbum.id, assetId: waiting });
+
+      await sut.onAlbumUpdate({ id: tripAlbum.id, userIds: [], recipientIds: [] });
+      await sut.onAlbumUpdate({ id: plainAlbum.id, userIds: [], recipientIds: [] });
+      expect(job.queue.mock.calls).toEqual([[{ name: JobName.TripFile, data: { id: tripAlbum.id } }]]);
+
+      await sut.onAssetMetadataExtracted({ assetId: waiting, userId: owner.id });
+      await sut.handleFileSweep();
+      expect(job.queueAll.mock.calls.map(([items]) => items)).toEqual([
+        [{ name: JobName.TripFile, data: { id: tripAlbum.id } }],
+        expect.arrayContaining([{ name: JobName.TripFile, data: { id: tripAlbum.id } }]),
+      ]);
+      expect(job.queueAll.mock.calls[1][0]).not.toContainEqual({ name: JobName.TripFile, data: { id: plainAlbum.id } });
     });
   });
 

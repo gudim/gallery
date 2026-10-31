@@ -87,3 +87,62 @@ where
 for update of
   "trip"
 commit
+
+-- TripRepository.getTripAlbumIds
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+  inner join "album_asset" on "album_asset"."albumId" = "trip"."albumId"
+where
+  "album_asset"."assetId" = $1::uuid
+  and "album"."deletedAt" is null
+
+-- TripRepository.hasTrip
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+
+-- TripRepository.getAlbumIdsToFile
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "album"."deletedAt" is null
+  and exists (
+    select
+      "asset"."id"
+    from
+      "album_asset"
+      inner join "asset" on "asset"."id" = "album_asset"."assetId"
+      inner join "asset_job_status" on "asset_job_status"."assetId" = "asset"."id"
+      left join "trip_asset" on "trip_asset"."albumId" = "album_asset"."albumId"
+      and "trip_asset"."assetId" = "album_asset"."assetId"
+    where
+      "album_asset"."albumId" = "trip"."albumId"
+      and "asset"."deletedAt" is null
+      and "asset_job_status"."metadataExtractedAt" is not null
+      and "trip_asset"."assetId" is null
+  )
+
+-- TripRepository.fileNewAssets
+begin
+select
+  "trip"."kind"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "trip"."albumId" = $1::uuid
+  and "album"."deletedAt" is null
+for update of
+  "trip"
+commit

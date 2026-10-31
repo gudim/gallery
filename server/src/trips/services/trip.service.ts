@@ -7,8 +7,12 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
-import { Permission } from 'src/enum.js';
+import type { ArgOf } from 'src/repositories/event.repository.js';
+import type { JobOf } from 'src/types.js';
+import { OnEvent, OnJob } from 'src/decorators.js';
+import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
+import { JobRepository } from 'src/repositories/job.repository.js';
 import {
   TripCreateDto,
   TripEndDto,
@@ -30,8 +34,38 @@ type Trip = NonNullable<Awaited<ReturnType<TripRepository['get']>>>;
 export class TripService {
   constructor(
     private accessRepository: AccessRepository,
+    private jobRepository: JobRepository,
     private tripRepository: TripRepository,
   ) {}
+
+  // Assets added to a trip's album, by anyone and from any client, are filed into stops (trips PLAN D12).
+  @OnEvent({ name: 'AlbumUpdate' })
+  async onAlbumUpdate({ id }: ArgOf<'AlbumUpdate'>) {
+    if (await this.tripRepository.hasTrip(id)) {
+      await this.jobRepository.queue({ name: JobName.TripFile, data: { id } });
+    }
+  }
+
+  // An asset added before its metadata was read waits for it: its time and GPS decide its stop.
+  @OnEvent({ name: 'AssetMetadataExtracted' })
+  async onAssetMetadataExtracted({ assetId }: ArgOf<'AssetMetadataExtracted'>) {
+    const albumIds = await this.tripRepository.getTripAlbumIds(assetId);
+    await this.jobRepository.queueAll(albumIds.map((id) => ({ name: JobName.TripFile, data: { id } })));
+  }
+
+  @OnJob({ name: JobName.TripFile, queue: QueueName.BackgroundTask })
+  async handleFile({ id }: JobOf<JobName.TripFile>): Promise<JobStatus> {
+    await this.tripRepository.fileNewAssets(id);
+    return JobStatus.Success;
+  }
+
+  // Nightly: files what no event reached, such as assets added while the worker was down.
+  @OnJob({ name: JobName.TripFileSweep, queue: QueueName.BackgroundTask })
+  async handleFileSweep(): Promise<JobStatus> {
+    const albumIds = await this.tripRepository.getAlbumIdsToFile();
+    await this.jobRepository.queueAll(albumIds.map((id) => ({ name: JobName.TripFile, data: { id } })));
+    return JobStatus.Success;
+  }
 
   /** `viewerKey` is a guest's browser key, which tells whether they liked each asset. */
   async get(auth: AuthDto, albumId: string, viewerKey?: string): Promise<TripResponseDto> {

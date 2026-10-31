@@ -12866,7 +12866,9 @@ export enum JobName {
     AssetClassifyQueueAll = "AssetClassifyQueueAll",
     AssetClassify = "AssetClassify",
     AssetAnalyzeQualityQueueAll = "AssetAnalyzeQualityQueueAll",
-    AssetAnalyzeQuality = "AssetAnalyzeQuality"
+    AssetAnalyzeQuality = "AssetAnalyzeQuality",
+    TripFile = "TripFile",
+    TripFileSweep = "TripFileSweep"
 }
 export enum QueueJobStatus {
     Active = "active",

@@ -647,7 +647,11 @@ export type JobItem =
   | { name: JobName.AssetAnalyzeQuality; data: IEntityJob & { staleOnly?: boolean } }
 
   // Face Repair
-  | { name: JobName.FaceRepairScan; data: IFaceRepairScanJob };
+  | { name: JobName.FaceRepairScan; data: IFaceRepairScanJob }
+
+  // Trips (trips PLAN D12)
+  | { name: JobName.TripFile; data: IEntityJob }
+  | { name: JobName.TripFileSweep; data?: IBaseJob };
 
 export type VectorExtension = (typeof VECTOR_EXTENSIONS)[number];
 
