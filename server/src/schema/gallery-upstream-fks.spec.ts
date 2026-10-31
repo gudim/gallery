@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { galleryTables } from 'src/schema/gallery.js';
 import 'src/schema/index.js';
+import { tripTables } from 'src/trips/schema/index.js';
 
 type UpstreamKey = { table: string; columns: string[]; forkForeignKeys: string[] };
 
@@ -21,7 +22,7 @@ const tableName = (table: { name: string }) =>
 describe('gallery-upstream-fks.json', () => {
   it('lists exactly the fork foreign keys onto upstream keys', () => {
     const schema = schemaFromCode({ overrides: true, namingStrategy: 'default' });
-    const forkTables = new Set(galleryTables.map((table) => tableName(table)));
+    const forkTables = new Set([...galleryTables, ...tripTables].map((table) => tableName(table)));
     const tables = new Map(schema.tables.map((table) => [table.name, table]));
     expect(
       [...forkTables].filter((name) => !tables.has(name)),

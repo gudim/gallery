@@ -1,0 +1,39 @@
+// The values the trip tables' check constraints allow (trips PLAN §2.1, GLOSSARY.md).
+export enum TripKind {
+  Route = 'route',
+  Places = 'places',
+  Plain = 'plain',
+}
+
+export enum TripStopRole {
+  Origin = 'origin',
+  Finish = 'finish',
+}
+
+export enum TripPointSource {
+  Inferred = 'inferred',
+  Manual = 'manual',
+}
+
+export enum TripLegMode {
+  Foot = 'foot',
+  Driving = 'driving',
+  Trail = 'trail',
+  Direct = 'direct',
+  Flight = 'flight',
+  Bicycle = 'bicycle',
+  Bus = 'bus',
+  Train = 'train',
+  Boat = 'boat',
+}
+
+export enum TripLegStatus {
+  Pending = 'pending',
+  Ok = 'ok',
+  Attention = 'attention',
+}
+
+export enum TripOverlayKind {
+  Trail = 'trail',
+  Mask = 'mask',
+}
