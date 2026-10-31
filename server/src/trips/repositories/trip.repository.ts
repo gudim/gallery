@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Insertable, Kysely, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
+import { randomUUID } from 'node:crypto';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { AlbumUserRole } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
-import { TripStopRole } from 'src/trips/enum.js';
+import { TripKind, TripPointSource, TripStopRole } from 'src/trips/enum.js';
 import { TripsDB } from 'src/trips/schema/index.js';
+import { fileAssets, syncLegs } from 'src/trips/utils/filing.js';
+import { pointOf } from 'src/trips/utils/geo.js';
 import { asUuid } from 'src/utils/database.js';
 
 export type TripRows = {
@@ -299,6 +302,229 @@ export class TripRepository {
           .execute();
       }
       return TripCreateResult.Created;
+    });
+  }
+
+  /** Albums with a trip, outside the trash, that hold the asset. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async getTripAlbumIds(assetId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('trip')
+      .innerJoin('album', 'album.id', 'trip.albumId')
+      .innerJoin('album_asset', 'album_asset.albumId', 'trip.albumId')
+      .select('trip.albumId')
+      .where('album_asset.assetId', '=', asUuid(assetId))
+      .where('album.deletedAt', 'is', null)
+      .execute();
+    return rows.map(({ albumId }) => albumId);
+  }
+
+  /** Whether the album, outside the trash, has a trip. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async hasTrip(albumId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('trip')
+      .innerJoin('album', 'album.id', 'trip.albumId')
+      .select('trip.albumId')
+      .where('trip.albumId', '=', asUuid(albumId))
+      .where('album.deletedAt', 'is', null)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /** Trips, outside the trash, with album assets waiting to be filed. */
+  @GenerateSql()
+  async getAlbumIdsToFile(): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('trip')
+      .innerJoin('album', 'album.id', 'trip.albumId')
+      .select('trip.albumId')
+      .where('album.deletedAt', 'is', null)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('album_asset')
+            .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+            .innerJoin('asset_job_status', 'asset_job_status.assetId', 'asset.id')
+            .leftJoin('trip_asset', (join) =>
+              join
+                .onRef('trip_asset.albumId', '=', 'album_asset.albumId')
+                .onRef('trip_asset.assetId', '=', 'album_asset.assetId'),
+            )
+            .select('asset.id')
+            .whereRef('album_asset.albumId', '=', 'trip.albumId')
+            .where('asset.deletedAt', 'is', null)
+            .where('asset_job_status.metadataExtractedAt', 'is not', null)
+            .where('trip_asset.assetId', 'is', null),
+        ),
+      )
+      .execute();
+    return rows.map(({ albumId }) => albumId);
+  }
+
+  /**
+   * Files the album assets the trip has not seen yet into its stops (trips PLAN D12): an asset outside the trash whose
+   * metadata is extracted and that has no `trip_asset` row. Every one gets a row, Unplaced when it fits no stop. The
+   * trip row is held throughout, so filing queues up behind edits. Returns how many assets were filed.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  fileNewAssets(albumId: string): Promise<number> {
+    const id = asUuid(albumId);
+    return this.db.transaction().execute(async (trx) => {
+      const trip = await trx
+        .selectFrom('trip')
+        .innerJoin('album', 'album.id', 'trip.albumId')
+        .select('trip.kind')
+        .where('trip.albumId', '=', id)
+        .where('album.deletedAt', 'is', null)
+        .forUpdate('trip')
+        .executeTakeFirst();
+      if (!trip) {
+        return 0;
+      }
+      const assets = await trx
+        .selectFrom('album_asset')
+        .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+        .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
+        .leftJoin('asset_job_status', 'asset_job_status.assetId', 'asset.id')
+        .leftJoin('trip_asset', (join) =>
+          join.onRef('trip_asset.albumId', '=', 'album_asset.albumId').onRef('trip_asset.assetId', '=', 'asset.id'),
+        )
+        .select([
+          'asset.id',
+          'asset.localDateTime as time',
+          'asset_exif.latitude',
+          'asset_exif.longitude',
+          'trip_asset.pointSource',
+          'trip_asset.latitude as pointLatitude',
+          'trip_asset.longitude as pointLongitude',
+          sql<boolean>`"trip_asset"."assetId" IS NULL`.as('isNew'),
+        ])
+        .where('album_asset.albumId', '=', id)
+        .where('asset.deletedAt', 'is', null)
+        // An asset whose metadata is not extracted yet has no time or GPS to file by; extraction queues filing again.
+        .where((eb) =>
+          eb.or([eb('trip_asset.assetId', 'is not', null), eb('asset_job_status.metadataExtractedAt', 'is not', null)]),
+        )
+        .orderBy('asset.localDateTime')
+        .orderBy('asset.id')
+        .execute();
+      if (assets.every(({ isNew }) => !isNew)) {
+        return 0;
+      }
+      const stops = await trx
+        .selectFrom('trip_stop')
+        .select([
+          'trip_stop.id',
+          'trip_stop.role',
+          'trip_stop.latitude',
+          'trip_stop.longitude',
+          'trip_stop.localStart as start',
+          'trip_stop.localEnd as end',
+          'trip_stop.isPositionManual',
+          'trip_stop.isAddedByHand',
+          'trip_stop.isAtCenter',
+          (eb) =>
+            eb
+              .selectFrom('trip_asset')
+              .select(sql<number>`count(*)::int`.as('count'))
+              .whereRef('trip_asset.stopId', '=', 'trip_stop.id')
+              .as('count'),
+        ])
+        .where('trip_stop.albumId', '=', id)
+        .execute();
+
+      const start = stops.find(({ role }) => role === TripStopRole.Start);
+      const filing = fileAssets(
+        trip.kind,
+        stops
+          .filter(({ role, isAddedByHand, isAtCenter }) => role === null && !isAddedByHand && !isAtCenter)
+          .map((stop) => ({ ...stop, count: stop.count ?? 0 })),
+        assets.map((asset) => ({
+          id: asset.id,
+          time: asset.time,
+          anchor:
+            asset.pointSource === TripPointSource.Manual
+              ? pointOf({ latitude: asset.pointLatitude, longitude: asset.pointLongitude })
+              : pointOf(asset),
+          isNew: asset.isNew,
+        })),
+        { start: start ? pointOf(start) : null, newId: () => randomUUID() },
+      );
+
+      const created = filing.stops.filter(({ isNew }) => isNew);
+      if (created.length > 0) {
+        await trx
+          .insertInto('trip_stop')
+          .values(
+            created.map(({ id, latitude, longitude, start, end }) => ({
+              id,
+              albumId,
+              latitude,
+              longitude,
+              localStart: start,
+              localEnd: end,
+            })),
+          )
+          .execute();
+      }
+      for (const { id, isNew, latitude, longitude, start, end } of filing.stops) {
+        if (isNew) {
+          continue;
+        }
+        await trx
+          .updateTable('trip_stop')
+          .set({ latitude, longitude, localStart: start, localEnd: end })
+          .where('id', '=', id)
+          .execute();
+      }
+      await trx
+        .insertInto('trip_asset')
+        .values(
+          filing.assets.map(({ assetId, stopId, point }) => ({
+            albumId,
+            assetId,
+            stopId,
+            latitude: point?.latitude ?? null,
+            longitude: point?.longitude ?? null,
+            pointSource: point && TripPointSource.Inferred,
+          })),
+        )
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
+      if (trip.kind === TripKind.Route && created.length > 0) {
+        const [ordered, legs] = await Promise.all([
+          trx
+            .selectFrom('trip_stop')
+            .select(['id', 'latitude', 'longitude', 'isTransit'])
+            .where('albumId', '=', id)
+            .orderBy(stopOrder('trip_stop'))
+            .execute(),
+          trx
+            .selectFrom('trip_leg')
+            .select(['id', 'fromStopId', 'toStopId', 'mode', 'isModeManual'])
+            .where('albumId', '=', id)
+            .execute(),
+        ]);
+        const { removedIds, added } = syncLegs(ordered, legs);
+        if (removedIds.length > 0) {
+          await trx.deleteFrom('trip_leg').where('id', 'in', removedIds).execute();
+        }
+        if (added.length > 0) {
+          await trx
+            .insertInto('trip_leg')
+            .values(added.map((leg) => ({ ...leg, albumId })))
+            .execute();
+        }
+      }
+
+      await trx
+        .updateTable('trip')
+        .set((eb) => ({ contentVersion: eb('contentVersion', '+', 1) }))
+        .where('albumId', '=', id)
+        .execute();
+      return filing.assets.length;
     });
   }
 }

@@ -362,6 +362,7 @@ describe(QueueService.name, () => {
         { name: JobName.HlsSessionCleanup },
         { name: JobName.AuditTableCleanup },
         { name: JobName.SharedSpaceAlbumGrantReconcileSweep },
+        { name: JobName.TripFileSweep },
         { name: JobName.MemoryGenerate },
         { name: JobName.UserSyncUsage },
         { name: JobName.AssetGenerateThumbnailsQueueAll, data: { force: false } },

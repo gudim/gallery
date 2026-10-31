@@ -1,5 +1,5 @@
 import { TripKind, TripLegMode } from 'src/trips/enum.js';
-import { type LatLng, defaultMode, haversineM } from 'src/trips/utils/geo.js';
+import { type LatLng, type Located, defaultMode, haversineM, pointOf, round6 } from 'src/trips/utils/geo.js';
 import {
   type Shot,
   daySections,
@@ -20,13 +20,6 @@ export type LaidOutStop = { index: number; latitude: number | null; longitude: n
 // `point` is an inferred point; an asset with GPS of its own or none at all has none.
 export type LaidOutAsset = { assetId: string; stopIndex: number | null; point: LatLng | null };
 export type TripLayout = { stops: LaidOutStop[]; assets: LaidOutAsset[] };
-
-type Located = { latitude: number | null; longitude: number | null };
-
-const pointOf = ({ latitude, longitude }: Located): LatLng | null =>
-  latitude === null || longitude === null ? null : { latitude, longitude };
-
-const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 
 const toStop = (index: number, items: Array<{ time: Date }>, centre: LatLng | null): LaidOutStop => ({
   index,

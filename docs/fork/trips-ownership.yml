@@ -69,6 +69,11 @@ features:
       - server/src/schema/index.ts
       - server/src/schema/gallery-upstream-fks.json
       - server/src/schema/gallery-upstream-fks.spec.ts
+      # the filing job (trips PLAN D12): two JobName values, their JobItem lines, the nightly sweep
+      - server/src/enum.ts
+      - server/src/types.ts
+      - server/src/services/queue.service.ts
+      - server/src/services/queue.service.spec.ts
       # generated: regenerate on a rebase, never merge by hand
       - open-api/immich-openapi-specs.json
       - packages/sdk/src/fetch-client.ts

@@ -12303,7 +12303,9 @@ export enum JobName {
     SharedSpaceAlbumGrantReconcileSweep = "SharedSpaceAlbumGrantReconcileSweep",
     SharedSpaceIdentityReconciliationSweep = "SharedSpaceIdentityReconciliationSweep",
     AssetClassifyQueueAll = "AssetClassifyQueueAll",
-    AssetClassify = "AssetClassify"
+    AssetClassify = "AssetClassify",
+    TripFile = "TripFile",
+    TripFileSweep = "TripFileSweep"
 }
 export enum QueueJobStatus {
     Active = "active",
