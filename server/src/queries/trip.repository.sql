@@ -134,6 +134,35 @@ for update of
   "trip"
 commit
 
+-- TripRepository.getKind
+select
+  "kind"
+from
+  "trip"
+where
+  "albumId" = $1::uuid
+
+-- TripRepository.getClockAssets
+select
+  "asset"."id",
+  "asset"."ownerId",
+  "asset_exif"."make",
+  "asset_exif"."model",
+  "asset"."type" = $1 as "isVideo",
+  "asset"."localDateTime" as "time",
+  "asset_exif"."latitude",
+  "asset_exif"."longitude"
+from
+  "album_asset"
+  inner join "asset" on "asset"."id" = "album_asset"."assetId"
+  left join "asset_exif" on "asset_exif"."assetId" = "asset"."id"
+where
+  "album_asset"."albumId" = $2::uuid
+  and "asset"."deletedAt" is null
+order by
+  "asset"."localDateTime",
+  "asset"."id"
+
 -- TripRepository.getLanguage
 select
   "language"

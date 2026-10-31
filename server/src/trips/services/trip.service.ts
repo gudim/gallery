@@ -18,6 +18,7 @@ import {
   TripAssetPointDto,
   TripAssetsCenterDto,
   TripAssetsMoveDto,
+  TripCamerasDto,
   TripCreateDto,
   TripEndDto,
   TripFinishUpdateDto,
@@ -55,6 +56,7 @@ import {
   TripLiker,
   TripRepository,
 } from 'src/trips/repositories/trip.repository.js';
+import { clockCameras } from 'src/trips/utils/clock.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
 import {
@@ -133,6 +135,11 @@ export class TripService {
     }
     if (filed.stops > 0) {
       await this.queueNaming(id);
+    }
+    // Times changed since filing, by the clock-offset wizard or a date edit, move their stops (trips PLAN D9).
+    const retimed = await this.tripEditorRepository.retime(id);
+    if (retimed.needsRouting) {
+      await this.queueRouting(id);
     }
     return JobStatus.Success;
   }
@@ -425,6 +432,20 @@ export class TripService {
       albumId,
       await this.tripEditorRepository.toCenter(albumId, dto.assetIds, dto.centre && pointOfEnd(dto.centre)),
     );
+  }
+
+  /**
+   * The album's cameras for the clock-offset wizard, with a suggested shift where one is worth it (trips PLAN D9).
+   * Editors open it; the shift itself goes through Immich's bulk asset update, and only on the caller's own assets.
+   */
+  async getCameras(auth: AuthDto, albumId: string): Promise<TripCamerasDto> {
+    await this.requireEdit(auth, albumId);
+    const kind = await this.tripRepository.getKind(albumId);
+    if (!kind) {
+      throw new NotFoundException('Trip not found');
+    }
+    const assets = await this.tripRepository.getClockAssets(albumId);
+    return { cameras: clockCameras(assets, auth.user.id, kind) };
   }
 
   /**
@@ -729,6 +750,9 @@ const refusal = (result: Exclude<TripEditResult, TripEditResult.Updated>) => {
     }
     case TripEditResult.NoLegsToRetry: {
       return new BadRequestException('No leg of the trip needs attention');
+    }
+    case TripEditResult.Unchanged: {
+      return new BadRequestException('Nothing changed');
     }
   }
 };

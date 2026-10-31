@@ -12,6 +12,7 @@ import {
   TripAssetPointDto,
   TripAssetsCenterDto,
   TripAssetsMoveDto,
+  TripCamerasDto,
   TripCreateDto,
   TripEndDto,
   TripFinishUpdateDto,
@@ -398,6 +399,18 @@ export class TripController {
     @Query() dto: TripGeoReverseQueryDto,
   ): Promise<TripGeoPlacesDto> {
     return this.service.reversePlace(auth, id, dto);
+  }
+
+  @Get(':id/cameras')
+  @Authenticated({ permission: Permission.AlbumUpdate })
+  @Endpoint({
+    summary: 'Get the cameras of a trip',
+    description:
+      'Lists the cameras of a trip’s album (EXIF make and model, videos apart) with their GPS share, and for a camera without GPS a shift of its clock that puts its assets in the stops of the cameras with GPS, where one is worth it; a Places trip gets none. The shift is applied through the bulk asset update, to the caller’s own assets only. The album owner and editors only.',
+    history: new HistoryBuilder().added('v1').beta('v1'),
+  })
+  getTripCameras(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<TripCamerasDto> {
+    return this.service.getCameras(auth, id);
   }
 
   @Get(':id/place-hints')

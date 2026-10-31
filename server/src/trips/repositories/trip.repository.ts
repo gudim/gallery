@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Insertable, Kysely, NotNull, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { randomUUID } from 'node:crypto';
+import type { ClockAsset } from 'src/trips/utils/clock.js';
 import type { BuiltLeg } from 'src/trips/utils/route-leg.js';
 import type { Station } from 'src/trips/utils/routing.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
-import { AlbumUserRole } from 'src/enum.js';
+import { AlbumUserRole, AssetType } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import {
   TripKind,
@@ -84,6 +85,7 @@ export enum TripEditResult {
   LegNotTrain = 'leg-not-train',
   LegNotAttention = 'leg-not-attention',
   NoLegsToRetry = 'no-legs-to-retry',
+  Unchanged = 'unchanged',
 }
 
 export enum TripCreateResult {
@@ -286,6 +288,7 @@ export class TripRepository {
       }
       if (assets.length > 0) {
         await trx.insertInto('trip_asset').values(assets).execute();
+        await recordLocalTimes(trx, trip.albumId);
       }
       if (legs.length > 0) {
         await trx.insertInto('trip_leg').values(legs).execute();
@@ -382,6 +385,41 @@ export class TripRepository {
       }
       return { assets, stops };
     });
+  }
+
+  /** The trip's kind; null for no trip. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async getKind(albumId: string): Promise<TripKind | null> {
+    const row = await this.db
+      .selectFrom('trip')
+      .select('kind')
+      .where('albumId', '=', asUuid(albumId))
+      .executeTakeFirst();
+    return row?.kind ?? null;
+  }
+
+  /** The album's assets outside the trash with their camera, owner, local time and own GPS, for the clock wizard. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getClockAssets(albumId: string): Promise<ClockAsset[]> {
+    return this.db
+      .selectFrom('album_asset')
+      .innerJoin('asset', 'asset.id', 'album_asset.assetId')
+      .leftJoin('asset_exif', 'asset_exif.assetId', 'asset.id')
+      .select([
+        'asset.id',
+        'asset.ownerId',
+        'asset_exif.make',
+        'asset_exif.model',
+        sql<boolean>`"asset"."type" = ${AssetType.Video}`.as('isVideo'),
+        'asset.localDateTime as time',
+        'asset_exif.latitude',
+        'asset_exif.longitude',
+      ])
+      .where('album_asset.albumId', '=', asUuid(albumId))
+      .where('asset.deletedAt', 'is', null)
+      .orderBy('asset.localDateTime')
+      .orderBy('asset.id')
+      .execute();
   }
 
   /** The language the trip's stops and stations are named in; null for the instance's, or for no trip. */
@@ -857,6 +895,18 @@ export const lockTrip = (trx: Transaction<DB>, albumId: string) =>
     .forUpdate('trip')
     .executeTakeFirst();
 
+/**
+ * Records the asset's local time on every filing of the trip that has none yet, so a time changed later is seen
+ * (`TripEditorRepository.retime`). Called after each write that adds filings.
+ */
+export const recordLocalTimes = (trx: Transaction<DB>, albumId: string) =>
+  sql`
+    UPDATE "trip_asset" SET "localDateTime" = "asset"."localDateTime"
+    FROM "asset"
+    WHERE "asset"."id" = "trip_asset"."assetId" AND "trip_asset"."albumId" = ${asUuid(albumId)}
+      AND "trip_asset"."localDateTime" IS NULL
+  `.execute(trx);
+
 export const bumpContentVersion = (trx: Transaction<DB>, albumId: string) =>
   trx
     .updateTable('trip')
@@ -1013,6 +1063,7 @@ export const fileTripAssets = async (
     // An Unplaced asset filed again keeps its point, which the caller has inferred already.
     .onConflict((oc) => oc.columns(['albumId', 'assetId']).doUpdateSet((eb) => ({ stopId: eb.ref('excluded.stopId') })))
     .execute();
+  await recordLocalTimes(trx, albumId);
 
   if (kind === TripKind.Route && created.length > 0) {
     await syncRouteLegs(trx, albumId);

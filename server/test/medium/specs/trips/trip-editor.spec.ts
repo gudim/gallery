@@ -127,6 +127,14 @@ const nominatimPlace = (name: string) => ({
 const embedding = (i: number, cos = 1, j = 511) =>
   JSON.stringify(Array.from({ length: 512 }, (_, k) => (k === i ? cos : k === j ? Math.sqrt(1 - cos ** 2) : 0)));
 
+// An asset's local time as metadata extraction writes it after a date edit.
+const shiftTime = (assetId: string, time: string) =>
+  db
+    .updateTable('asset')
+    .set({ localDateTime: new Date(`2026-05-01T${time}:00.000Z`) })
+    .where('id', '=', assetId)
+    .execute();
+
 const fakeNominatim = (respond: (url: URL) => Response) => {
   const urls: URL[] = [];
   vi.stubGlobal(
@@ -683,6 +691,61 @@ describe('stop editor', () => {
           TripAssetsCenterDto.schema.parse({ assetIds: [route.assetIds[1]], centre: CENTRE }),
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('clock', () => {
+    it('follows a time changed since filing: the stop’s times move, and the route’s legs follow the new order', async () => {
+      const { sut, auth, album, assetIds, trip } = await setup();
+      const stopC = trip.assets[5].stopId!;
+      // The camera of C was 6 h fast: C was shot before A, as metadata extraction now reads it.
+      await shiftTime(assetIds[5], '09:00');
+
+      await sut.handleFile({ id: album.id });
+      const after = await read(sut, auth, album.id);
+      expect(after.stops.find(({ id }) => id === stopC)).toMatchObject({
+        localStart: '2026-05-01T09:00:00.000Z',
+        localEnd: '2026-05-01T09:00:00.000Z',
+      });
+      expect(after.stops.map(({ id }) => id).indexOf(stopC)).toBe(1); // right after the start
+      expect(after.contentVersion).toBe(trip.contentVersion + 1);
+
+      await sut.handleFile({ id: album.id });
+      const { contentVersion } = await read(sut, auth, album.id);
+      expect(contentVersion).toBe(after.contentVersion);
+    });
+
+    it('lists the cameras with a suggested shift and the caller’s own assets, and answers 403 to a viewer', async () => {
+      // A phone with GPS at A and B; a camera without GPS, 39 min fast, shot ten assets at the same stops.
+      const shots: Shot[] = [
+        ['10:00', A],
+        ['10:10', A],
+        ['12:00', B],
+        ['12:10', B],
+        ...['10:42', '10:44', '10:46', '10:48', '12:39', '12:41', '12:43', '12:45', '12:47', '12:49'].map(
+          (time): Shot => [time, null],
+        ),
+      ];
+      const { ctx, sut, auth, album, assetIds } = await setup(shots);
+      for (const [index, assetId] of assetIds.entries()) {
+        await ctx.newExif({
+          assetId,
+          ...(index < 4 ? { make: 'Google', model: 'Pixel' } : { make: 'Canon', model: 'EOS' }),
+        });
+      }
+      const { user: viewer } = await ctx.newUser();
+      await ctx.newAlbumUser({ albumId: album.id, userId: viewer.id, role: AlbumUserRole.Viewer });
+
+      const { cameras } = await sut.getCameras(auth, album.id);
+      expect(
+        cameras.map(({ make, assetCount, gpsCount, isReference }) => [make, assetCount, gpsCount, isReference]),
+      ).toEqual([
+        ['Canon', 10, 0, false],
+        ['Google', 4, 4, true],
+      ]);
+      expect(cameras[0].ownAssetIds).toEqual(assetIds.slice(4));
+      expect(Math.abs(cameras[0].suggestion!.offsetMinutes + 39)).toBeLessThanOrEqual(1);
+      await expect(sut.getCameras(factory.auth({ user: viewer }), album.id)).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

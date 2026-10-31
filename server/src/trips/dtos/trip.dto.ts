@@ -431,6 +431,30 @@ const TripPlaceHintsSchema = z
   })
   .meta({ id: 'TripPlaceHintsDto' });
 
+const TripCameraSchema = z
+  .object({
+    make: z.string().nullable().describe('EXIF make'),
+    model: z.string().nullable().describe('EXIF model'),
+    isVideo: z.boolean().describe('Videos are a camera of their own'),
+    assetCount: z.int().describe('Assets of the camera in the album'),
+    gpsCount: z.int().describe('Of them, assets with their own GPS'),
+    isReference: z.boolean().describe('At least half of its assets have GPS; its stops time the other cameras'),
+    ownAssetIds: z.array(z.string()).describe('The caller’s assets of the camera, the only ones they may shift'),
+    suggestion: z
+      .object({
+        offsetMinutes: z.int().describe('Minutes to add to the camera’s times'),
+        current: z.number().describe('Share of its assets in a reference stop as they are'),
+        best: z.number().describe('Share of its assets in a reference stop after the shift'),
+      })
+      .nullable()
+      .describe('A shift worth applying, or null'),
+  })
+  .meta({ id: 'TripCameraDto' });
+
+const TripCamerasSchema = z
+  .object({ cameras: z.array(TripCameraSchema).describe('Cameras of the album, most assets first') })
+  .meta({ id: 'TripCamerasDto' });
+
 const TripCreateSchema = z
   .object({
     albumId: z.uuidv4().describe('Album ID; the trip takes it'),
@@ -508,6 +532,7 @@ export class TripGeoSearchDto extends createZodDto(TripGeoSearchSchema) {}
 export class TripGeoReverseQueryDto extends createZodDto(TripGeoReverseSchema) {}
 export class TripGeoPlacesDto extends createZodDto(TripGeoPlacesSchema) {}
 export class TripPlaceHintsDto extends createZodDto(TripPlaceHintsSchema) {}
+export class TripCamerasDto extends createZodDto(TripCamerasSchema) {}
 export class TripStopSplitDto extends createZodDto(TripStopSplitSchema) {}
 export class TripStopCreateDto extends createZodDto(TripStopCreateSchema) {}
 export class TripAssetsMoveDto extends createZodDto(TripAssetsMoveSchema) {}
