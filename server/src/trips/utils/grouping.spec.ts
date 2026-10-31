@@ -9,7 +9,7 @@ import {
   placeGroups,
   routeGroups,
   transitSuggestions,
-} from 'src/trips/utils/layout.js';
+} from 'src/trips/utils/grouping.js';
 
 const T0 = Date.UTC(2026, 7, 1, 10, 0);
 const at = (minutes: number) => new Date(T0 + minutes * 60_000);

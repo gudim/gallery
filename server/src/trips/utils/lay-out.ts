@@ -7,7 +7,7 @@ import {
   inferRoutePoints,
   placeGroups,
   routeGroups,
-} from 'src/trips/utils/layout.js';
+} from 'src/trips/utils/grouping.js';
 
 // The first layout of a trip (travel-album's locate + full_cluster): every album asset filed into a new stop, or left
 // Unplaced. Pure: the caller reads the assets and writes the result.
