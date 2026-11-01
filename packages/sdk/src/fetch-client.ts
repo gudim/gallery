@@ -4365,6 +4365,27 @@ export type TrashResponseDto = {
     /** Number of items in trash */
     count: number;
 };
+export type TripLlmSettingsResponseDto = {
+    /** The user agrees to send their photos to that server */
+    allowUpload: boolean;
+    /** The server has TRIPS_LLM_SECRET set, so a key can be saved */
+    canStoreKey: boolean;
+    key: TripLlmKeyState;
+    /** Model name; empty when not set */
+    model: string;
+    /** Base URL of an OpenAI-compatible API; empty when not set */
+    url: string;
+};
+export type TripLlmSettingsUpdateDto = {
+    /** The user agrees to send their photos to that server */
+    allowUpload: boolean;
+    /** API key: a new key, null to clear it, omitted to keep the saved one while the URL stays */
+    key?: string | null;
+    /** Model name */
+    model: string;
+    /** Base URL of an OpenAI-compatible API, such as https://api.openai.com/v1 */
+    url: string;
+};
 export type TripEndDto = {
     /** Latitude */
     latitude: number;
@@ -11296,6 +11317,32 @@ export function restoreAssets({ bulkIdsDto }: {
     })));
 }
 /**
+ * Retrieve my LLM settings for trip texts
+ */
+export function getTripLlmSettings(opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripLlmSettingsResponseDto;
+    }>("/trip-llm-settings", {
+        ...opts
+    }));
+}
+/**
+ * Update my LLM settings for trip texts
+ */
+export function updateTripLlmSettings({ tripLlmSettingsUpdateDto }: {
+    tripLlmSettingsUpdateDto: TripLlmSettingsUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripLlmSettingsResponseDto;
+    }>("/trip-llm-settings", oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: tripLlmSettingsUpdateDto
+    })));
+}
+/**
  * Create a trip
  */
 export function createTrip({ tripCreateDto }: {
@@ -13053,6 +13100,11 @@ export enum TimeBucketSize {
 export enum AssetOrderBy {
     TakenAt = "takenAt",
     CreatedAt = "createdAt"
+}
+export enum TripLlmKeyState {
+    None = "none",
+    Set = "set",
+    Unreadable = "unreadable"
 }
 export enum TripKind {
     Route = "route",

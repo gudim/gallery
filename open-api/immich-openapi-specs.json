@@ -25149,6 +25149,106 @@
         "x-immich-state": "Stable"
       }
     },
+    "/trip-llm-settings": {
+      "get": {
+        "description": "Returns the caller’s OpenAI-compatible server for generating trip texts. The key itself is never returned, only whether one is saved and readable.",
+        "operationId": "getTripLlmSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripLlmSettingsResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retrieve my LLM settings for trip texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "userPreference.read",
+        "x-immich-state": "Beta"
+      },
+      "put": {
+        "description": "Saves the caller’s OpenAI-compatible server. A saved key is kept only while the URL stays; a new key needs TRIPS_LLM_SECRET on the server and is stored encrypted.",
+        "operationId": "updateTripLlmSettings",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripLlmSettingsUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripLlmSettingsResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Update my LLM settings for trip texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "userPreference.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips": {
       "post": {
         "description": "Makes a trip of an album and lays its assets out into stops by the trip kind; assets that fit no stop are Unplaced. A Route trip may take a start and a finish. Only the album owner can make a trip, and only of an album without one (409 otherwise). Returns the whole trip.",
@@ -49439,6 +49539,76 @@
           "assetId",
           "count",
           "isLiked"
+        ],
+        "type": "object"
+      },
+      "TripLlmKeyState": {
+        "description": "Whether a key is saved and readable",
+        "enum": [
+          "none",
+          "set",
+          "unreadable"
+        ],
+        "type": "string"
+      },
+      "TripLlmSettingsResponseDto": {
+        "properties": {
+          "allowUpload": {
+            "description": "The user agrees to send their photos to that server",
+            "type": "boolean"
+          },
+          "canStoreKey": {
+            "description": "The server has TRIPS_LLM_SECRET set, so a key can be saved",
+            "type": "boolean"
+          },
+          "key": {
+            "$ref": "#/components/schemas/TripLlmKeyState"
+          },
+          "model": {
+            "description": "Model name; empty when not set",
+            "type": "string"
+          },
+          "url": {
+            "description": "Base URL of an OpenAI-compatible API; empty when not set",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowUpload",
+          "canStoreKey",
+          "key",
+          "model",
+          "url"
+        ],
+        "type": "object"
+      },
+      "TripLlmSettingsUpdateDto": {
+        "properties": {
+          "allowUpload": {
+            "description": "The user agrees to send their photos to that server",
+            "type": "boolean"
+          },
+          "key": {
+            "description": "API key: a new key, null to clear it, omitted to keep the saved one while the URL stays",
+            "minLength": 1,
+            "nullable": true,
+            "type": "string"
+          },
+          "model": {
+            "description": "Model name",
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "description": "Base URL of an OpenAI-compatible API, such as https://api.openai.com/v1",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowUpload",
+          "model",
+          "url"
         ],
         "type": "object"
       },
