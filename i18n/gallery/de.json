@@ -1558,6 +1558,7 @@
   "trips_mode_train": "mit dem Zug",
   "trips_move_pin": "Markierung verschieben",
   "trips_move_to_stop": "Zu einem Halt verschieben",
+  "trips_network_queue": "Netzwerkanfragen der Reisen",
   "trips_new_stop": "Neuer Halt daraus",
   "trips_no_place": "Kein Ort",
   "trips_no_shots": "keine Fotos",

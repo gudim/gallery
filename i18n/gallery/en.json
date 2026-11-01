@@ -1561,6 +1561,7 @@
   "trips_mode_train": "by train",
   "trips_move_pin": "Move the pin",
   "trips_move_to_stop": "Move to stop",
+  "trips_network_queue": "Trip network requests",
   "trips_new_stop": "New stop from these",
   "trips_no_place": "No place",
   "trips_no_shots": "no photos",

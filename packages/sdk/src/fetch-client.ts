@@ -2393,6 +2393,7 @@ export type QueuesResponseLegacyDto = {
     storageBackendMigration: QueueResponseLegacyDto;
     storageTemplateMigration: QueueResponseLegacyDto;
     thumbnailGeneration: QueueResponseLegacyDto;
+    tripNetwork: QueueResponseLegacyDto;
     videoConversion: QueueResponseLegacyDto;
     workflow: QueueResponseLegacyDto;
 };
@@ -13398,7 +13399,8 @@ export enum QueueName {
     StorageBackendMigration = "storageBackendMigration",
     Classification = "classification",
     QualityAnalysis = "qualityAnalysis",
-    SpatialScene = "spatialScene"
+    SpatialScene = "spatialScene",
+    TripNetwork = "tripNetwork"
 }
 export enum QueueCommand {
     Start = "start",

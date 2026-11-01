@@ -910,6 +910,7 @@ export enum QueueName {
   Classification = 'classification',
   QualityAnalysis = 'qualityAnalysis',
   SpatialScene = 'spatialScene',
+  TripNetwork = 'tripNetwork',
 }
 
 export const QueueNameSchema = z.enum(QueueName).describe('Queue name').meta({ id: 'QueueName' });

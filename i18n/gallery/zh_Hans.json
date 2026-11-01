@@ -1573,6 +1573,7 @@
   "trips_mode_train": "乘火车",
   "trips_move_pin": "移动图钉",
   "trips_move_to_stop": "移到另一站",
+  "trips_network_queue": "旅行网络请求",
   "trips_new_stop": "用这些新建一站",
   "trips_no_place": "无地点",
   "trips_no_shots": "没有照片",

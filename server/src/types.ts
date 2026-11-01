@@ -217,6 +217,7 @@ export type ConcurrentQueueName = Exclude<
   | QueueName.DuplicateDetection
   | QueueName.BackupDatabase
   | QueueName.StorageBackendMigration
+  | QueueName.TripNetwork
 >;
 
 export type Jobs = { [K in JobItem['name']]: (JobItem & { name: K })['data'] };

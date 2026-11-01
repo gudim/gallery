@@ -41,7 +41,7 @@ export class TripNameService {
    * moved meanwhile is left as it is. A failed request ends the asking, keeps what was found, and fails the job; the
    * nightly sweep queues it again.
    */
-  @OnJob({ name: JobName.TripName, queue: QueueName.BackgroundTask })
+  @OnJob({ name: JobName.TripName, queue: QueueName.TripNetwork })
   async handleName({ id }: JobOf<JobName.TripName>): Promise<JobStatus> {
     const trip = await this.tripNameRepository.getStopsToName(id);
     if (!trip || trip.kind === TripKind.Plain) {

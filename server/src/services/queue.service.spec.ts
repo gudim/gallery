@@ -76,7 +76,7 @@ describe(QueueService.name, () => {
     it('should update concurrency', () => {
       sut.onConfigUpdate({ newConfig: defaults, oldConfig: {} as SystemConfig });
 
-      expect(mocks.job.setConcurrency).toHaveBeenCalledTimes(26);
+      expect(mocks.job.setConcurrency).toHaveBeenCalledTimes(27);
       expect(mocks.job.setConcurrency).toHaveBeenNthCalledWith(5, QueueName.FacialRecognition, 1);
       expect(mocks.job.setConcurrency).toHaveBeenNthCalledWith(7, QueueName.DuplicateDetection, 1);
       expect(mocks.job.setConcurrency).toHaveBeenNthCalledWith(8, QueueName.BackgroundTask, 5);
@@ -86,6 +86,8 @@ describe(QueueService.name, () => {
       // concurrently races two faces of the same pet into two separate people, so it is pinned to 1
       // the same way facial recognition is.
       expect(mocks.job.setConcurrency).toHaveBeenCalledWith(QueueName.PetRecognition, 1);
+      // Trips' calls to outside services (Nominatim, routing, the LLM) go one at a time.
+      expect(mocks.job.setConcurrency).toHaveBeenCalledWith(QueueName.TripNetwork, 1);
     });
 
     it('should update cron expression on non-microservices worker when lock held', async () => {
@@ -621,6 +623,7 @@ describe(QueueService.name, () => {
         [QueueName.QualityAnalysis]: expected,
         [QueueName.SpatialScene]: expected,
         [QueueName.StorageBackendMigration]: expected,
+        [QueueName.TripNetwork]: expected,
       });
     });
 

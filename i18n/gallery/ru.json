@@ -1556,6 +1556,7 @@
   "trips_mode_train": "на поезде",
   "trips_move_pin": "Сдвинуть пин",
   "trips_move_to_stop": "Перенести в остановку",
+  "trips_network_queue": "Сетевые запросы поездок",
   "trips_new_stop": "Новая остановка из них",
   "trips_no_place": "Без места",
   "trips_no_shots": "съёмки не было",

@@ -1559,6 +1559,7 @@
   "trips_mode_train": "pociągiem",
   "trips_move_pin": "Przesuń znacznik",
   "trips_move_to_stop": "Przenieś na przystanek",
+  "trips_network_queue": "Żądania sieciowe podróży",
   "trips_new_stop": "Nowy przystanek z nich",
   "trips_no_place": "Brak miejsca",
   "trips_no_shots": "brak zdjęć",

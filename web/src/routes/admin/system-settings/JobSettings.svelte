@@ -63,6 +63,7 @@
     [QueueName.Classification]: 'Auto-Classification',
     [QueueName.QualityAnalysis]: $t('admin.quality_analysis_job'),
     [QueueName.SpatialScene]: $t('admin.machine_learning_spatial_scene'),
+    [QueueName.TripNetwork]: $t('trips_network_queue'),
   });
 </script>
 
