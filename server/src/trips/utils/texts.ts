@@ -1,4 +1,5 @@
 import { TripKind } from 'src/trips/enum.js';
+import { TRIP_TITLE_SOURCE_GEOCODED } from 'src/trips/utils/naming.js';
 
 // Prompts, response schemas and answer checks of trip texts (trips PLAN §2.6), ported from travel-album's
 // atlas/texts/{prompts,generate}.py. The prompts are in English and name the trip's language (DECISIONS-LOG 2026-11-01).
@@ -8,10 +9,10 @@ export const TRIP_TEXTS_CHUNK = 30;
 
 /** Text sources generation may replace without "replace my texts too" (travel-album P15). */
 export const TRIP_TEXT_SOURCE_GENERATED = 'generated';
-const REPLACEABLE_SOURCES = new Set([TRIP_TEXT_SOURCE_GENERATED, 'geocoded']);
+export const TRIP_REPLACEABLE_TEXT_SOURCES = [TRIP_TEXT_SOURCE_GENERATED, TRIP_TITLE_SOURCE_GEOCODED];
 
 export const isReplaceableText = (value: string | null, source: string | null, overwrite: boolean) =>
-  overwrite || !value || (source !== null && REPLACEABLE_SOURCES.has(source));
+  overwrite || !value || (source !== null && TRIP_REPLACEABLE_TEXT_SOURCES.includes(source));
 
 /** An asset's caption may be replaced while it is empty or still the text an LLM wrote (DECISIONS-LOG 2026-10-31). */
 export const isReplaceableCaption = (description: string | null, generated: string | null, overwrite: boolean) =>
@@ -67,6 +68,8 @@ export class TripTextsError extends Error {
     message: string,
     // false: a settings problem that a retry cannot fix.
     readonly isRetryable = true,
+    // For the server log only: what the LLM server answered, never shown to the user.
+    readonly detail?: string,
   ) {
     super(message);
   }

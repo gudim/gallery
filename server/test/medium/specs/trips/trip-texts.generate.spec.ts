@@ -22,6 +22,8 @@ import { getKyselyDB } from 'test/utils.js';
 // network.
 let db: Kysely<DB>;
 const previews = mkdtempSync(join(tmpdir(), 'trip-texts-'));
+// A public address (TEST-NET-3), so no name is looked up.
+const LLM_URL = 'https://203.0.113.10/v1';
 
 beforeAll(async () => {
   db = await getKyselyDB();
@@ -82,7 +84,7 @@ const setup = async () => {
   );
   const { user: owner } = await ctx.newUser();
   const auth = factory.auth({ user: { id: owner.id } });
-  await sut.updateSettings(auth, { url: 'https://llm.example/v1', model: 'small', key: 'sk-1', allowUpload: true });
+  await sut.updateSettings(auth, { url: LLM_URL, model: 'small', key: 'sk-1', allowUpload: true });
 
   // A route trip with one stop holding `count` photos a minute apart, each with a preview on disk.
   const newStop = async (count: number, options: { ownerId?: string } = {}) => {
@@ -117,7 +119,25 @@ const setup = async () => {
     return { albumId: album.id, stopId: stop.id, placeId: place.id, assetIds };
   };
 
-  return { ctx, job, sut, owner, auth, newStop };
+  // The task a job of a run would hold; generation writes nothing without it.
+  const newTask = async (target: { stopId: string } | { placeId: string }, overwrite = false) => {
+    const table = 'stopId' in target ? 'trip_stop' : 'trip_place';
+    const { albumId } = await db
+      .selectFrom(table)
+      .select('albumId')
+      .where('id', '=', 'stopId' in target ? target.stopId : target.placeId)
+      .executeTakeFirstOrThrow();
+    return db
+      .insertInto('trip_text_task')
+      .values({ albumId, ...target, overwrite, isQueued: true })
+      .returning(['id', 'placeId', 'overwrite'])
+      .executeTakeFirstOrThrow();
+  };
+  const runStop = async (stopId: string, overwrite = false) =>
+    sut.generateStop({ ...(await newTask({ stopId }, overwrite)), stopId });
+  const runPlace = async (placeId: string) => sut.generatePlace(await newTask({ placeId }));
+
+  return { ctx, job, sut, owner, auth, newStop, runStop, runPlace };
 };
 
 const descriptions = async (assetIds: string[]) => {
@@ -140,11 +160,11 @@ const stopRow = (stopId: string) =>
 
 describe(TripTextsService.name, () => {
   it('captions a stop of 70 photos in 3 calls, each after the previous captions', async () => {
-    const { sut, job, newStop } = await setup();
+    const { job, newStop, runStop } = await setup();
     const fetchMock = stubServer();
     const { stopId, assetIds } = await newStop(70);
 
-    await sut.generateStop(stopId, false);
+    await runStop(stopId);
 
     const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(init!.body as string) as Body);
     expect(bodies.map((body) => photoCount(body))).toEqual([30, 30, 10]);
@@ -178,7 +198,7 @@ describe(TripTextsService.name, () => {
   });
 
   it('never overwrites the owner’s texts without "replace my texts too", and replaces its own', async () => {
-    const { sut, ctx, newStop } = await setup();
+    const { ctx, newStop, runStop } = await setup();
     const { stopId, assetIds } = await newStop(3);
     await db.updateTable('trip_stop').set({ story: 'Mine.', storySource: 'manual' }).where('id', '=', stopId).execute();
     await ctx.newExif({ assetId: assetIds[0], description: 'My caption.' });
@@ -186,19 +206,19 @@ describe(TripTextsService.name, () => {
     await db.insertInto('trip_generated_caption').values({ assetId: assetIds[1], text: 'Old generated.' }).execute();
     stubServer();
 
-    await sut.generateStop(stopId, false);
+    await runStop(stopId);
 
     await expect(stopRow(stopId)).resolves.toMatchObject({ title: 'Title 1', story: 'Mine.', storySource: 'manual' });
     expect(await captionsOf(assetIds)).toEqual(['My caption.', 'Caption 1.2', 'Caption 1.3']);
 
     stubServer();
-    await sut.generateStop(stopId, true);
+    await runStop(stopId, true);
     await expect(stopRow(stopId)).resolves.toMatchObject({ story: 'Story 1', storySource: 'generated' });
     await expect(captionsOf(assetIds)).resolves.toEqual(['Caption 1.1\n\nLong.', 'Caption 1.2', 'Caption 1.3']);
   });
 
   it('never overwrites a caption typed while the model was answering', async () => {
-    const { sut, newStop } = await setup();
+    const { newStop, runStop } = await setup();
     const { stopId, assetIds } = await newStop(2);
     stubServer({
       onCall: async () => {
@@ -210,7 +230,7 @@ describe(TripTextsService.name, () => {
       },
     });
 
-    await sut.generateStop(stopId, false);
+    await runStop(stopId);
 
     expect(await captionsOf(assetIds)).toEqual(['Caption 1.1\n\nLong.', 'Typed meanwhile.']);
     const generated = await db
@@ -221,8 +241,47 @@ describe(TripTextsService.name, () => {
     expect(generated.map((row) => row.assetId)).toEqual([assetIds[0]]);
   });
 
+  it('replaces the owner’s texts with "replace my texts too", but never one typed while the model was answering', async () => {
+    const { ctx, newStop, runStop } = await setup();
+    const { stopId, assetIds } = await newStop(3);
+    await db.updateTable('trip_stop').set({ story: 'Mine.', storySource: 'manual' }).where('id', '=', stopId).execute();
+    await ctx.newExif({ assetId: assetIds[0], description: 'My caption.' });
+    await ctx.newExif({ assetId: assetIds[1], description: 'Another of mine.' });
+    stubServer({
+      onCall: async () => {
+        await db
+          .updateTable('asset_exif')
+          .set({ description: 'Typed meanwhile.' })
+          .where('assetId', '=', assetIds[1])
+          .execute();
+        await db.updateTable('trip_stop').set({ story: 'Typed meanwhile.' }).where('id', '=', stopId).execute();
+      },
+    });
+
+    await runStop(stopId, true);
+
+    await expect(stopRow(stopId)).resolves.toMatchObject({ title: 'Title 1', story: 'Typed meanwhile.' });
+    expect(await captionsOf(assetIds)).toEqual(['Caption 1.1\n\nLong.', 'Typed meanwhile.', 'Caption 1.3']);
+  });
+
+  it('leaves out an asset without a preview yet, from the estimate and from the call', async () => {
+    const { sut, auth, newStop, runStop } = await setup();
+    const { albumId, stopId, assetIds } = await newStop(2);
+    await db.deleteFrom('asset_file').where('assetId', '=', assetIds[1]).execute();
+    const fetchMock = stubServer();
+
+    await expect(sut.estimate(auth, albumId, { stopId, overwrite: false })).resolves.toMatchObject({
+      calls: 1,
+      assets: 1,
+    });
+    await runStop(stopId);
+
+    expect(photoCount(JSON.parse(fetchMock.mock.calls[0][1]!.body as string) as Body)).toBe(1);
+    expect(await captionsOf(assetIds)).toEqual(['Caption 1.1\n\nLong.', '']);
+  });
+
   it('writes nothing when an answer names other photos', async () => {
-    const { sut, newStop } = await setup();
+    const { newStop, runStop } = await setup();
     const { stopId, assetIds } = await newStop(2);
     stubServer({
       answer: {
@@ -235,19 +294,19 @@ describe(TripTextsService.name, () => {
       },
     });
 
-    await expect(sut.generateStop(stopId, false)).rejects.toThrow('do not match');
+    await expect(runStop(stopId)).rejects.toThrow('do not match');
 
     await expect(stopRow(stopId)).resolves.toMatchObject({ title: 'Biržai', titleSource: 'geocoded', story: null });
     expect(await captionsOf(assetIds)).toEqual(['', '']);
   });
 
   it('captions only the owner’s own assets', async () => {
-    const { sut, ctx, newStop } = await setup();
+    const { ctx, newStop, runStop } = await setup();
     const { user: other } = await ctx.newUser();
     const { stopId, assetIds } = await newStop(1, { ownerId: other.id });
     const fetchMock = stubServer();
 
-    await sut.generateStop(stopId, false);
+    await runStop(stopId);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await expect(captionsOf(assetIds)).resolves.toEqual(['']);
@@ -255,7 +314,7 @@ describe(TripTextsService.name, () => {
   });
 
   it('calls nothing when every text is the owner’s', async () => {
-    const { sut, ctx, newStop } = await setup();
+    const { ctx, newStop, runStop } = await setup();
     const { stopId, assetIds } = await newStop(1);
     await db
       .updateTable('trip_stop')
@@ -265,28 +324,28 @@ describe(TripTextsService.name, () => {
     await ctx.newExif({ assetId: assetIds[0], description: 'Mine.' });
     const fetchMock = stubServer();
 
-    await sut.generateStop(stopId, false);
+    await runStop(stopId);
 
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('refuses without consent to send photos, as a settings error that is not retried', async () => {
-    const { sut, auth, newStop } = await setup();
-    await sut.updateSettings(auth, { url: 'https://llm.example/v1', model: 'small', allowUpload: false });
+    const { sut, auth, newStop, runStop } = await setup();
+    await sut.updateSettings(auth, { url: LLM_URL, model: 'small', allowUpload: false });
     const { stopId } = await newStop(1);
     const fetchMock = stubServer();
 
-    await expect(sut.generateStop(stopId, false)).rejects.toMatchObject({ isRetryable: false });
+    await expect(runStop(stopId)).rejects.toMatchObject({ isRetryable: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('writes a place’s article from its stops and leaves the owner’s article alone', async () => {
-    const { sut, newStop } = await setup();
+    const { newStop, runPlace } = await setup();
     const { stopId, placeId } = await newStop(1);
     await db.updateTable('trip_stop').set({ story: 'A story.' }).where('id', '=', stopId).execute();
     const fetchMock = stubServer();
 
-    await sut.generatePlace(placeId, false);
+    await runPlace(placeId);
 
     const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string) as Body;
     expect(prompt(body)).toContain('Stop: Biržai\nA story.');
@@ -303,7 +362,7 @@ describe(TripTextsService.name, () => {
       .set({ article: 'Mine.', articleSource: 'manual' })
       .where('id', '=', placeId)
       .execute();
-    await sut.generatePlace(placeId, false);
+    await runPlace(placeId);
     await expect(place()).resolves.toEqual({ article: 'Mine.', articleSource: 'manual' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -409,6 +468,24 @@ describe('a run of trip texts', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('writes nothing for a run that a new one replaced while the model was answering', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId, assetIds } = await newStop(1);
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    const [old] = queued(job);
+    stubServer({
+      onCall: async () => {
+        await sut.start(auth, albumId, { stopId, overwrite: false });
+      },
+    });
+
+    await sut.handleTexts(old);
+
+    await expect(stopRow(stopId)).resolves.toMatchObject({ title: 'Biržai', story: null });
+    expect(await captionsOf(assetIds)).toEqual(['']);
+    await expect(sut.getProgress(auth, albumId)).resolves.toEqual({ pending: 1, failed: [] });
+  });
+
   it('is for the album owner only, and refused without settings', async () => {
     const { sut, ctx, auth, newStop } = await setup();
     const { albumId } = await newStop(1);
@@ -423,7 +500,7 @@ describe('a run of trip texts', () => {
       'Trip not found',
     );
 
-    await sut.updateSettings(auth, { url: 'https://llm.example/v1', model: 'small', allowUpload: false });
+    await sut.updateSettings(auth, { url: LLM_URL, model: 'small', allowUpload: false });
     await expect(sut.estimate(auth, albumId, { overwrite: false })).resolves.toMatchObject({ problem: 'noConsent' });
     await expect(sut.start(auth, albumId, { overwrite: false })).rejects.toThrow('not allowed');
   });

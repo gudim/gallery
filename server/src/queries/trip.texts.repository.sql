@@ -142,62 +142,28 @@ where
   "trip_asset"."stopId" = $4::uuid
   and "asset"."deletedAt" is null
   and "asset"."visibility" != $5
+  and exists (
+    select
+      "asset_file"."id"
+    from
+      "asset_file"
+    where
+      "asset_file"."assetId" = "asset"."id"
+      and "asset_file"."type" = $6
+  )
 order by
   "asset"."localDateTime",
   "asset"."id"
 
 -- TripTextsRepository.writeStop
 begin
-update "trip_stop"
-set
-  "title" = $1,
-  "titleSource" = $2
-where
-  "id" = $3::uuid
-  and "isAtCenter" = $4
-  and (
-    coalesce("title", '') = $5
-    or "titleSource" in ($6, $7)
-  )
-update "trip_stop"
-set
-  "story" = $1,
-  "storySource" = $2
-where
-  "id" = $3::uuid
-  and (
-    coalesce("story", '') = $4
-    or "storySource" in ($5, $6)
-  )
-update "asset_exif"
-set
-  "description" = $1,
-  "lockedProperties" = nullif(
-    array(
-      select distinct
-        unnest("asset_exif"."lockedProperties" || $2::text[])
-    ),
-    '{}'
-  )
+select
+  "id"
 from
-  "asset"
+  "trip_text_task"
 where
-  "asset"."id" = "asset_exif"."assetId"
-  and "asset_exif"."assetId" = $3::uuid
-  and "asset"."ownerId" = $4::uuid
-  and (
-    coalesce("asset_exif"."description", '') = $5
-    or "asset_exif"."description" = (
-      select
-        "trip_generated_caption"."text"
-      from
-        "trip_generated_caption"
-      where
-        "trip_generated_caption"."assetId" = "asset_exif"."assetId"
-    )
-  )
-returning
-  "asset_exif"."assetId"
+  "id" = $1::uuid
+for update
 commit
 
 -- TripTextsRepository.getPlace
@@ -224,16 +190,13 @@ where
 
 -- TripTextsRepository.writePlace
 begin
-update "trip_place"
-set
-  "article" = $1,
-  "articleSource" = $2
+select
+  "id"
+from
+  "trip_text_task"
 where
-  "id" = $3::uuid
-  and (
-    coalesce("article", '') = $4
-    or "articleSource" in ($5, $6)
-  )
+  "id" = $1::uuid
+for update
 commit
 
 -- TripTextsRepository.replaceTasks

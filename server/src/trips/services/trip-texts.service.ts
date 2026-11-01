@@ -1,8 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
 import type { JobOf } from 'src/types.js';
 import { OnJob } from 'src/decorators.js';
-import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
+import { JobName, JobStatus, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
@@ -17,7 +17,7 @@ import {
 } from 'src/trips/dtos/trip-texts.dto.js';
 import { TripKind, TripTextsProblem } from 'src/trips/enum.js';
 import { TripTextsRepository } from 'src/trips/repositories/trip-texts.repository.js';
-import { TRIPS_USER_AGENT_VARIABLE, defaultTripGeoUserAgent } from 'src/trips/utils/geo-services.js';
+import { requireAlbumOwner } from 'src/trips/utils/access.js';
 import { TripLlmConfig, completeTripText } from 'src/trips/utils/llm-client.js';
 import {
   TripLlmKeyState,
@@ -26,6 +26,7 @@ import {
   resolveLlmSecret,
   tripLlmKeyState,
 } from 'src/trips/utils/llm-key.js';
+import { llmUrlRefusal } from 'src/trips/utils/llm-url.js';
 import { resolveTripNamingLanguages } from 'src/trips/utils/naming.js';
 import {
   TRIP_TEXTS_CHUNK,
@@ -39,7 +40,8 @@ import {
   planStopTexts,
   stopRequest,
 } from 'src/trips/utils/texts.js';
-import { checkAccess } from 'src/utils/access.js';
+
+type TripTextTask = { id: string; placeId: string | null; overwrite: boolean };
 
 const mimeTypeOf = (path: string) => (/\.webp$/i.test(path) ? 'image/webp' : 'image/jpeg');
 
@@ -57,7 +59,6 @@ const PROBLEM_MESSAGES: Record<TripTextsProblem, string> = {
 @Injectable()
 export class TripTextsService {
   private readonly secret = resolveLlmSecret();
-  private readonly userAgent = process.env[TRIPS_USER_AGENT_VARIABLE]?.trim() || defaultTripGeoUserAgent();
   private readonly defaultLanguage = resolveTripNamingLanguages()[0];
 
   constructor(
@@ -81,6 +82,10 @@ export class TripTextsService {
   }
 
   async updateSettings(auth: AuthDto, dto: TripLlmSettingsUpdateDto): Promise<TripLlmSettingsResponseDto> {
+    const refusal = await llmUrlRefusal(dto.url);
+    if (refusal) {
+      throw new BadRequestException(refusal);
+    }
     const previous = await this.tripTextsRepository.getSettings(auth.user.id);
     await this.tripTextsRepository.upsertSettings({
       userId: auth.user.id,
@@ -113,23 +118,15 @@ export class TripTextsService {
       throw new TripTextsError(PROBLEM_MESSAGES[problem ?? TripTextsProblem.NoSettings], false);
     }
     const key = settings.keyCipher ? decryptLlmKey(settings.keyCipher, this.secret!) : null;
-    return { url: settings.url, model: settings.model, key, userAgent: this.userAgent };
+    return { url: settings.url, model: settings.model, key };
   }
 
   // Only the album owner generates texts, with their own settings (trips DECISIONS-LOG 2026-11-01); a reader who is
   // not the owner gets 403, anyone else 404, as for a missing album.
   private async requireOwner(auth: AuthDto, albumId: string) {
-    const readable = await checkAccess(this.accessRepository, {
-      auth,
-      permission: Permission.AlbumRead,
-      ids: [albumId],
-    });
-    if (!readable.has(albumId) || !(await this.tripTextsRepository.hasTrip(albumId))) {
+    await requireAlbumOwner(this.accessRepository, auth, albumId, 'Only the album owner generates texts');
+    if (!(await this.tripTextsRepository.hasTrip(albumId))) {
       throw new NotFoundException('Trip not found');
-    }
-    const owned = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
-    if (auth.sharedLink || !owned.has(albumId)) {
-      throw new ForbiddenException('Only the album owner generates texts');
     }
   }
 
@@ -235,21 +232,20 @@ export class TripTextsService {
       return JobStatus.Skipped;
     }
     try {
-      await (task.stopId
-        ? this.generateStop(task.stopId, task.overwrite)
-        : this.generatePlace(task.placeId!, task.overwrite));
+      await (task.stopId ? this.generateStop({ ...task, stopId: task.stopId }) : this.generatePlace(task));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const detail = error instanceof TripTextsError && error.detail ? ` (${error.detail})` : '';
       const isRetryable = !(error instanceof TripTextsError) || error.isRetryable;
       if (isRetryable && task.attempt < TRIP_TEXTS_ATTEMPTS) {
         this.logger.warn(
-          `Trip texts of ${task.stopId ? 'stop' : 'place'} failed (attempt ${task.attempt}): ${message}`,
+          `Trip texts of ${task.stopId ? 'stop' : 'place'} failed (attempt ${task.attempt}): ${message}${detail}`,
         );
         await this.tripTextsRepository.setTaskAttempt(id, task.attempt + 1);
         await this.queueTasks([id], RETRY_DELAY_MS * 2 ** (task.attempt - 1));
         return JobStatus.Failed;
       }
-      this.logger.error(`Trip texts of ${task.stopId ? 'stop' : 'place'} failed for good: ${message}`);
+      this.logger.error(`Trip texts of ${task.stopId ? 'stop' : 'place'} failed for good: ${message}${detail}`);
       await this.tripTextsRepository.failTask(id, message);
       await this.queuePlaces(task.albumId);
       return JobStatus.Failed;
@@ -262,9 +258,10 @@ export class TripTextsService {
   /**
    * Writes a stop's title, story and captions, as travel-album's generate_stop: its assets go to the model in chunks,
    * the first writing title and story, each next one getting the previous captions. Every answer is checked before
-   * anything is written, then all is written at once; a refused answer writes nothing.
+   * anything is written, then all is written at once; a refused answer writes nothing, and so does a task that a newer
+   * run replaced meanwhile.
    */
-  async generateStop(stopId: string, overwrite: boolean): Promise<void> {
+  async generateStop({ id: taskId, stopId, overwrite }: TripTextTask & { stopId: string }): Promise<void> {
     const stop = await this.tripTextsRepository.getStop(stopId);
     if (!stop) {
       return;
@@ -279,14 +276,11 @@ export class TripTextsService {
 
     let written: { title: string; story: string } | null = null;
     const captions = new Map<string, TripTextCaption>();
-    let previous: typeof assets = [];
+    let answered: typeof assets = [];
     for (let start = 0; start < assets.length; start += TRIP_TEXTS_CHUNK) {
       const chunk = assets.slice(start, start + TRIP_TEXTS_CHUNK);
       const frames = await Promise.all(
         chunk.map(async (asset) => {
-          if (!asset.previewPath) {
-            throw new TripTextsError(`Asset ${asset.id} has no preview yet`);
-          }
           const data = await StorageService.backendFor(asset.previewPath).readAll(asset.previewPath);
           return { ...asset, image: { data, mimeType: mimeTypeOf(asset.previewPath) } };
         }),
@@ -294,7 +288,7 @@ export class TripTextsService {
       const request = stopRequest(
         prompt,
         frames,
-        previous.map((asset) => ({ ...asset, ...captions.get(asset.id)! })),
+        answered.map((asset) => ({ ...asset, ...captions.get(asset.id)! })),
         written,
       );
       const answer = checkStopAnswer(await completeTripText(config, request), chunk.length);
@@ -302,19 +296,22 @@ export class TripTextsService {
       for (const [index, asset] of chunk.entries()) {
         captions.set(asset.id, answer.captions[index]);
       }
-      previous = chunk;
+      answered = chunk;
     }
 
+    const descriptions = new Map(assets.map((asset) => [asset.id, asset.description]));
     const changed = await this.tripTextsRepository.writeStop({
+      taskId,
       stopId: stop.id,
       albumId: stop.albumId,
       ownerId: stop.ownerId,
       overwrite,
-      title: wantTitle ? written!.title : null,
-      story: wantStory ? written!.story : null,
+      title: wantTitle ? { text: written!.title, seen: stop.title } : null,
+      story: wantStory ? { text: written!.story, seen: stop.story } : null,
       captions: captionIds.flatMap((assetId) => {
         const { caption, long } = captions.get(assetId)!;
-        return caption || long ? [{ assetId, text: joinCaption(caption, long) }] : [];
+        const seen = descriptions.get(assetId) ?? null;
+        return caption || long ? [{ assetId, text: joinCaption(caption, long), seen }] : [];
       }),
     });
     // The description goes to the XMP sidecar, as Immich's own edit sends it (AssetService.updateExif).
@@ -327,7 +324,10 @@ export class TripTextsService {
    * Writes a place's article from the titles and stories of its stops, as travel-album's generate_place; a trip without
    * a map has no articles.
    */
-  async generatePlace(placeId: string, overwrite: boolean): Promise<void> {
+  async generatePlace({ id: taskId, placeId, overwrite }: TripTextTask): Promise<void> {
+    if (!placeId) {
+      return;
+    }
     const place = await this.tripTextsRepository.getPlace(placeId);
     if (
       !place ||
@@ -341,7 +341,13 @@ export class TripTextsService {
     const request = placeRequest({ ...place, language: place.language ?? this.defaultLanguage }, place.stops);
     const article = checkPlaceAnswer(await completeTripText(config, request));
     if (article) {
-      await this.tripTextsRepository.writePlace(place.id, place.albumId, article, overwrite);
+      await this.tripTextsRepository.writePlace({
+        taskId,
+        placeId: place.id,
+        albumId: place.albumId,
+        overwrite,
+        article: { text: article, seen: place.article },
+      });
     }
   }
 }
