@@ -127,3 +127,7 @@ One line per choice the plan does not dictate. Newest last. `(owner)` marks a ch
 - 2026-11-01 (owner) Generation stays off until the user ticks the consent to send photos to the configured server (travel-album's `allow_upload`).
 - 2026-11-01 (owner) A failed stop job retries on its own up to 3 attempts with exponential backoff from 1 minute; a settings error (no key, HTTP 401/403) is not retried.
 - 2026-11-01 (owner) The stage 2.6 "Done when" check runs a real generation through an OpenAI-compatible cloud service (OpenAI or OpenRouter, key entered by the owner).
+- 2026-11-01 (owner) D18 is revised: Gallery's mobile app gets a trip screen (map, stops, a stop's assets, likes) and the editor of stage 2.5 (stops, assets and points, legs, clock offset, place hints, captions), as PLAN §2.9 after §2.8. The road and LLM generation stay on the web.
+- 2026-11-01 (owner) On the phone a trip is entered from its album page, as on the web; there is no list of trips.
+- 2026-11-01 (owner) Mobile test builds carry their own application id suffix and install next to Gallery from the Play store; they are checked on an emulator against the dev stack, with phone and tablet screenshots in both themes.
+- 2026-11-01 The first rollout (§2.4) moves after §2.9, so it stays the last stage, and mobile trip data is online only (no Drift tables, no sync stream), since trips are edited on the server and read whole.

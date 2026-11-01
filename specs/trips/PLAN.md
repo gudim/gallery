@@ -32,7 +32,7 @@ All of these were settled with the owner on 2026-10-30. Do not reopen them witho
 | D15 | The Favorites trip is a Places trip that mirrors the user's stars (Gallery's per-user favorites). |
 | D16 | Each user keeps their own LLM settings: URL, model and key of an OpenAI-compatible server (revised 2026-11-01: no Anthropic API type, see `DECISIONS-LOG.md`). |
 | D17 | Search: the trip viewer searches stories, captions and CLIP inside the trip, for guests too; a Cmd+K provider finds stops by story text. |
-| D18 | The UI is rewritten in Svelte inside Gallery's web app (MapLibre, Gallery's asset viewer). The mobile app is not touched: it sees a trip as an album with captions. |
+| D18 | The UI is rewritten in Svelte inside Gallery's web app (MapLibre, Gallery's asset viewer). Gallery's mobile app gets the trip screen and the editor last, in §2.9 (revised 2026-11-01, see `DECISIONS-LOG.md`); until then it sees a trip as an album with captions. |
 | D19 | Migration from travel-album is a one-off script **in the travel-album repo**, run once in production and then forgotten. Old travel-album links are not kept. Details in §2.2. |
 
 ## 2. Stages
@@ -160,7 +160,7 @@ Done when:
 
 ### 2.4 First rollout
 
-Done last, after §2.8, and by the owner: every other stage is built and checked on the local dev
+Done last, after §2.9, and by the owner: every other stage is built and checked on the local dev
 stack (DECISIONS-LOG 2026-10-31).
 
 - The trips build replaces the Gallery already running on ThinkCentre next to travel-album; no
@@ -219,9 +219,46 @@ Done when:
 - A showcase lists only trips that satisfy D14.
 - The offline zip opens from `file://`.
 
+### 2.9 Mobile app
+
+Added by the owner on 2026-11-01, revising D18: Gallery's Flutter app shows and edits trips as the
+web does. It comes after §2.8; the first rollout (§2.4) stays last.
+
+- **Entry**: the album page. "Open the trip" when the album has one; "Make a trip" for the
+  album's owner when it has none. One hook line in the upstream album page.
+- **Trip screen**: Gallery's MapLibre map (`maplibre_gl`, as on Gallery's map page) with the route
+  (legs with their mode badges, stop markers, start and finish, overlays) and a bottom sheet of
+  stops with the legs between them. A stop opens its assets in a grid and Gallery's asset viewer,
+  with captions and likes. The three trip kinds. No road: it stays on the web.
+- **Edit mode**, for the album owner and editors (D7); a viewer sees no edit controls:
+  - making a trip from an album and picking its kind;
+  - stops: title, story, place, delete, merge with the next, split, start and finish, "on the way";
+  - assets: move to a stop or a new stop, split here, hide (D11), manual point and its reset, pin
+    drag, place search (Nominatim, D13);
+  - legs: mode, stations, retry;
+  - the clock-offset wizard (D9), place hints, captions (D8).
+- LLM generation (§2.6) stays on the web.
+- Trip data is read from the server and is online only: no Drift tables and no sync stream. The
+  client is the generated Dart `TripsApi`.
+- Trip code lives in `mobile/lib/trips/`; upstream and Gallery files get one-line hooks only. UI
+  strings are the same `trips_` keys of `i18n/gallery/` (D3).
+- Builds for testing carry their own application id suffix (`.trips`), so they install next to
+  Gallery from the Play store. No store release.
+- Port behaviour from `web/src/lib/trips/`, not its look: the look is Gallery's mobile app.
+
+Done when:
+- On migrated `birzhay-2026`, the trip screen matches the reference data of §2.3: 10 stop markers,
+  9 lines, stats 79 · 3 · 8 · 1 · 487, the same ten stops in order.
+- A trip is made from an album on the phone and edited there end to end (stops, assets, legs,
+  texts), and every edit reads back the same on the web, and the other way round.
+- An editor edits a trip on the phone; a viewer cannot.
+- The owner has seen emulator screenshots, phone and tablet, in both themes, next to Gallery's own
+  album and map screens.
+- Codegen, `dart analyze` and `flutter test` are green.
+
 ## 3. Not done
 
-- Trip views in the mobile app (D18).
+- The road and LLM generation in the mobile app (§2.9).
 - Writing trip points into asset coordinates (D10).
 - Keeping old travel-album URLs (D19).
 - Running the migration again after the production run.
