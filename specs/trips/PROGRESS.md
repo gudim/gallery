@@ -1,6 +1,6 @@
 # Trips: progress
 
-## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): checked 2026-11-01
+## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): closed 2026-11-01
 
 Checked against the dev Gallery running the server built from `trips-5` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`. The phone backup is the owner's Galaxy S25 folder `2026/2026-04/LT-Apr-2026 (замки)/2Share` (184 photos, 3–5 April 2026), uploaded with Gallery's CLI (`POST /assets`, as the app's backup) into a new album.
 
