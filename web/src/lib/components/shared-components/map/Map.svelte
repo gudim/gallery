@@ -15,6 +15,7 @@
   import { serverConfigManager } from '$lib/managers/server-config-manager.svelte';
   import MapSettingsModal from '$lib/modals/MapSettingsModal.svelte';
   import { mapSettings } from '$lib/stores/preferences.store';
+  import { isTripMapSource } from '$lib/trips/trip-map';
   import { getAssetMediaUrl, handlePromiseError } from '$lib/utils';
   import { getMapMarkers, getSpaceMapMarkers, type MapMarkerResponseDto } from '@immich/sdk';
   import { Alert, Container, Icon, modalManager, Text, Theme, themeManager } from '@immich/ui';
@@ -314,12 +315,14 @@
         if (previousStyle) {
           // Preserves the custom map markers from the previous style when the theme is switched
           // Required until https://github.com/dimfeld/svelte-maplibre/issues/146 is fixed
-          const customLayers = previousStyle.layers.filter((l) => l.type === 'fill' && l.source === 'geojson');
+          const customLayers = previousStyle.layers.filter(
+            (l) => (l.type === 'fill' && l.source === 'geojson') || ('source' in l && isTripMapSource(l.source)),
+          );
           const layers = nextStyle.layers.concat(customLayers);
           const sources = nextStyle.sources;
 
           for (const [key, value] of Object.entries(previousStyle.sources || {})) {
-            if (key.startsWith('geojson')) {
+            if (key.startsWith('geojson') || isTripMapSource(key)) {
               sources[key] = value;
             }
           }

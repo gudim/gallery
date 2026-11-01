@@ -9,6 +9,7 @@
   import { assetMultiSelectManager } from '$lib/managers/asset-multi-select-manager.svelte';
   import { authManager } from '$lib/managers/auth-manager.svelte';
   import { TimelineManager } from '$lib/managers/timeline-manager/timeline-manager.svelte';
+  import { MODE_ICONS } from '$lib/trips/trip-map';
   import { dayLabel, itemTitle, rangeLine, yearSpan } from '$lib/trips/trip-text';
   import { timeSpan, tripStats, type TripItem, type TripView, type TripViewStop } from '$lib/trips/trip-view';
   import {
@@ -18,29 +19,19 @@
     setFinish,
     setStart,
     TripKind,
-    TripLegMode,
     TripLegStatus,
     TripStopRole,
     type TripLegDto,
   } from '@immich/sdk';
   import { Button, CloseButton, Icon, LoadingSpinner, modalManager } from '@immich/ui';
   import {
-    mdiAirplane,
     mdiAlertCircleOutline,
     mdiArrowLeft,
-    mdiBike,
-    mdiBus,
-    mdiCar,
     mdiClockEditOutline,
-    mdiFerry,
     mdiFlagCheckered,
-    mdiHiking,
     mdiHomeMapMarker,
     mdiMapMarkerPlusOutline,
     mdiRefresh,
-    mdiTrain,
-    mdiVectorLine,
-    mdiWalk,
   } from '@mdi/js';
   import { locale, t } from 'svelte-i18n';
 
@@ -108,18 +99,6 @@
       isRoute && stats.km ? $t('trips_km', { values: { km: stats.km.toLocaleString(lang) } }) : '',
     ].filter(Boolean),
   );
-
-  const MODE_ICONS: Record<TripLegMode, string> = {
-    [TripLegMode.Foot]: mdiWalk,
-    [TripLegMode.Driving]: mdiCar,
-    [TripLegMode.Trail]: mdiHiking,
-    [TripLegMode.Direct]: mdiVectorLine,
-    [TripLegMode.Flight]: mdiAirplane,
-    [TripLegMode.Bicycle]: mdiBike,
-    [TripLegMode.Bus]: mdiBus,
-    [TripLegMode.Train]: mdiTrain,
-    [TripLegMode.Boat]: mdiFerry,
-  };
 
   const legLine = (leg: TripLegDto) => {
     const parts = [$t(`trips_mode_${leg.mode}`)];

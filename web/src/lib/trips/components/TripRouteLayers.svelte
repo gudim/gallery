@@ -1,21 +1,27 @@
 <script lang="ts">
-  import { PLACES_COLOR, type TripView } from '$lib/trips/trip-view';
+  import { BADGE_MODES, MODE_ICONS } from '$lib/trips/trip-map';
+  import { alongLine, inkOn, PLACES_COLOR, type TripView } from '$lib/trips/trip-view';
   import { TripKind, TripLegMode, TripOverlayKind } from '@immich/sdk';
+  import { Icon } from '@immich/ui';
   import type { Feature, LineString, Point, Position } from 'geojson';
   import { LngLatBounds, type Map } from 'maplibre-gl';
   import { onMount } from 'svelte';
-  import { CircleLayer, GeoJSON, LineLayer } from 'svelte-maplibre';
+  import { t } from 'svelte-i18n';
+  import { CircleLayer, GeoJSON, LineLayer, Marker } from 'svelte-maplibre';
 
-  // A trip's route on Gallery's map (trips PLAN §2.3): legs coloured by day and styled by mode, the start and finish,
-  // and trails. Stops themselves are Gallery's own asset markers, passed to the map by the trip page.
+  // A trip's route on Gallery's map (trips PLAN §2.3): legs coloured by day and styled by mode, each with its mode's
+  // badge, the start and finish, and trails. Stops themselves are Gallery's own asset markers, passed to the map by the
+  // trip page.
 
   interface Props {
     map: Map;
     view: TripView;
     onReady?: (map: Map) => void;
+    /** Set in edit mode: a leg's badge opens the leg. */
+    onOpenLeg?: (legId: string) => void;
   }
 
-  let { map, view, onReady }: Props = $props();
+  let { map, view, onReady, onOpenLeg }: Props = $props();
 
   type LineStyle = { width: number; opacity: number; dash?: number[] };
   // Widths in px and dashes in line widths, after travel-album's leg styles.
@@ -40,7 +46,7 @@
     features: view.legs.map((leg): Feature<LineString> => ({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: leg.points.map(([lat, lng]) => [lng, lat]) },
-      properties: { mode: leg.mode, color: colorOf(leg.day) },
+      properties: { mode: leg.mode, color: leg.color },
     })),
   });
 
@@ -67,7 +73,26 @@
       })),
   });
 
+  // A leg's badge sits at its middle, or a quarter along when assets shot on the way are near the middle; it hides
+  // while the leg is shorter than ~90 px on screen (travel-album map.js layoutBadges).
+  const badges = $derived(
+    view.legs
+      .filter(({ mode }) => BADGE_MODES.has(mode))
+      .map((leg) => {
+        const way = view.transit.find(
+          ({ fromStopId, toStopId }) => fromStopId === leg.fromStopId && toStopId === leg.toStopId,
+        );
+        const fraction = way && Math.abs(way.fraction - 0.5) < 0.15 ? (way.fraction < 0.5 ? 0.75 : 0.25) : 0.5;
+        return { leg, ...alongLine(leg.points, fraction) };
+      }),
+  );
+  let zoom = $state(map.getZoom());
+  const isShown = ({ at: [lat], meters }: { at: [number, number]; meters: number }) =>
+    meters / ((40_075_016.686 * Math.cos((lat * Math.PI) / 180)) / 2 ** (zoom + 8)) >= 90;
+
   onMount(() => {
+    const onZoom = () => (zoom = map.getZoom());
+    map.on('zoom', onZoom);
     // The map fits the stops with assets; the start, finish and legs may reach further.
     const bounds = new LngLatBounds();
     const extend = (point: Position) => bounds.extend(point as [number, number]);
@@ -80,6 +105,7 @@
       map.fitBounds(bounds, { padding: 50, maxZoom: 15, animate: false });
     }
     onReady?.(map);
+    return () => map.off('zoom', onZoom);
   });
 </script>
 
@@ -118,3 +144,28 @@
     }}
   />
 </GeoJSON>
+
+{#each badges as badge (badge.leg.id)}
+  {#if isShown(badge)}
+    {@const leg = badge.leg}
+    <Marker lngLat={{ lat: badge.at[0], lng: badge.at[1] }}>
+      <svelte:element
+        this={onOpenLeg ? 'button' : 'div'}
+        type={onOpenLeg ? 'button' : undefined}
+        role={onOpenLeg ? undefined : 'img'}
+        class={[
+          'flex size-7 items-center justify-center rounded-full border-2 border-white shadow-md',
+          onOpenLeg && 'cursor-pointer',
+        ]}
+        style:background={leg.color}
+        style:color={inkOn(leg.color)}
+        title={$t(`trips_mode_${leg.mode}`)}
+        aria-label={$t(`trips_mode_${leg.mode}`)}
+        onclick={() => onOpenLeg?.(leg.id)}
+        data-testid="trip-leg-badge"
+      >
+        <Icon icon={MODE_ICONS[leg.mode]} size="16" />
+      </svelte:element>
+    </Marker>
+  {/if}
+{/each}

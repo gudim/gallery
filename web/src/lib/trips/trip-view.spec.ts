@@ -9,7 +9,16 @@ import {
   type TripResponseDto,
   type TripStopDto,
 } from '@immich/sdk';
-import { buildTripView, decodePolyline, inkOn, timeSpan, transitFraction, tripStats } from '$lib/trips/trip-view';
+import {
+  alongLine,
+  buildTripView,
+  DAY_COLORS,
+  decodePolyline,
+  inkOn,
+  timeSpan,
+  transitFraction,
+  tripStats,
+} from '$lib/trips/trip-view';
 
 const stop = (id: string, overrides: Partial<TripStopDto> = {}): TripStopDto => ({
   id,
@@ -139,10 +148,10 @@ describe('buildTripView', () => {
   it('draws legs with a line, counts every leg in km and carries likes and points', () => {
     const view = buildTripView(trip(), assets);
 
-    expect(view.legs.map(({ id, day }) => ({ id, day }))).toEqual([
-      { id: 'l1', day: 0 },
-      { id: 'l2', day: 0 },
-      { id: 'l4', day: 1 },
+    expect(view.legs.map(({ id, day, color }) => ({ id, day, color }))).toEqual([
+      { id: 'l1', day: 0, color: DAY_COLORS[0] },
+      { id: 'l2', day: 0, color: DAY_COLORS[0] },
+      { id: 'l4', day: 1, color: DAY_COLORS[1] },
     ]);
     expect(view.km).toBe(6);
     expect(tripStats(view)).toEqual({ assets: 5, videos: 1, stops: 3, days: 2, km: 6 });
@@ -150,6 +159,21 @@ describe('buildTripView', () => {
     expect(a1).toMatchObject({ latitude: 1, longitude: 2, isInferred: false, time: '10:05', likes: 0 });
     expect(a2).toMatchObject({ latitude: 5, longitude: 6, isInferred: true, isVideo: true });
     expect(b1).toMatchObject({ likes: 3, isLiked: true });
+  });
+
+  it('colours each leg of a one-day trip on its own, counting legs without a line', () => {
+    const oneDay = trip();
+    oneDay.stops = oneDay.stops.filter(({ id }) => id !== 'c' && id !== 'd');
+    oneDay.assets = oneDay.assets.filter(({ assetId }) => assetId !== 'c1');
+
+    const view = buildTripView(oneDay, assets);
+
+    expect(view.days).toHaveLength(1);
+    expect(view.legs.map(({ id, color }) => ({ id, color }))).toEqual([
+      { id: 'l1', color: DAY_COLORS[0] },
+      { id: 'l2', color: DAY_COLORS[1] },
+      { id: 'l4', color: DAY_COLORS[3] },
+    ]);
   });
 
   it('skips trip assets the caller cannot see', () => {
@@ -182,6 +206,22 @@ describe('helpers', () => {
       [40.7, -120.95],
       [43.252, -126.453],
     ]);
+  });
+
+  it('finds a point along a line and its length', () => {
+    const { at, meters } = alongLine(
+      [
+        [0, 0],
+        [0, 1],
+        [0, 3],
+      ],
+      0.5,
+    );
+
+    expect(at[0]).toBeCloseTo(0);
+    expect(at[1]).toBeCloseTo(1.5);
+    expect(meters / 1000).toBeCloseTo(333.6, 0);
+    expect(alongLine([[1, 2]], 0.5)).toEqual({ at: [1, 2], meters: 0 });
   });
 
   it('places transit in the middle when times are missing', () => {

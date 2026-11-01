@@ -293,6 +293,7 @@
                   <TripRouteLayers
                     map={instance}
                     view={trip}
+                    onOpenLeg={isEditing ? openLeg : undefined}
                     onReady={(ready) => {
                       map = ready;
                       flyTo(openId);
