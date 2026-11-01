@@ -30,7 +30,7 @@ All of these were settled with the owner on 2026-10-30. Do not reopen them witho
 | D13 | Stop and place names come from Nominatim (rate limit, cache, second language), as in travel-album. The library's GeoNames city is untouched. |
 | D14 | Guest access is the album's shared link. A showcase lists the trips marked for it that have a live shared link without a password; the home page is an admin's pick from showcased trips. |
 | D15 | The Favorites trip is a Places trip that mirrors the user's stars (Gallery's per-user favorites). |
-| D16 | Each user keeps their own LLM settings: API type (Anthropic or OpenAI-compatible), URL, model and key. |
+| D16 | Each user keeps their own LLM settings: URL, model and key of an OpenAI-compatible server (revised 2026-11-01: no Anthropic API type, see `DECISIONS-LOG.md`). |
 | D17 | Search: the trip viewer searches stories, captions and CLIP inside the trip, for guests too; a Cmd+K provider finds stops by story text. |
 | D18 | The UI is rewritten in Svelte inside Gallery's web app (MapLibre, Gallery's asset viewer). The mobile app is not touched: it sees a trip as an album with captions. |
 | D19 | Migration from travel-album is a one-off script **in the travel-album repo**, run once in production and then forgotten. Old travel-album links are not kept. Details in §2.2. |
@@ -194,11 +194,12 @@ Done when:
 ### 2.6 LLM texts
 
 - Per-user LLM settings (D16). Generates stop stories, place articles, and captions where the
-  description is empty. The Batch API runs as delayed BullMQ jobs.
+  description is empty, through an OpenAI-compatible server only (no Batch API; revised
+  2026-11-01, see `DECISIONS-LOG.md`).
 - Port from travel-album's `atlas/texts/{generate,prompts}.py` and `PLAN §5.14`.
 
 Done when:
-- One trip is generated through each API type, and a failed stop retries on its own.
+- One trip is generated through an OpenAI-compatible server, and a failed stop retries on its own.
 - A caption typed while generation was running is never overwritten.
 
 ### 2.7 Search
