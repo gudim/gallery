@@ -97,7 +97,8 @@ export type TripUnplaced = ItemBase & { type: 'unplaced' };
 
 export type TripItem = TripViewStop | TripTransit | TripUnplaced;
 
-export type TripViewLeg = TripLegDto & { day: number; points: [number, number][] };
+/** `color` is the day's, or on a one-day trip the leg's own, so legs that meet stay apart. */
+export type TripViewLeg = TripLegDto & { day: number; color: string; points: [number, number][] };
 
 export type TripView = {
   kind: TripKind;
@@ -284,12 +285,17 @@ export const buildTripView = (trip: TripResponseDto, assets: AssetResponseDto[])
   const legs: TripViewLeg[] =
     kind === TripKind.Route
       ? trip.legs
-          .filter(({ polyline }) => !!polyline)
-          .map((leg) => ({
-            ...leg,
-            day: legDay(leg.fromStopId, leg.toStopId),
-            points: decodePolyline(leg.polyline!),
-          }))
+          .map((leg, index) => ({ leg, index }))
+          .filter(({ leg }) => !!leg.polyline)
+          .map(({ leg, index }) => {
+            const day = legDay(leg.fromStopId, leg.toStopId);
+            return {
+              ...leg,
+              day,
+              color: days.length === 1 ? DAY_COLORS[index % DAY_COLORS.length] : (days[day]?.color ?? PLACES_COLOR),
+              points: decodePolyline(leg.polyline!),
+            };
+          })
       : [];
 
   // Transit stops between the same two real stops make one item on the leg between them.
@@ -402,6 +408,32 @@ export const buildTripView = (trip: TripResponseDto, assets: AssetResponseDto[])
     overlays: trip.overlays,
     isMultiCountry: new Set(viewStops.map(({ country }) => country).filter(Boolean)).size > 1,
   };
+};
+
+/**
+ * The point `fraction` of the way along a line of [latitude, longitude] points, and the line's length in metres
+ * (travel-album map.js lineMid).
+ */
+export const alongLine = (points: [number, number][], fraction: number) => {
+  const radians = Math.PI / 180;
+  const steps = points.slice(1).map(([lat, lng], index) => {
+    const [fromLat, fromLng] = points[index];
+    const x = (lng - fromLng) * radians * Math.cos(((lat + fromLat) / 2) * radians);
+    const y = (lat - fromLat) * radians;
+    return Math.hypot(x, y) * 6_371_008.8;
+  });
+  const meters = steps.reduce((sum, step) => sum + step, 0);
+  let left = meters * fraction;
+  for (const [index, step] of steps.entries()) {
+    if (left <= step && step > 0) {
+      const [fromLat, fromLng] = points[index];
+      const [lat, lng] = points[index + 1];
+      const part = left / step;
+      return { at: [fromLat + (lat - fromLat) * part, fromLng + (lng - fromLng) * part] as [number, number], meters };
+    }
+    left -= step;
+  }
+  return { at: points.at(-1)!, meters };
 };
 
 /** The header numbers: assets, videos, stops with assets, days, km (travel-album map.js stats). */
