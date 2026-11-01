@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely, sql } from 'kysely';
+import { Kysely, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { Insertable } from 'kysely';
 import type { TripLlmSettingsTable } from 'src/trips/schema/tables/trip-llm-settings.table.js';
@@ -7,20 +7,45 @@ import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { AlbumUserRole, AssetFileType, AssetType, AssetVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import { bumpContentVersion } from 'src/trips/repositories/trip.repository.js';
-import { TRIP_TEXT_SOURCE_GENERATED } from 'src/trips/utils/texts.js';
+import { TRIP_REPLACEABLE_TEXT_SOURCES, TRIP_TEXT_SOURCE_GENERATED } from 'src/trips/utils/texts.js';
 import { asUuid } from 'src/utils/database.js';
 
-const REPLACEABLE_SOURCES = [TRIP_TEXT_SOURCE_GENERATED, 'geocoded'];
+/** A text to write and the one it replaces, as read before the model answered. */
+export type TripTextWrite = { text: string; seen: string | null };
 
-export type TripStopTexts = {
+/** What a run writes; nothing is written once the run's task is gone, replaced by a newer run. */
+type TripTextsOfTask = { taskId: string; albumId: string; overwrite: boolean };
+
+export type TripStopTexts = TripTextsOfTask & {
   stopId: string;
-  albumId: string;
   ownerId: string;
-  overwrite: boolean;
-  title: string | null;
-  story: string | null;
-  captions: Array<{ assetId: string; text: string }>;
+  title: TripTextWrite | null;
+  story: TripTextWrite | null;
+  captions: Array<TripTextWrite & { assetId: string }>;
 };
+
+export type TripPlaceText = TripTextsOfTask & { placeId: string; article: TripTextWrite };
+
+/**
+ * A text is written while it is still replaceable now, not only when it was read: the owner may have typed one while
+ * the model was answering (travel-album P15, DECISIONS-LOG 2026-10-31). "Replace my texts too" also replaces the
+ * owner's own text, but only the one that was read: a text typed meanwhile is never overwritten.
+ */
+const isWritable = (column: string, source: string, { seen }: TripTextWrite, overwrite: boolean) => {
+  const value = sql`coalesce(${sql.ref(column)}, '')`;
+  const sources = sql.join(TRIP_REPLACEABLE_TEXT_SOURCES);
+  const unchanged = overwrite ? sql` or ${value} = ${seen ?? ''}` : sql``;
+  return sql<boolean>`(${value} = '' or ${sql.ref(source)} in (${sources})${unchanged})`;
+};
+
+/** Holds the run's task until the write commits, so a run started meanwhile waits; false when it is already gone. */
+const holdTask = async (trx: Transaction<DB>, taskId: string) =>
+  !!(await trx
+    .selectFrom('trip_text_task')
+    .select('id')
+    .where('id', '=', asUuid(taskId))
+    .forUpdate()
+    .executeTakeFirst());
 
 // LLM texts of trips (trips PLAN §2.6): the users' settings and, later, the generation it drives.
 @Injectable()
@@ -129,7 +154,7 @@ export class TripTextsRepository {
 
   /**
    * The stop's assets in time order, with their captions and preview files; an asset in the trash or the locked folder
-   * is left out, as the trip viewer leaves it out.
+   * is left out, as the trip viewer leaves it out, and so is one without a preview yet: it cannot go to the model.
    */
   @GenerateSql({ params: [DummyValue.UUID] })
   getStopAssets(stopId: string) {
@@ -157,32 +182,42 @@ export class TripTextsRepository {
       .where('trip_asset.stopId', '=', asUuid(stopId))
       .where('asset.deletedAt', 'is', null)
       .where('asset.visibility', '!=', AssetVisibility.Locked)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('asset_file')
+            .select('asset_file.id')
+            .whereRef('asset_file.assetId', '=', 'asset.id')
+            .where('asset_file.type', '=', AssetFileType.Preview),
+        ),
+      )
+      .$narrowType<{ previewPath: string }>()
       .orderBy('asset.localDateTime')
       .orderBy('asset.id')
       .execute();
   }
 
-  /**
-   * Writes a stop's checked texts in one transaction and returns the assets whose caption changed. Each text is
-   * written only if it is still replaceable now, not only when it was read: the owner may have typed one while the
-   * model was answering (travel-album P15, DECISIONS-LOG 2026-10-31).
-   */
+  /** Writes a stop's checked texts in one transaction (see isWritable) and returns the assets whose caption changed. */
   @GenerateSql({
     params: [
       {
+        taskId: DummyValue.UUID,
         stopId: DummyValue.UUID,
         albumId: DummyValue.UUID,
         ownerId: DummyValue.UUID,
-        overwrite: false,
-        title: DummyValue.STRING,
-        story: DummyValue.STRING,
-        captions: [{ assetId: DummyValue.UUID, text: DummyValue.STRING }],
+        overwrite: true,
+        title: { text: DummyValue.STRING, seen: DummyValue.STRING },
+        story: { text: DummyValue.STRING, seen: null },
+        captions: [{ assetId: DummyValue.UUID, text: DummyValue.STRING, seen: DummyValue.STRING }],
       },
     ],
   })
   writeStop(texts: TripStopTexts) {
-    const { stopId, albumId, ownerId, overwrite, title, story, captions } = texts;
+    const { taskId, stopId, albumId, ownerId, overwrite, title, story, captions } = texts;
     return this.db.transaction().execute(async (trx) => {
+      if (!(await holdTask(trx, taskId))) {
+        return [];
+      }
       let changed = 0;
       for (const [column, source, value] of [
         ['title', 'titleSource', title],
@@ -193,20 +228,16 @@ export class TripTextsRepository {
         }
         const result = await trx
           .updateTable('trip_stop')
-          .set({ [column]: value, [source]: TRIP_TEXT_SOURCE_GENERATED })
+          .set({ [column]: value.text, [source]: TRIP_TEXT_SOURCE_GENERATED })
           .where('id', '=', asUuid(stopId))
           .$if(column === 'title', (qb) => qb.where('isAtCenter', '=', false))
-          .$if(!overwrite, (qb) =>
-            qb.where((eb) =>
-              eb.or([eb(eb.fn.coalesce(column, sql.lit('')), '=', ''), eb(source, 'in', REPLACEABLE_SOURCES)]),
-            ),
-          )
+          .where(isWritable(column, source, value, overwrite))
           .executeTakeFirst();
         changed += Number(result.numUpdatedRows);
       }
 
       const assetIds: string[] = [];
-      for (const { assetId, text } of captions) {
+      for (const { assetId, text, seen } of captions) {
         const row = await trx
           .updateTable('asset_exif')
           .set((eb) => ({
@@ -217,20 +248,19 @@ export class TripTextsRepository {
           .whereRef('asset.id', '=', 'asset_exif.assetId')
           .where('asset_exif.assetId', '=', asUuid(assetId))
           .where('asset.ownerId', '=', asUuid(ownerId))
-          .$if(!overwrite, (qb) =>
-            qb.where((eb) =>
-              eb.or([
-                eb(eb.fn.coalesce('asset_exif.description', sql.lit('')), '=', ''),
-                eb(
-                  'asset_exif.description',
-                  '=',
-                  eb
-                    .selectFrom('trip_generated_caption')
-                    .select('trip_generated_caption.text')
-                    .whereRef('trip_generated_caption.assetId', '=', 'asset_exif.assetId'),
-                ),
-              ]),
-            ),
+          .where((eb) =>
+            eb.or([
+              eb(eb.fn.coalesce('asset_exif.description', sql.lit('')), '=', ''),
+              eb(
+                'asset_exif.description',
+                '=',
+                eb
+                  .selectFrom('trip_generated_caption')
+                  .select('trip_generated_caption.text')
+                  .whereRef('trip_generated_caption.assetId', '=', 'asset_exif.assetId'),
+              ),
+              ...(overwrite ? [eb(eb.fn.coalesce('asset_exif.description', sql.lit('')), '=', seen ?? '')] : []),
+            ]),
           )
           .returning('asset_exif.assetId')
           .executeTakeFirst();
@@ -291,22 +321,28 @@ export class TripTextsRepository {
     return { ...place, stops };
   }
 
-  /** Writes a place's article while it is still replaceable; true when it was written. */
-  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID, DummyValue.STRING, false] })
-  writePlace(placeId: string, albumId: string, article: string, overwrite: boolean) {
+  /** Writes a place's article (see isWritable); true when it was written. */
+  @GenerateSql({
+    params: [
+      {
+        taskId: DummyValue.UUID,
+        placeId: DummyValue.UUID,
+        albumId: DummyValue.UUID,
+        overwrite: false,
+        article: { text: DummyValue.STRING, seen: null },
+      },
+    ],
+  })
+  writePlace({ taskId, placeId, albumId, overwrite, article }: TripPlaceText) {
     return this.db.transaction().execute(async (trx) => {
+      if (!(await holdTask(trx, taskId))) {
+        return false;
+      }
       const result = await trx
         .updateTable('trip_place')
-        .set({ article, articleSource: TRIP_TEXT_SOURCE_GENERATED })
+        .set({ article: article.text, articleSource: TRIP_TEXT_SOURCE_GENERATED })
         .where('id', '=', asUuid(placeId))
-        .$if(!overwrite, (qb) =>
-          qb.where((eb) =>
-            eb.or([
-              eb(eb.fn.coalesce('article', sql.lit('')), '=', ''),
-              eb('articleSource', 'in', REPLACEABLE_SOURCES),
-            ]),
-          ),
-        )
+        .where(isWritable('article', 'articleSource', article, overwrite))
         .executeTakeFirst();
       if (Number(result.numUpdatedRows) === 0) {
         return false;

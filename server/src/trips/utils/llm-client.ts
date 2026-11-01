@@ -1,25 +1,33 @@
+import { serverVersion } from 'src/constants.js';
+import { llmUrlRefusal } from 'src/trips/utils/llm-url.js';
 import { TripTextPart, TripTextsError } from 'src/trips/utils/texts.js';
 
 // One call to an OpenAI-compatible server (trips DECISIONS-LOG 2026-11-01): `/chat/completions` with a strict JSON
 // schema, as travel-album's OpenAIClient.
 
-export type TripLlmConfig = { url: string; model: string; key: string | null; userAgent: string };
+export type TripLlmConfig = { url: string; model: string; key: string | null };
 
 const TIMEOUT_MS = 10 * 60 * 1000;
-// Answers a retry cannot change: bad key, no access, unknown model or URL.
-const SETTINGS_STATUSES = new Set([400, 401, 403, 404, 422]);
+// Answers a retry cannot change: a bad key or no access (DECISIONS-LOG 2026-11-01).
+const SETTINGS_STATUSES = new Set([401, 403]);
+// The geo services' User-Agent carries the operator's contact for OpenStreetMap; an LLM server gets only the name.
+const USER_AGENT = `gallery-server/${serverVersion}`;
 
 export const completeTripText = async (
   config: TripLlmConfig,
   request: { system: string; parts: TripTextPart[]; schema: object },
 ): Promise<unknown> => {
+  const refusal = await llmUrlRefusal(config.url);
+  if (refusal) {
+    throw new TripTextsError(refusal, false);
+  }
   const url = `${config.url.replace(/\/+$/, '')}/chat/completions`;
   const content = request.parts.map((part) =>
     part.type === 'text'
       ? { type: 'text', text: part.text }
       : { type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${part.data.toString('base64')}` } },
   );
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'User-Agent': config.userAgent };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT };
   if (config.key) {
     headers.Authorization = `Bearer ${config.key}`;
   }
@@ -38,16 +46,20 @@ export const completeTripText = async (
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      // A redirect could lead inside the server's network.
+      redirect: 'error',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (error) {
     throw new TripTextsError(`${url}: ${error instanceof Error ? error.message : String(error)}`);
   }
+  // The answer's body goes to the log only: whatever the URL points at, the user sees just the status.
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new TripTextsError(
-      `${url}: HTTP ${response.status} ${text.slice(0, 500)}`,
+      `${url}: HTTP ${response.status}`,
       !SETTINGS_STATUSES.has(response.status),
+      text.slice(0, 500),
     );
   }
 

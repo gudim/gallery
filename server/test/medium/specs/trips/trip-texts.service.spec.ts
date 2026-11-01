@@ -40,7 +40,9 @@ const setup = async (secret?: string) => {
   };
 };
 
-const openAi = { url: 'https://api.openai.com/v1', model: 'gpt-5-mini', allowUpload: true };
+// Public addresses (TEST-NET-3), so a save looks up no name.
+const openAi = { url: 'https://203.0.113.10/v1', model: 'gpt-5-mini', allowUpload: true };
+const openRouter = 'https://203.0.113.20/api/v1';
 
 describe(TripTextsService.name, () => {
   it('returns empty settings before the first save', async () => {
@@ -75,18 +77,26 @@ describe(TripTextsService.name, () => {
       model: 'gpt-5',
       key: TripLlmKeyState.Set,
     });
-    await expect(
-      service.updateSettings(auth, { ...openAi, url: 'https://openrouter.ai/api/v1' }),
-    ).resolves.toMatchObject({ key: TripLlmKeyState.None });
+    await expect(service.updateSettings(auth, { ...openAi, url: openRouter })).resolves.toMatchObject({
+      key: TripLlmKeyState.None,
+    });
   });
 
   it('refuses a key without TRIPS_LLM_SECRET but saves a server without one', async () => {
     const { auth, service } = await setup();
     await expect(service.updateSettings(auth, { ...openAi, key: 'sk-123' })).rejects.toThrow('TRIPS_LLM_SECRET');
-    await expect(service.updateSettings(auth, { ...openAi, url: 'http://127.0.0.1:11434/v1' })).resolves.toMatchObject({
+    await expect(service.updateSettings(auth, { ...openAi, url: openRouter })).resolves.toMatchObject({
       key: TripLlmKeyState.None,
       canStoreKey: false,
     });
+  });
+
+  it('refuses a server inside the server’s network', async () => {
+    const { auth, service } = await setup('secret');
+    for (const url of ['http://127.0.0.1:11434/v1', 'http://localhost:11434/v1', 'http://10.0.0.5/v1']) {
+      await expect(service.updateSettings(auth, { ...openAi, url })).rejects.toThrow("inside the server's network");
+    }
+    await expect(service.getSettings(auth)).resolves.toMatchObject({ url: '' });
   });
 
   it('reports a key saved under another secret as unreadable', async () => {
