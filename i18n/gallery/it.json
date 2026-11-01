@@ -1377,6 +1377,7 @@
   "trips_mode_train": "in treno",
   "trips_move_pin": "Sposta il segnaposto",
   "trips_move_to_stop": "Sposta in una tappa",
+  "trips_network_queue": "Richieste di rete dei viaggi",
   "trips_new_stop": "Nuova tappa da queste",
   "trips_no_place": "Nessun luogo",
   "trips_no_shots": "nessuna foto",

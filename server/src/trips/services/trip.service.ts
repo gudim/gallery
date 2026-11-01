@@ -152,7 +152,7 @@ export class TripService {
    * any transaction, which may take minutes at one request per second per host; each line is then written only if
    * its leg did not change meanwhile.
    */
-  @OnJob({ name: JobName.TripRouteLegs, queue: QueueName.BackgroundTask })
+  @OnJob({ name: JobName.TripRouteLegs, queue: QueueName.TripNetwork })
   async handleRouteLegs({ id }: JobOf<JobName.TripRouteLegs>): Promise<JobStatus> {
     const legs = await this.tripRouteRepository.getRoutingLegs(id);
     if (legs.length === 0) {

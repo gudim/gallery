@@ -1379,6 +1379,7 @@
   "trips_mode_train": "en train",
   "trips_move_pin": "Déplacer le repère",
   "trips_move_to_stop": "Déplacer vers une étape",
+  "trips_network_queue": "Requêtes réseau des voyages",
   "trips_new_stop": "Nouvelle étape avec celles-ci",
   "trips_no_place": "Aucun lieu",
   "trips_no_shots": "aucune photo",

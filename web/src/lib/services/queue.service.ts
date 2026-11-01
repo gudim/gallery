@@ -23,6 +23,7 @@ import {
   mdiFolderMove,
   mdiImageSearch,
   mdiLibraryShelves,
+  mdiMapMarkerPath,
   mdiOcr,
   mdiPause,
   mdiPaw,
@@ -329,6 +330,10 @@ export const asQueueItem = ($t: MessageFormatter, queue: { name: QueueName }): Q
       icon: mdiTagMultipleOutline,
       title: 'Auto-Classification',
       subtitle: 'Automatically classify and tag photos',
+    },
+    [QueueName.TripNetwork]: {
+      icon: mdiMapMarkerPath,
+      title: $t('trips_network_queue'),
     },
   };
 

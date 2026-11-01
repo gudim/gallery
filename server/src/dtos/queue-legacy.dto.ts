@@ -43,6 +43,7 @@ const QueuesResponseLegacySchema = z
     [QueueName.IntegrityCheck]: QueueResponseLegacySchema,
     [QueueName.StorageBackendMigration]: QueueResponseLegacySchema,
     [QueueName.Classification]: QueueResponseLegacySchema,
+    [QueueName.TripNetwork]: QueueResponseLegacySchema,
   })
   .meta({ id: 'QueuesResponseLegacyDto' });
 

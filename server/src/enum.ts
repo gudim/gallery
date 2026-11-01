@@ -905,6 +905,7 @@ export enum QueueName {
   Editor = 'editor',
   StorageBackendMigration = 'storageBackendMigration',
   Classification = 'classification',
+  TripNetwork = 'tripNetwork',
 }
 
 export const QueueNameSchema = z.enum(QueueName).describe('Queue name').meta({ id: 'QueueName' });

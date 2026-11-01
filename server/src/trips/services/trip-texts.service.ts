@@ -241,7 +241,7 @@ export class TripTextsService {
    * One stop or place of a run. A failure retries later with a growing delay, up to TRIP_TEXTS_ATTEMPTS, unless it is
    * a settings problem; then the task stays failed for "retry".
    */
-  @OnJob({ name: JobName.TripTexts, queue: QueueName.BackgroundTask })
+  @OnJob({ name: JobName.TripTexts, queue: QueueName.TripNetwork })
   async handleTexts({ id }: JobOf<JobName.TripTexts>): Promise<JobStatus> {
     const task = await this.tripTextsRepository.getTask(id);
     if (!task || task.error !== null) {

@@ -59,6 +59,7 @@
     [QueueName.IntegrityCheck]: $t('integrity_checks'),
     [QueueName.StorageBackendMigration]: 'Storage Backend Migration',
     [QueueName.Classification]: 'Auto-Classification',
+    [QueueName.TripNetwork]: $t('trips_network_queue'),
   });
 </script>
 

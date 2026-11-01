@@ -39884,7 +39884,8 @@
           "integrityCheck",
           "editor",
           "storageBackendMigration",
-          "classification"
+          "classification",
+          "tripNetwork"
         ],
         "type": "string"
       },
@@ -40073,6 +40074,9 @@
           "thumbnailGeneration": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
+          "tripNetwork": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
           "videoConversion": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
@@ -40103,6 +40107,7 @@
           "storageBackendMigration",
           "storageTemplateMigration",
           "thumbnailGeneration",
+          "tripNetwork",
           "videoConversion",
           "workflow"
         ],

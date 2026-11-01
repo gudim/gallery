@@ -1378,6 +1378,7 @@
   "trips_mode_train": "en tren",
   "trips_move_pin": "Mover el marcador",
   "trips_move_to_stop": "Mover a una parada",
+  "trips_network_queue": "Solicitudes de red de los viajes",
   "trips_new_stop": "Nueva parada con estas",
   "trips_no_place": "Ningún lugar",
   "trips_no_shots": "sin fotos",

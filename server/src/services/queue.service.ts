@@ -298,6 +298,7 @@ export class QueueService extends BaseService {
       QueueName.DuplicateDetection,
       QueueName.BackupDatabase,
       QueueName.StorageBackendMigration,
+      QueueName.TripNetwork,
     ].includes(name);
   }
 
