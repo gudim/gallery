@@ -135,7 +135,9 @@ export class TripService {
     if (filed.assets > 0 && (await this.tripRouteRepository.hasPendingLegs(id))) {
       await this.queueRouting(id);
     }
-    if (filed.stops > 0) {
+    // Not only a new stop: a later filing may move one an earlier filing opened while its naming ran, which then skips
+    // it as moved (a phone backup reaches a trip in several filings, as metadata is read).
+    if (filed.stops > 0 || (filed.assets > 0 && (await this.tripNameRepository.hasStopsToName(id)))) {
       await this.queueNaming(id);
     }
     // Times changed since filing, by the clock-offset wizard or a date edit, move their stops (trips PLAN D9).
