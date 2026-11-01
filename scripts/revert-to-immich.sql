@@ -964,6 +964,7 @@ DROP TABLE IF EXISTS "gallery_migrations_lock";
 -- server/src/schema/migrations-trips/ migration creates is dropped and checked
 -- below (server/src/trips/revert-to-immich.trips.spec.ts).
 -- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS "trip_llm_settings" CASCADE;
 DROP TABLE IF EXISTS "trip_geo_host" CASCADE;
 DROP TABLE IF EXISTS "trip_geo_cache" CASCADE;
 DROP TABLE IF EXISTS "trip_generated_caption" CASCADE;
@@ -991,7 +992,7 @@ BEGIN
      AND tablename IN (
        'trips_migrations', 'trips_migrations_lock',
        'trip', 'trip_place', 'trip_stop', 'trip_asset', 'trip_leg', 'trip_overlay', 'trip_like',
-       'trip_generated_caption', 'trip_geo_cache', 'trip_geo_host'
+       'trip_generated_caption', 'trip_geo_cache', 'trip_geo_host', 'trip_llm_settings'
      );
   IF trip_tables_left > 0 THEN
     RAISE EXCEPTION 'revert-to-immich: % trip table(s) still present after cleanup, aborting.', trip_tables_left;
