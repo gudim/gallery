@@ -1,6 +1,6 @@
 # Trips: progress
 
-## Stage 2.6: LLM texts (branch `trips-6`, from `trips-all`): checked 2026-11-01, awaiting the owner's look at the screenshots
+## Stage 2.6: LLM texts (branch `trips-6`, from `trips-all`): closed 2026-11-01
 
 Revised by the owner on 2026-11-01 (PLAN §2.6, DECISIONS-LOG): OpenAI-compatible servers only, no Batch API. Checked against the dev Gallery running the server built from `trips-6` (its `dist` mounted into the `v5.9.1` image, `TRIPS_LLM_SECRET` set by a compose override) and `vite dev`, in Chromium with locale `ru-RU`. The owner entered their OpenAI key and model in the new settings section; the key is stored encrypted and was never seen by the agent.
 
@@ -10,6 +10,8 @@ Revised by the owner on 2026-11-01 (PLAN §2.6, DECISIONS-LOG): OpenAI-compatibl
 Screenshots (outside git): the settings page and the trip's edit mode before; the settings section, the edit mode with the new button and the window (no settings, estimate) at 1440 and 390 px in both themes after; the run's progress, "Тексты написаны." and the trip read again.
 
 Also seen: a generated caption, like a hand edit, loses its `description` lock once Immich has written the XMP sidecar (`MetadataService.handleSidecarWrite` unlocks it). Generated texts stay replaceable, so a second run over the same trip estimates and pays for the same calls again; "replace my texts too" is about the owner's own texts only.
+
+The owner approved the result and the screenshots on 2026-11-01. A two-axis review (standards, PLAN §2.6) then found six faults, all fixed with medium tests (DECISIONS-LOG 2026-11-01): "replace my texts too" overwrote a caption typed during the run, a job of a replaced run still wrote, 400/404/422 skipped the retries, any user could point the server inside its network and read the answer in the error, assets without a preview failed their stop, and a re-save kept an unreadable key. Internal addresses are refused, as Immich lets only an admin choose the hosts the server calls.
 
 ## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): closed 2026-11-01
 
