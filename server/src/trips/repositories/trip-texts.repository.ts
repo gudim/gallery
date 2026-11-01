@@ -3,6 +3,7 @@ import { Kysely, RawBuilder, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { Insertable } from 'kysely';
 import type { TripLlmSettingsTable } from 'src/trips/schema/tables/trip-llm-settings.table.js';
+import type { TripTextSeen } from 'src/trips/schema/tables/trip-text-task.table.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
 import { AlbumUserRole, AssetFileType, AssetType, AssetVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
@@ -23,6 +24,9 @@ export type TripStopTexts = TripTextsOfTask & {
   story: TripTextWrite | null;
   captions: Array<TripTextWrite & { assetId: string }>;
 };
+
+/** A stop or place of a new run, with what it read for "replace my texts too". */
+export type TripTaskTarget = { id: string; seen: TripTextSeen | null };
 
 export type TripPlaceText = TripTextsOfTask & { placeId: string; article: TripTextWrite };
 
@@ -355,14 +359,16 @@ export class TripTextsRepository {
    * Starts a run: replaces every task of the trip, stops queued at once and places waiting for them. Returns the stop
    * tasks to queue.
    */
-  @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], [DummyValue.UUID], false] })
-  replaceTasks(albumId: string, stopIds: string[], placeIds: string[], overwrite: boolean) {
+  @GenerateSql({
+    params: [DummyValue.UUID, [{ id: DummyValue.UUID, seen: null }], [{ id: DummyValue.UUID, seen: null }], false],
+  })
+  replaceTasks(albumId: string, stops: TripTaskTarget[], places: TripTaskTarget[], overwrite: boolean) {
     return this.db.transaction().execute(async (trx) => {
       await holdTrip(trx, albumId);
       await trx.deleteFrom('trip_text_task').where('albumId', '=', asUuid(albumId)).execute();
       const rows = [
-        ...stopIds.map((stopId) => ({ albumId, stopId, overwrite, isQueued: true })),
-        ...placeIds.map((placeId) => ({ albumId, placeId, overwrite })),
+        ...stops.map(({ id, seen }) => ({ albumId, stopId: id, overwrite, seen, isQueued: true })),
+        ...places.map(({ id, seen }) => ({ albumId, placeId: id, overwrite, seen })),
       ];
       if (rows.length === 0) {
         return [];
@@ -376,7 +382,7 @@ export class TripTextsRepository {
   getTask(id: string) {
     return this.db
       .selectFrom('trip_text_task')
-      .select(['id', 'albumId', 'stopId', 'placeId', 'overwrite', 'attempt', 'error'])
+      .select(['id', 'albumId', 'stopId', 'placeId', 'overwrite', 'seen', 'attempt', 'error'])
       .where('id', '=', asUuid(id))
       .executeTakeFirst();
   }

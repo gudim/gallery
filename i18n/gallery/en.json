@@ -1452,6 +1452,7 @@
   "trips_texts_problem_keyUnreadable": "Your saved API key cannot be read. Enter it again in your settings.",
   "trips_texts_problem_noConsent": "Allow sending your photos to the language model in your settings first.",
   "trips_texts_problem_noSettings": "Set up the language model in your settings first.",
+  "trips_texts_restart": "Start again",
   "trips_texts_retry": "Retry failed",
   "trips_texts_scope": "What to write",
   "trips_texts_scope_stop": "This stop: {title}",

@@ -6,6 +6,7 @@ import { BlockList, isIP } from 'node:net';
 // only at the hosts they declare.
 
 const internal = new BlockList();
+// IANA's IPv4 special-purpose registry, less what routes publicly or only documents (TEST-NET).
 for (const [address, prefix] of [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -20,11 +21,15 @@ for (const [address, prefix] of [
 ] as const) {
   internal.addSubnet(address, prefix, 'ipv4');
 }
+// IANA's IPv6 special-purpose registry, less what routes publicly. `::/96` holds `::`, `::1` and the IPv4-compatible
+// form; NAT64, Teredo and 6to4 carry an IPv4 address inside, which may be a private one. IPv4-mapped addresses are
+// checked against the IPv4 list by BlockList itself.
 for (const [address, prefix] of [
-  ['::', 127],
-  // NAT64 and 6to4 carry an IPv4 address inside, which may be a private one.
+  ['::', 96],
   ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['2001::', 32],
   ['2002::', 16],
   ['fc00::', 7],
   ['fe80::', 10],

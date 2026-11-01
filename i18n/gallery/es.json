@@ -1447,6 +1447,7 @@
   "trips_texts_problem_keyUnreadable": "Tu clave de API guardada no se puede leer. Introdúcela de nuevo en tus ajustes.",
   "trips_texts_problem_noConsent": "Permite primero en tus ajustes enviar tus fotos al modelo de lenguaje.",
   "trips_texts_problem_noSettings": "Configura primero el modelo de lenguaje en tus ajustes.",
+  "trips_texts_restart": "Volver a empezar",
   "trips_texts_retry": "Reintentar los fallidos",
   "trips_texts_scope": "Qué escribir",
   "trips_texts_scope_stop": "Esta parada: {title}",
