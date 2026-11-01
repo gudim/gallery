@@ -49,11 +49,11 @@ select
   "trip_place"."title" as "placeTitle",
   "trip_place"."article"
 from
-  "trip_stop"
-  inner join "trip" on "trip"."albumId" = "trip_stop"."albumId"
+  "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
   inner join "album_user" on "album_user"."albumId" = "album"."id"
   and "album_user"."role" = $1
+  inner join "trip_stop" on "trip_stop"."albumId" = "trip"."albumId"
   left join "trip_place" on "trip_place"."id" = "trip_stop"."placeId"
 where
   "album"."deletedAt" is null
@@ -79,11 +79,11 @@ select
   "trip_place"."title" as "placeTitle",
   "trip_place"."article"
 from
-  "trip_stop"
-  inner join "trip" on "trip"."albumId" = "trip_stop"."albumId"
+  "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
   inner join "album_user" on "album_user"."albumId" = "album"."id"
   and "album_user"."role" = $1
+  inner join "trip_stop" on "trip_stop"."albumId" = "trip"."albumId"
   left join "trip_place" on "trip_place"."id" = "trip_stop"."placeId"
 where
   "album"."deletedAt" is null
@@ -179,14 +179,14 @@ select
   "trip"."kind",
   "trip"."language"
 from
-  "trip_place"
-  inner join "trip" on "trip"."albumId" = "trip_place"."albumId"
+  "trip"
   inner join "album" on "album"."id" = "trip"."albumId"
   inner join "album_user" on "album_user"."albumId" = "album"."id"
   and "album_user"."role" = $1
+  inner join "trip_place" on "trip_place"."albumId" = "trip"."albumId"
 where
-  "trip_place"."id" = $2::uuid
-  and "album"."deletedAt" is null
+  "album"."deletedAt" is null
+  and "trip_place"."id" = $2::uuid
 
 -- TripTextsRepository.writePlace
 begin
@@ -201,6 +201,13 @@ commit
 
 -- TripTextsRepository.replaceTasks
 begin
+select
+  "albumId"
+from
+  "trip"
+where
+  "albumId" = $1::uuid
+for update
 delete from "trip_text_task"
 where
   "albumId" = $1::uuid
@@ -256,7 +263,29 @@ where
 -- TripTextsRepository.takePlaceTasks
 update "trip_text_task"
 set
-  "isQueued" = $1
+  "isQueued" = not exists (
+    select
+      "stop_task"."id"
+    from
+      "trip_text_task" as "stop_task"
+      inner join "trip_stop" on "trip_stop"."id" = "stop_task"."stopId"
+    where
+      "trip_stop"."placeId" = "trip_text_task"."placeId"
+      and "stop_task"."error" is not null
+  ),
+  "error" = case
+    when exists (
+      select
+        "stop_task"."id"
+      from
+        "trip_text_task" as "stop_task"
+        inner join "trip_stop" on "trip_stop"."id" = "stop_task"."stopId"
+      where
+        "trip_stop"."placeId" = "trip_text_task"."placeId"
+        and "stop_task"."error" is not null
+    ) then $1
+    else null
+  end
 where
   "albumId" = $2::uuid
   and "placeId" is not null
@@ -273,9 +302,18 @@ where
       and "stop_task"."error" is null
   )
 returning
-  "id"
+  "id",
+  "isQueued"
 
 -- TripTextsRepository.retryTasks
+begin
+select
+  "albumId"
+from
+  "trip"
+where
+  "albumId" = $1::uuid
+for update
 update "trip_text_task"
 set
   "error" = $1,
@@ -287,6 +325,7 @@ where
 returning
   "id",
   "stopId"
+commit
 
 -- TripTextsRepository.getTasks
 select

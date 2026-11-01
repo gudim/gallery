@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Kysely, Transaction, sql } from 'kysely';
+import { Kysely, RawBuilder, Transaction, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import type { Insertable } from 'kysely';
 import type { TripLlmSettingsTable } from 'src/trips/schema/tables/trip-llm-settings.table.js';
@@ -31,12 +31,17 @@ export type TripPlaceText = TripTextsOfTask & { placeId: string; article: TripTe
  * the model was answering (travel-album P15, DECISIONS-LOG 2026-10-31). "Replace my texts too" also replaces the
  * owner's own text, but only the one that was read: a text typed meanwhile is never overwritten.
  */
-const isWritable = (column: string, source: string, { seen }: TripTextWrite, overwrite: boolean) => {
+const isWritable = (column: string, isGenerated: RawBuilder<unknown>, { seen }: TripTextWrite, overwrite: boolean) => {
   const value = sql`coalesce(${sql.ref(column)}, '')`;
-  const sources = sql.join(TRIP_REPLACEABLE_TEXT_SOURCES);
   const unchanged = overwrite ? sql` or ${value} = ${seen ?? ''}` : sql``;
-  return sql<boolean>`(${value} = '' or ${sql.ref(source)} in (${sources})${unchanged})`;
+  return sql<boolean>`(${value} = '' or ${isGenerated}${unchanged})`;
 };
+
+/** A title, story or article an LLM or Nominatim wrote, by its source column. */
+const hasGeneratedSource = (source: string) => sql`${sql.ref(source)} in (${sql.join(TRIP_REPLACEABLE_TEXT_SOURCES)})`;
+
+/** A caption that is still the text an LLM wrote (DECISIONS-LOG 2026-10-31). */
+const isGeneratedCaption = sql`"asset_exif"."description" = (select "text" from "trip_generated_caption" where "trip_generated_caption"."assetId" = "asset_exif"."assetId")`;
 
 /** Holds the run's task until the write commits, so a run started meanwhile waits; false when it is already gone. */
 const holdTask = async (trx: Transaction<DB>, taskId: string) =>
@@ -47,7 +52,15 @@ const holdTask = async (trx: Transaction<DB>, taskId: string) =>
     .forUpdate()
     .executeTakeFirst());
 
-// LLM texts of trips (trips PLAN §2.6): the users' settings and, later, the generation it drives.
+/** Shown for a place whose article waits for a failed stop. */
+const PLACE_WAITS_FOR_STOPS = 'Not written while a stop of this place failed; retry writes it after its stops';
+
+/** Holds the trip while its tasks change, so two starts or retries at once do not both queue the same stops. */
+const holdTrip = async (trx: Transaction<DB>, albumId: string) => {
+  await trx.selectFrom('trip').select('albumId').where('albumId', '=', asUuid(albumId)).forUpdate().execute();
+};
+
+// LLM texts of trips (trips PLAN §2.6): the users' settings, the texts' sources and writes, and the tasks of a run.
 @Injectable()
 export class TripTextsRepository {
   constructor(@InjectKysely() private db: Kysely<DB>) {}
@@ -81,14 +94,20 @@ export class TripTextsRepository {
       .execute();
   }
 
-  private stops() {
+  /** Trips outside the trash, with their album's owner, whose settings and assets generation uses. */
+  private ownedTrips() {
     return this.db
-      .selectFrom('trip_stop')
-      .innerJoin('trip', 'trip.albumId', 'trip_stop.albumId')
+      .selectFrom('trip')
       .innerJoin('album', 'album.id', 'trip.albumId')
       .innerJoin('album_user', (join) =>
         join.onRef('album_user.albumId', '=', 'album.id').on('album_user.role', '=', AlbumUserRole.Owner),
       )
+      .where('album.deletedAt', 'is', null);
+  }
+
+  private stops() {
+    return this.ownedTrips()
+      .innerJoin('trip_stop', 'trip_stop.albumId', 'trip.albumId')
       .leftJoin('trip_place', 'trip_place.id', 'trip_stop.placeId')
       .select([
         'trip_stop.id',
@@ -108,8 +127,7 @@ export class TripTextsRepository {
         'trip_stop.localEnd',
         'trip_place.title as placeTitle',
         'trip_place.article',
-      ])
-      .where('album.deletedAt', 'is', null);
+      ]);
   }
 
   /** A stop with what its prompt needs; nothing for a deleted stop or a trip whose album is in the trash. */
@@ -231,7 +249,7 @@ export class TripTextsRepository {
           .set({ [column]: value.text, [source]: TRIP_TEXT_SOURCE_GENERATED })
           .where('id', '=', asUuid(stopId))
           .$if(column === 'title', (qb) => qb.where('isAtCenter', '=', false))
-          .where(isWritable(column, source, value, overwrite))
+          .where(isWritable(column, hasGeneratedSource(source), value, overwrite))
           .executeTakeFirst();
         changed += Number(result.numUpdatedRows);
       }
@@ -248,20 +266,7 @@ export class TripTextsRepository {
           .whereRef('asset.id', '=', 'asset_exif.assetId')
           .where('asset_exif.assetId', '=', asUuid(assetId))
           .where('asset.ownerId', '=', asUuid(ownerId))
-          .where((eb) =>
-            eb.or([
-              eb(eb.fn.coalesce('asset_exif.description', sql.lit('')), '=', ''),
-              eb(
-                'asset_exif.description',
-                '=',
-                eb
-                  .selectFrom('trip_generated_caption')
-                  .select('trip_generated_caption.text')
-                  .whereRef('trip_generated_caption.assetId', '=', 'asset_exif.assetId'),
-              ),
-              ...(overwrite ? [eb(eb.fn.coalesce('asset_exif.description', sql.lit('')), '=', seen ?? '')] : []),
-            ]),
-          )
+          .where(isWritable('asset_exif.description', isGeneratedCaption, { text, seen }, overwrite))
           .returning('asset_exif.assetId')
           .executeTakeFirst();
         if (!row) {
@@ -285,13 +290,8 @@ export class TripTextsRepository {
   /** A place with what its prompt needs, and its stops in time order; nothing for a trip in the trash. */
   @GenerateSql({ params: [DummyValue.UUID] })
   async getPlace(placeId: string) {
-    const place = await this.db
-      .selectFrom('trip_place')
-      .innerJoin('trip', 'trip.albumId', 'trip_place.albumId')
-      .innerJoin('album', 'album.id', 'trip.albumId')
-      .innerJoin('album_user', (join) =>
-        join.onRef('album_user.albumId', '=', 'album.id').on('album_user.role', '=', AlbumUserRole.Owner),
-      )
+    const place = await this.ownedTrips()
+      .innerJoin('trip_place', 'trip_place.albumId', 'trip.albumId')
       .select([
         'trip_place.id',
         'trip_place.albumId',
@@ -305,7 +305,6 @@ export class TripTextsRepository {
         'trip.language',
       ])
       .where('trip_place.id', '=', asUuid(placeId))
-      .where('album.deletedAt', 'is', null)
       .executeTakeFirst();
     if (!place) {
       return;
@@ -342,7 +341,7 @@ export class TripTextsRepository {
         .updateTable('trip_place')
         .set({ article: article.text, articleSource: TRIP_TEXT_SOURCE_GENERATED })
         .where('id', '=', asUuid(placeId))
-        .where(isWritable('article', 'articleSource', article, overwrite))
+        .where(isWritable('article', hasGeneratedSource('articleSource'), article, overwrite))
         .executeTakeFirst();
       if (Number(result.numUpdatedRows) === 0) {
         return false;
@@ -359,6 +358,7 @@ export class TripTextsRepository {
   @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], [DummyValue.UUID], false] })
   replaceTasks(albumId: string, stopIds: string[], placeIds: string[], overwrite: boolean) {
     return this.db.transaction().execute(async (trx) => {
+      await holdTrip(trx, albumId);
       await trx.deleteFrom('trip_text_task').where('albumId', '=', asUuid(albumId)).execute();
       const rows = [
         ...stopIds.map((stopId) => ({ albumId, stopId, overwrite, isQueued: true })),
@@ -398,13 +398,27 @@ export class TripTextsRepository {
 
   /**
    * Marks the trip's waiting places queued once no stop is pending, and returns them. Each row is returned once even
-   * when two stops finish together: the update takes it.
+   * when two stops finish together: the update takes it. A place with a failed stop fails too instead of being
+   * written without that stop's story; "retry" sends both, and the place runs after its stops.
    */
   @GenerateSql({ params: [DummyValue.UUID] })
   takePlaceTasks(albumId: string) {
     return this.db
       .updateTable('trip_text_task')
-      .set({ isQueued: true })
+      .set((eb) => {
+        const hasFailedStop = eb.exists(
+          eb
+            .selectFrom('trip_text_task as stop_task')
+            .innerJoin('trip_stop', 'trip_stop.id', 'stop_task.stopId')
+            .select('stop_task.id')
+            .whereRef('trip_stop.placeId', '=', 'trip_text_task.placeId')
+            .where('stop_task.error', 'is not', null),
+        );
+        return {
+          isQueued: eb.not(hasFailedStop).$castTo<boolean>(),
+          error: eb.case().when(hasFailedStop).then(PLACE_WAITS_FOR_STOPS).else(null).end(),
+        };
+      })
       .where('albumId', '=', asUuid(albumId))
       .where('placeId', 'is not', null)
       .where('isQueued', '=', false)
@@ -420,22 +434,25 @@ export class TripTextsRepository {
           ),
         ),
       )
-      .returning('id')
+      .returning(['id', 'isQueued'])
       .execute()
-      .then((rows) => rows.map((row) => row.id));
+      .then((rows) => rows.filter((row) => row.isQueued).map((row) => row.id));
   }
 
   /** Sends the trip's failed tasks again from the first attempt; returns the stop tasks to queue. */
   @GenerateSql({ params: [DummyValue.UUID] })
   retryTasks(albumId: string) {
-    return this.db
-      .updateTable('trip_text_task')
-      .set((eb) => ({ error: null, attempt: 1, isQueued: eb('stopId', 'is not', null).$castTo<boolean>() }))
-      .where('albumId', '=', asUuid(albumId))
-      .where('error', 'is not', null)
-      .returning(['id', 'stopId'])
-      .execute()
-      .then((rows) => rows.filter((row) => row.stopId !== null).map((row) => row.id));
+    return this.db.transaction().execute(async (trx) => {
+      await holdTrip(trx, albumId);
+      const rows = await trx
+        .updateTable('trip_text_task')
+        .set((eb) => ({ error: null, attempt: 1, isQueued: eb('stopId', 'is not', null).$castTo<boolean>() }))
+        .where('albumId', '=', asUuid(albumId))
+        .where('error', 'is not', null)
+        .returning(['id', 'stopId'])
+        .execute();
+      return rows.filter((row) => row.stopId !== null).map((row) => row.id);
+    });
   }
 
   /** The trip's tasks with the titles to show for them. */

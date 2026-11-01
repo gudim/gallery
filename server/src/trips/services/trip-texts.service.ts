@@ -42,6 +42,11 @@ import {
 } from 'src/trips/utils/texts.js';
 
 type TripTextTask = { id: string; placeId: string | null; overwrite: boolean };
+type TripLlmSettings = NonNullable<Awaited<ReturnType<TripTextsRepository['getSettings']>>>;
+
+/** A trip without a map has no articles, and a place without stops has nothing to write one from. */
+const hasArticle = (place: { kind: TripKind; stops: unknown[] }) =>
+  place.kind !== TripKind.Plain && place.stops.length > 0;
 
 const mimeTypeOf = (path: string) => (/\.webp$/i.test(path) ? 'image/webp' : 'image/jpeg');
 
@@ -97,7 +102,7 @@ export class TripTextsService {
     return this.getSettings(auth);
   }
 
-  private problemOf(settings: Awaited<ReturnType<TripTextsRepository['getSettings']>>) {
+  private problemOf(settings: TripLlmSettings | undefined) {
     if (!settings) {
       return TripTextsProblem.NoSettings;
     }
@@ -146,7 +151,7 @@ export class TripTextsService {
     if (!stopId) {
       for (const placeId of await this.tripTextsRepository.getPlaceIds(albumId)) {
         const place = await this.tripTextsRepository.getPlace(placeId);
-        if (!place || place.kind === TripKind.Plain || place.stops.length === 0) {
+        if (!place || !hasArticle(place)) {
           continue;
         }
         if (isReplaceableText(place.article, place.articleSource, overwrite)) {
@@ -231,6 +236,7 @@ export class TripTextsService {
     if (!task || task.error !== null) {
       return JobStatus.Skipped;
     }
+    const target = task.stopId ? 'stop' : 'place';
     try {
       await (task.stopId ? this.generateStop({ ...task, stopId: task.stopId }) : this.generatePlace(task));
     } catch (error) {
@@ -238,14 +244,12 @@ export class TripTextsService {
       const detail = error instanceof TripTextsError && error.detail ? ` (${error.detail})` : '';
       const isRetryable = !(error instanceof TripTextsError) || error.isRetryable;
       if (isRetryable && task.attempt < TRIP_TEXTS_ATTEMPTS) {
-        this.logger.warn(
-          `Trip texts of ${task.stopId ? 'stop' : 'place'} failed (attempt ${task.attempt}): ${message}${detail}`,
-        );
-        await this.tripTextsRepository.setTaskAttempt(id, task.attempt + 1);
-        await this.queueTasks([id], RETRY_DELAY_MS * 2 ** (task.attempt - 1));
-        return JobStatus.Failed;
+        this.logger.warn(`Trip texts of ${target} failed (attempt ${task.attempt}): ${message}${detail}`);
+        if (await this.queueAttempt(id, task.attempt + 1)) {
+          return JobStatus.Failed;
+        }
       }
-      this.logger.error(`Trip texts of ${task.stopId ? 'stop' : 'place'} failed for good: ${message}${detail}`);
+      this.logger.error(`Trip texts of ${target} failed for good: ${message}${detail}`);
       await this.tripTextsRepository.failTask(id, message);
       await this.queuePlaces(task.albumId);
       return JobStatus.Failed;
@@ -253,6 +257,22 @@ export class TripTextsService {
     await this.tripTextsRepository.finishTask(id);
     await this.queuePlaces(task.albumId);
     return JobStatus.Success;
+  }
+
+  /**
+   * Queues the task's next attempt after a growing delay. A task left pending without a job would hold the run's
+   * places for good, so when the queue refuses it the task fails instead, for "retry"; a worker that dies before
+   * the job ends gets it again from BullMQ as a stalled job.
+   */
+  private async queueAttempt(id: string, attempt: number) {
+    try {
+      await this.tripTextsRepository.setTaskAttempt(id, attempt);
+      await this.queueTasks([id], RETRY_DELAY_MS * 2 ** (attempt - 2));
+      return true;
+    } catch (error) {
+      this.logger.error(`Trip texts: could not queue attempt ${attempt} of task ${id}: ${error}`);
+      return false;
+    }
   }
 
   /**
@@ -329,12 +349,7 @@ export class TripTextsService {
       return;
     }
     const place = await this.tripTextsRepository.getPlace(placeId);
-    if (
-      !place ||
-      place.kind === TripKind.Plain ||
-      !isReplaceableText(place.article, place.articleSource, overwrite) ||
-      place.stops.length === 0
-    ) {
+    if (!place || !hasArticle(place) || !isReplaceableText(place.article, place.articleSource, overwrite)) {
       return;
     }
     const config = await this.getConfig(place.ownerId);

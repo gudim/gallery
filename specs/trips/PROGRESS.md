@@ -13,6 +13,8 @@ Also seen: a generated caption, like a hand edit, loses its `description` lock o
 
 The owner approved the result and the screenshots on 2026-11-01. A two-axis review (standards, PLAN §2.6) then found six faults, all fixed with medium tests (DECISIONS-LOG 2026-11-01): "replace my texts too" overwrote a caption typed during the run, a job of a replaced run still wrote, 400/404/422 skipped the retries, any user could point the server inside its network and read the answer in the error, assets without a preview failed their stop, and a re-save kept an unreadable key. Internal addresses are refused, as Immich lets only an admin choose the hosts the server calls.
 
+A second review found four more, fixed with medium tests: two starts at once queued the stops twice, a task whose retry the queue refused stayed pending for good, a place was written without the story of a failed stop, and NAT64, 6to4 and site-local IPv6 addresses passed the internal-address check.
+
 ## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): closed 2026-11-01
 
 Checked against the dev Gallery running the server built from `trips-5` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`. The phone backup is the owner's Galaxy S25 folder `2026/2026-04/LT-Apr-2026 (замки)/2Share` (184 photos, 3–5 April 2026), uploaded with Gallery's CLI (`POST /assets`, as the app's backup) into a new album.
