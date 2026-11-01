@@ -50413,7 +50413,13 @@
             "type": "integer"
           },
           "problem": {
-            "$ref": "#/components/schemas/TripTextsProblem"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TripTextsProblem"
+              }
+            ],
+            "description": "Why generation is off, or null",
+            "nullable": true
           },
           "stops": {
             "description": "Stops that get texts",
@@ -50463,14 +50469,12 @@
         "type": "object"
       },
       "TripTextsProblem": {
-        "description": "Why generation is off, or null",
+        "description": "Why generation is off",
         "enum": [
           "noSettings",
           "noConsent",
-          "keyUnreadable",
-          null
+          "keyUnreadable"
         ],
-        "nullable": true,
         "type": "string"
       },
       "TripTextsProgressDto": {

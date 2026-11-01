@@ -4840,7 +4840,8 @@ export type TripTextsEstimateDto = {
     ownTexts: number;
     /** Places that get an article */
     places: number;
-    problem: TripTextsProblem | null;
+    /** Why generation is off, or null */
+    problem: (TripTextsProblem) | null;
     /** Stops that get texts */
     stops: number;
 };
@@ -13243,8 +13244,7 @@ export enum TripStationSide {
 export enum TripTextsProblem {
     NoSettings = "noSettings",
     NoConsent = "noConsent",
-    KeyUnreadable = "keyUnreadable",
-    Null
+    KeyUnreadable = "keyUnreadable"
 }
 export enum WorkflowResult {
     Completed = "completed",

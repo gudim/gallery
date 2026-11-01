@@ -53,8 +53,7 @@ const TripTextsEstimateQuerySchema = z
 
 const TripTextsProblemSchema = z
   .enum(TripTextsProblem)
-  .nullable()
-  .describe('Why generation is off, or null')
+  .describe('Why generation is off')
   .meta({ id: 'TripTextsProblem' });
 
 const TripTextsEstimateSchema = z
@@ -64,7 +63,7 @@ const TripTextsEstimateSchema = z
     stops: z.int32().describe('Stops that get texts'),
     places: z.int32().describe('Places that get an article'),
     ownTexts: z.int32().describe('The owner’s own texts in scope, kept unless overwrite is set'),
-    problem: TripTextsProblemSchema,
+    problem: TripTextsProblemSchema.nullable().describe('Why generation is off, or null'),
   })
   .meta({ id: 'TripTextsEstimateDto' });
 
