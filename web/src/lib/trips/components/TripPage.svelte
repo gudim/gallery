@@ -177,17 +177,17 @@
     }
   };
 
+  /** The open stop or item, where picked assets come from */
+  const selectionItem = $derived(openId ? view?.order.find(({ id }) => id === openId) : undefined);
+
   // Captions are the assets' descriptions, loaded with the album, so a run that wrote texts reads the trip again.
   const generateTexts = async () => {
-    const item = openId ? view?.order.find(({ id }) => id === openId) : undefined;
+    const item = selectionItem;
     const stop = item?.type === 'stop' ? { id: item.id, title: item.title } : undefined;
     if (await modalManager.show(TripTextsModal, { albumId, stop })) {
       load(albumId);
     }
   };
-
-  /** The stop or item the picked assets came from */
-  const selectionItem = $derived(openId ? view?.order.find(({ id }) => id === openId) : undefined);
 
   type Located = (TripViewStop | TripTransit) & { latitude: number; longitude: number };
   const isLocated = (item: TripItem): item is Located =>

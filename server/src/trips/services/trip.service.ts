@@ -54,6 +54,7 @@ import { TripGeoError, TripGeoRepository } from 'src/trips/repositories/trip-geo
 import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
 import { RoutingLegRow, TripRouteRepository, legEnds } from 'src/trips/repositories/trip-route.repository.js';
 import { TripCreateResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
+import { requireAlbumOwner, requireTripRead } from 'src/trips/utils/access.js';
 import { clockCameras } from 'src/trips/utils/clock.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
@@ -581,13 +582,8 @@ export class TripService {
     }
   }
 
-  // A reader who is not the album owner gets 403; anyone else 404, as for a missing album.
-  private async requireOwner(auth: AuthDto, albumId: string, message: string) {
-    await this.requireRead(auth, albumId);
-    const isOwner = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
-    if (auth.sharedLink || !isOwner.has(albumId)) {
-      throw new ForbiddenException(message);
-    }
+  private requireOwner(auth: AuthDto, albumId: string, message: string) {
+    return requireAlbumOwner(this.accessRepository, auth, albumId, message);
   }
 
   // A reader who cannot edit (a viewer, a shared link) gets 403; anyone else 404, as for a missing album.
@@ -603,16 +599,8 @@ export class TripService {
     }
   }
 
-  // Owner, editor, viewer or the album's shared link (trips PLAN D7). Anyone else gets 404, as for a missing album.
-  private async requireRead(auth: AuthDto, albumId: string) {
-    const allowed = await checkAccess(this.accessRepository, {
-      auth,
-      permission: Permission.AlbumRead,
-      ids: [albumId],
-    });
-    if (!allowed.has(albumId)) {
-      throw new NotFoundException('Trip not found');
-    }
+  private requireRead(auth: AuthDto, albumId: string) {
+    return requireTripRead(this.accessRepository, auth, albumId);
   }
 
   // An asset of a trip the caller can read, outside the trash; anything else is 404.
