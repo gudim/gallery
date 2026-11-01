@@ -375,4 +375,35 @@ describe(TripNameService.name, () => {
     expect(swept).toContainEqual({ name: JobName.TripName, data: { id: routeId } });
     expect(swept).not.toContainEqual({ name: JobName.TripName, data: { id: plainId } });
   });
+
+  // A phone backup reaches the trip in several filings, as metadata is read; a later one moves the stop an earlier one
+  // opened, and the naming queued then skips it as moved.
+  it('is queued again by filing into a stop still without a title, and not when every stop has one', async () => {
+    const { ctx, job, sut, trips, owner, newTrip } = await setup();
+    const naming = () => job.queue.mock.calls.filter(([item]) => item.name === JobName.TripName);
+    const [a, b] = newPoints(2);
+    stubNominatim([[a, VILNIUS]]);
+    const routeId = await newTrip('route', [a, b]);
+    await sut.handleName({ id: routeId });
+    const fileNear = async (point: Point, localDateTime: string) => {
+      const { asset } = await ctx.newAsset({ ownerId: owner.id, localDateTime: new Date(localDateTime) });
+      await ctx.newExif({ assetId: asset.id, latitude: point.latitude + 0.0001, longitude: point.longitude });
+      await ctx.newJobStatus({ assetId: asset.id, metadataExtractedAt: new Date() });
+      await ctx.newAlbumAsset({ albumId: routeId, assetId: asset.id });
+      job.queue.mockClear();
+      await expect(trips.handleFile({ id: routeId })).resolves.toBe(JobStatus.Success);
+    };
+
+    await fileNear(b, '2026-05-01T11:10:00.000Z');
+    expect(naming()).toEqual([[{ name: JobName.TripName, data: { id: routeId } }]]);
+
+    await db
+      .updateTable('trip_stop')
+      .set({ title: 'Kaunas' })
+      .where('albumId', '=', routeId)
+      .where('title', 'is', null)
+      .execute();
+    await fileNear(a, '2026-05-01T10:10:00.000Z');
+    expect(naming()).toEqual([]);
+  });
 });

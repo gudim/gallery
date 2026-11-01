@@ -116,10 +116,22 @@ export class TripNameRepository {
     });
   }
 
+  /** Whether the trip is one `getAlbumIdsToName` lists: filing queues naming for it. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async hasStopsToName(albumId: string): Promise<boolean> {
+    const row = await this.tripsToName().where('trip.albumId', '=', asUuid(albumId)).executeTakeFirst();
+    return !!row;
+  }
+
   /** Trips with a map, outside the trash, with a stop that has a point and no title: naming's nightly retry. */
   @GenerateSql()
   async getAlbumIdsToName(): Promise<string[]> {
-    const rows = await this.db
+    const rows = await this.tripsToName().execute();
+    return rows.map(({ albumId }) => albumId);
+  }
+
+  private tripsToName() {
+    return this.db
       .selectFrom('trip')
       .innerJoin('album', 'album.id', 'trip.albumId')
       .select('trip.albumId')
@@ -135,8 +147,6 @@ export class TripNameRepository {
             .where('trip_stop.longitude', 'is not', null)
             .where(sql`coalesce(btrim("trip_stop"."title"), '')`, '=', ''),
         ),
-      )
-      .execute();
-    return rows.map(({ albumId }) => albumId);
+      );
   }
 }

@@ -26,6 +26,28 @@ for update of
   "trip"
 commit
 
+-- TripNameRepository.hasStopsToName
+select
+  "trip"."albumId"
+from
+  "trip"
+  inner join "album" on "album"."id" = "trip"."albumId"
+where
+  "album"."deletedAt" is null
+  and "trip"."kind" != $1
+  and exists (
+    select
+      "trip_stop"."id"
+    from
+      "trip_stop"
+    where
+      "trip_stop"."albumId" = "trip"."albumId"
+      and "trip_stop"."latitude" is not null
+      and "trip_stop"."longitude" is not null
+      and coalesce(btrim("trip_stop"."title"), '') = $2
+  )
+  and "trip"."albumId" = $3::uuid
+
 -- TripNameRepository.getAlbumIdsToName
 select
   "trip"."albumId"
