@@ -2,7 +2,6 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,7 +10,7 @@ import type { AuthDto } from 'src/dtos/auth.dto.js';
 import type { ArgOf } from 'src/repositories/event.repository.js';
 import type { JobOf } from 'src/types.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
-import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
+import { JobName, JobStatus, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
@@ -54,7 +53,7 @@ import { TripGeoError, TripGeoRepository } from 'src/trips/repositories/trip-geo
 import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
 import { RoutingLegRow, TripRouteRepository, legEnds } from 'src/trips/repositories/trip-route.repository.js';
 import { TripCreateResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
-import { requireAlbumOwner, requireTripRead } from 'src/trips/utils/access.js';
+import { requireAlbumOwner, requireTripEdit, requireTripRead } from 'src/trips/utils/access.js';
 import { clockCameras } from 'src/trips/utils/clock.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
@@ -78,7 +77,6 @@ import {
   stationsRequest,
   valhallaRequest,
 } from 'src/trips/utils/routing.js';
-import { checkAccess } from 'src/utils/access.js';
 import { asDateTimeString } from 'src/utils/date.js';
 
 type Trip = NonNullable<Awaited<ReturnType<TripRepository['get']>>>;
@@ -189,7 +187,7 @@ export class TripService {
 
   /** `viewerKey` is a guest's browser key, which tells whether they liked each asset. */
   async get(auth: AuthDto, albumId: string, viewerKey?: string): Promise<TripResponseDto> {
-    await this.requireRead(auth, albumId);
+    await requireTripRead(this.accessRepository, auth, albumId);
     return this.read(auth, albumId, likerOf(auth, viewerKey));
   }
 
@@ -218,7 +216,7 @@ export class TripService {
 
   /** Creates the album's trip from one document (trips PLAN §2.1). Owner only; an album has at most one trip. */
   async import(auth: AuthDto, albumId: string, dto: TripImportDto): Promise<TripResponseDto> {
-    await this.requireOwner(auth, albumId, 'Only the album owner can import a trip');
+    await requireAlbumOwner(this.accessRepository, auth, albumId, 'Only the album owner can import a trip');
     const assetIds = [...new Set([...dto.assets, ...dto.likes].map(({ assetId }) => assetId))];
     const inAlbum = await this.tripRepository.getAlbumAssetIds(albumId, assetIds);
     const missing = assetIds.filter((id) => !inAlbum.has(id));
@@ -290,7 +288,7 @@ export class TripService {
    */
   async create(auth: AuthDto, dto: TripCreateDto): Promise<TripResponseDto> {
     const { albumId, kind, start, finish, isFinishAtStart, language } = dto;
-    await this.requireOwner(auth, albumId, 'Only the album owner can make a trip');
+    await requireAlbumOwner(this.accessRepository, auth, albumId, 'Only the album owner can make a trip');
     const assets = await this.tripRepository.getLayoutAssets(albumId);
     const layout = layOutTrip(kind, assets, start);
 
@@ -427,7 +425,7 @@ export class TripService {
    * Editors open it; the shift itself goes through Immich's bulk asset update, and only on the caller's own assets.
    */
   async getCameras(auth: AuthDto, albumId: string): Promise<TripCamerasDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const kind = await this.tripRepository.getKind(albumId);
     if (!kind) {
       throw new NotFoundException('Trip not found');
@@ -441,7 +439,7 @@ export class TripService {
    * for another kind. Editors only: the hints serve filing.
    */
   async getPlaceHints(auth: AuthDto, albumId: string): Promise<TripPlaceHintsDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const found = await this.tripRepository.getPlaceHintRows(albumId);
     return found ? placeHints(found.rows, found.hasCenter) : { places: [], center: [] };
   }
@@ -451,7 +449,7 @@ export class TripService {
    * Editors only: it asks Nominatim on their behalf.
    */
   async searchPlaces(auth: AuthDto, albumId: string, { query }: TripGeoSearchDto): Promise<TripGeoPlacesDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const request = nominatimSearchRequest(query, await this.languageOf(albumId));
     return {
       places: await orBadGateway('place search', this.tripGeoRepository.fetchJson(request, parseNominatimSearch)),
@@ -460,7 +458,7 @@ export class TripService {
 
   /** The place at a point, in the trip's language; none where Nominatim knows no place (travel-album `geo/reverse`). */
   async reversePlace(auth: AuthDto, albumId: string, point: TripGeoReverseQueryDto): Promise<TripGeoPlacesDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const request = nominatimReverseRequest(point, await this.languageOf(albumId));
     const place = await orBadGateway('place search', this.tripGeoRepository.fetchJson(request, parseNominatimPlace));
     return { places: place ? [place] : [] };
@@ -469,7 +467,7 @@ export class TripService {
   // A stop or leg edit by the album's owner or an editor, then as travel-album's `editor.edited`: pending legs are routed
   // and untitled stops named.
   private async edit(auth: AuthDto, albumId: string, edit: () => Promise<TripEdited>): Promise<TripResponseDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const edited = await edit();
     if (edited.result !== TripEditResult.Updated) {
       throw refusal(edited.result);
@@ -493,7 +491,7 @@ export class TripService {
 
   /** Up to five stations near each end of a leg, nearest first (travel-album `leg_stations`). Editors only. */
   async getLegStations(auth: AuthDto, albumId: string, legId: string): Promise<TripLegStationsDto> {
-    await this.requireEdit(auth, albumId);
+    await requireTripEdit(this.accessRepository, auth, albumId);
     const leg = await this.requireLeg(albumId, legId);
     const language = await this.languageOf(albumId);
     return {
@@ -582,30 +580,9 @@ export class TripService {
     }
   }
 
-  private requireOwner(auth: AuthDto, albumId: string, message: string) {
-    return requireAlbumOwner(this.accessRepository, auth, albumId, message);
-  }
-
-  // A reader who cannot edit (a viewer, a shared link) gets 403; anyone else 404, as for a missing album.
-  private async requireEdit(auth: AuthDto, albumId: string) {
-    await this.requireRead(auth, albumId);
-    const allowed = await checkAccess(this.accessRepository, {
-      auth,
-      permission: Permission.AlbumUpdate,
-      ids: [albumId],
-    });
-    if (!allowed.has(albumId)) {
-      throw new ForbiddenException('Only the album owner and editors edit the trip');
-    }
-  }
-
-  private requireRead(auth: AuthDto, albumId: string) {
-    return requireTripRead(this.accessRepository, auth, albumId);
-  }
-
   // An asset of a trip the caller can read, outside the trash; anything else is 404.
   private async requireAsset(auth: AuthDto, albumId: string, assetId: string) {
-    await this.requireRead(auth, albumId);
+    await requireTripRead(this.accessRepository, auth, albumId);
     if (!(await this.tripRepository.hasAsset(albumId, assetId))) {
       throw new NotFoundException('Asset not found in the trip');
     }
