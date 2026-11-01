@@ -10,6 +10,7 @@ const trip = (overrides: Partial<TripResponseDto> = {}): TripResponseDto => ({
   kind: TripKind.Route,
   language: 'en',
   contentVersion: 1,
+  isNaming: false,
   isFavorites: false,
   isFeatured: false,
   isShowcased: false,
@@ -85,6 +86,20 @@ describe('TripEditor', () => {
 
     await vi.advanceTimersByTimeAsync(20_000);
     expect(getTrip).toHaveBeenCalledTimes(1);
+    editor.destroy();
+  });
+
+  it('reads the trip again while the server says stops are being named, though nothing a guest sees changed', async () => {
+    const editor = new TripEditor(trip({ isNaming: true }), []);
+    vi.mocked(getTrip)
+      .mockResolvedValueOnce(trip({ isNaming: true }))
+      .mockResolvedValue(trip({ isNaming: false }));
+
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(getTrip).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(getTrip).toHaveBeenCalledTimes(2);
     editor.destroy();
   });
 

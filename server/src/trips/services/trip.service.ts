@@ -10,7 +10,7 @@ import type { AuthDto } from 'src/dtos/auth.dto.js';
 import type { ArgOf } from 'src/repositories/event.repository.js';
 import type { JobOf } from 'src/types.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
-import { JobName, JobStatus, QueueName } from 'src/enum.js';
+import { JobName, JobStatus, QueueJobStatus, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
@@ -58,6 +58,7 @@ import { clockCameras } from 'src/trips/utils/clock.js';
 import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
 import {
+  isUntitled,
   nominatimReverseRequest,
   nominatimSearchRequest,
   parseNominatimPlace,
@@ -80,6 +81,14 @@ import {
 import { asDateTimeString } from 'src/utils/date.js';
 
 type Trip = NonNullable<Awaited<ReturnType<TripRepository['get']>>>;
+
+// A paused queue keeps its jobs as waiting or paused, by BullMQ version.
+const NAMING_JOB_STATUSES = [
+  QueueJobStatus.Active,
+  QueueJobStatus.Waiting,
+  QueueJobStatus.Delayed,
+  QueueJobStatus.Paused,
+];
 
 // Not a BaseService: it needs the trip repositories, and BaseService's constructor is upstream's (trips DECISIONS-LOG).
 @Injectable()
@@ -594,7 +603,20 @@ export class TripService {
       throw new NotFoundException('Trip not found');
     }
     // A shared link that hides metadata hides where each asset was; stops and legs stay (DECISIONS-LOG 2026-10-31).
-    return mapTrip(trip, { showAssetPoints: auth.sharedLink?.showExif ?? true });
+    const showAssetPoints = auth.sharedLink?.showExif ?? true;
+    return mapTrip(trip, { showAssetPoints, isNaming: await this.isNaming(trip) });
+  }
+
+  /**
+   * Whether the editor should wait for names: naming shares the trip network queue with the texts, so it may wait
+   * there a long while; a stop Nominatim finds nothing for stays untitled after it ran, and the answer is then false.
+   */
+  private async isNaming({ trip, stops }: Trip) {
+    if (stops.every((stop) => stop.latitude === null || !isUntitled(stop))) {
+      return false;
+    }
+    const jobs = await this.jobRepository.searchJobs(QueueName.TripNetwork, { status: NAMING_JOB_STATUSES });
+    return jobs.some(({ name, data }) => name === JobName.TripName && data.id === trip.albumId);
   }
 }
 
@@ -730,7 +752,7 @@ const withoutAlbumId = <T extends { albumId: string }>({ albumId: _, ...rest }: 
 
 const mapTrip = (
   { trip, places, stops, assets, legs, overlays, likes }: Trip,
-  { showAssetPoints }: { showAssetPoints: boolean },
+  { showAssetPoints, isNaming }: { showAssetPoints: boolean; isNaming: boolean },
 ): TripResponseDto => ({
   albumId: trip.albumId,
   kind: trip.kind,
@@ -739,6 +761,7 @@ const mapTrip = (
   isFeatured: trip.isFeatured,
   language: trip.language,
   contentVersion: trip.contentVersion,
+  isNaming,
   places: places.map((row) => withoutAlbumId(row)),
   stops: stops
     .map((row) => withoutAlbumId(row))

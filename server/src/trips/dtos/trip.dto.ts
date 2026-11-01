@@ -243,6 +243,7 @@ const TripResponseSchema = z
     isFeatured: z.boolean().describe('Picked by an admin for the home page'),
     language: z.string().nullable().describe('Language the trip’s stops are named in; null is the server’s default'),
     contentVersion: z.int32().describe('Bumped by every change a guest can see'),
+    isNaming: z.boolean().describe('A stop has a point and no title, and a naming of the trip is queued or running'),
     places: z.array(z.object({ id: z.string().describe('Place ID'), ...placeFields }).meta({ id: 'TripPlaceDto' })),
     stops: z
       .array(

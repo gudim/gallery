@@ -75,6 +75,7 @@ const trip = (): TripResponseDto => ({
   isFeatured: false,
   language: null,
   contentVersion: 1,
+  isNaming: false,
   places: [{ id: 'p', key: 'p', title: null, article: 'An article', articleSource: null }],
   stops: [
     stop('start', { role: TripStopRole.Start }),
