@@ -8,6 +8,7 @@ import { DB } from 'src/schema/index.js';
 import { TripLegMode, TripLegStatus, TripStationSide } from 'src/trips/enum.js';
 import { bumpContentVersion, lockTrip, stopOrder } from 'src/trips/repositories/trip.repository.js';
 import { syncLegs } from 'src/trips/utils/filing.js';
+import { pointOf } from 'src/trips/utils/geo.js';
 import { asUuid } from 'src/utils/database.js';
 
 // The legs of a route and their lines (trips PLAN §2.5, travel-album `route_legs`).
@@ -154,6 +155,14 @@ const stationColumns = [
 ] as const;
 
 export type RoutingLegRow = Awaited<ReturnType<TripRouteRepository['getRoutingLegs']>>[number];
+
+// A leg read with both stops' points; an end without a point is null.
+export type LegEndsRow = Record<'fromLatitude' | 'fromLongitude' | 'toLatitude' | 'toLongitude', number | null>;
+
+export const legEnds = (row: LegEndsRow) => ({
+  from: pointOf({ latitude: row.fromLatitude, longitude: row.fromLongitude }),
+  to: pointOf({ latitude: row.toLatitude, longitude: row.toLongitude }),
+});
 
 export const stationValues = (side: TripStationSide, { name, latitude, longitude }: Station) =>
   side === TripStationSide.Departure

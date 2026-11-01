@@ -52,7 +52,7 @@ export class TripFavoritesRepository {
       }
 
       const before = await placesOf(trx, albumId);
-      const removed = await removeUnshared(trx, albumId, userId);
+      const removed = await removeUnqualified(trx, albumId, userId);
       const added = await trx
         .insertInto('album_asset')
         .columns(['albumId', 'assetId'])
@@ -104,11 +104,11 @@ export class TripFavoritesRepository {
 
 // The user's stars that belong in their Favorites album, outside the trash.
 const starsToAdd = (trx: Transaction<DB>, userId: string) =>
-  starsShared(trx, userId).where('asset.deletedAt', 'is', null);
+  qualifyingStars(trx, userId).where('asset.deletedAt', 'is', null);
 
 // The user's stars they could add to an album by hand (Immich's `AssetShare`): their own outside the locked folder, or a
 // partner's on the timeline. A trashed asset still counts, so the album keeps it for a restore.
-const starsShared = (trx: Transaction<DB>, userId: string) =>
+const qualifyingStars = (trx: Transaction<DB>, userId: string) =>
   trx
     .selectFrom('asset_favorite')
     .innerJoin('asset', 'asset.id', 'asset_favorite.assetId')
@@ -142,12 +142,12 @@ const createFavoritesTrip = async (trx: Transaction<DB>, userId: string, { album
 
 // Takes out of the album every asset that is not a star the user could add by hand: unstarred, a partner's after the
 // partnership ended, another user's an editor added (trips DECISIONS-LOG). Returns how many left.
-const removeUnshared = async (trx: Transaction<DB>, albumId: string, userId: string) => {
+const removeUnqualified = async (trx: Transaction<DB>, albumId: string, userId: string) => {
   const rows = await trx
     .selectFrom('album_asset')
     .select('album_asset.assetId')
     .where('album_asset.albumId', '=', asUuid(albumId))
-    .where('album_asset.assetId', 'not in', starsShared(trx, userId).select('asset.id'))
+    .where('album_asset.assetId', 'not in', qualifyingStars(trx, userId).select('asset.id'))
     .execute();
   if (rows.length > 0) {
     await trx

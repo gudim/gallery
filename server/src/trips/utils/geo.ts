@@ -9,14 +9,6 @@ export type Located = { latitude: number | null; longitude: number | null };
 export const pointOf = ({ latitude, longitude }: Located): LatLng | null =>
   latitude === null || longitude === null ? null : { latitude, longitude };
 
-// A leg read with both stops' points; an end without a point is null.
-export type LegEndsRow = Record<'fromLatitude' | 'fromLongitude' | 'toLatitude' | 'toLongitude', number | null>;
-
-export const legEnds = (row: LegEndsRow) => ({
-  from: pointOf({ latitude: row.fromLatitude, longitude: row.fromLongitude }),
-  to: pointOf({ latitude: row.toLatitude, longitude: row.toLongitude }),
-});
-
 // Stored coordinates keep 6 decimals, about 0.1 m.
 export const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 

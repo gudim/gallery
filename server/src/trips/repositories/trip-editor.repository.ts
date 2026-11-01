@@ -14,10 +14,17 @@ import {
   TripStopRole,
 } from 'src/trips/enum.js';
 import { fileTripAssets } from 'src/trips/repositories/trip-filing.repository.js';
-import { noStations, stationValues, syncRouteLegs, unbuilt } from 'src/trips/repositories/trip-route.repository.js';
+import {
+  type LegEndsRow,
+  legEnds,
+  noStations,
+  stationValues,
+  syncRouteLegs,
+  unbuilt,
+} from 'src/trips/repositories/trip-route.repository.js';
 import { bumpContentVersion, lockTrip, recordLocalTimes, stopOrder } from 'src/trips/repositories/trip.repository.js';
 import { placeAfter, transitSpans } from 'src/trips/utils/editor.js';
-import { type LatLng, type LegEndsRow, defaultMode, haversineM, legEnds, pointOf } from 'src/trips/utils/geo.js';
+import { type LatLng, defaultMode, haversineM, pointOf } from 'src/trips/utils/geo.js';
 import { inferPoints, speedKmh } from 'src/trips/utils/grouping.js';
 import { asUuid } from 'src/utils/database.js';
 
@@ -341,10 +348,11 @@ export class TripEditorRepository {
     return this.editRoute(albumId, async (trx) => {
       if (isFinishAtStart) {
         const start = await getEnd(trx, albumId, TripStopRole.Start);
-        if (!start) {
+        const at = start && pointOf(start);
+        if (!at) {
           return TripEditResult.NoStart;
         }
-        point = { latitude: start.latitude!, longitude: start.longitude!, title: start.title };
+        point = { ...at, title: start.title };
       }
       await putEnd(trx, albumId, TripStopRole.Finish, point, isFinishAtStart);
     });
@@ -474,8 +482,8 @@ export class TripEditorRepository {
 
   /**
    * Files Unplaced assets of a Places trip to its centre (travel-album `to_center`): into the stop "<centre>, no exact
-   * place", which the first call makes at `centre` with a pin by hand (trips DECISIONS-LOG 2026-10-31, owner); later
-   * calls file into it and leave out `centre`.
+   * place", which the first call makes at `center` with a pin by hand (trips DECISIONS-LOG 2026-10-31, owner); later
+   * calls file into it and leave out `center`.
    */
   @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], null] })
   toCenter(albumId: string, assetIds: string[], center: TripPoint | null): Promise<TripEdited> {
