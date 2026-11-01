@@ -52,10 +52,10 @@ import { TripEditResult, TripEdited, TripEditorRepository } from 'src/trips/repo
 import { TripFilingRepository } from 'src/trips/repositories/trip-filing.repository.js';
 import { TripGeoError, TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
 import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
-import { RoutingLegRow, TripRouteRepository } from 'src/trips/repositories/trip-route.repository.js';
+import { RoutingLegRow, TripRouteRepository, legEnds } from 'src/trips/repositories/trip-route.repository.js';
 import { TripCreateResult, TripLiker, TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { clockCameras } from 'src/trips/utils/clock.js';
-import { type LatLng, legEnds, pointOf } from 'src/trips/utils/geo.js';
+import { type LatLng, pointOf } from 'src/trips/utils/geo.js';
 import { layOutTrip, routeLegs } from 'src/trips/utils/lay-out.js';
 import {
   nominatimReverseRequest,
