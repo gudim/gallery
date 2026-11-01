@@ -1,5 +1,6 @@
 import { Kysely } from 'kysely';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
@@ -27,7 +28,16 @@ const setup = async (secret?: string) => {
   const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository, JobRepository] });
   const { user } = await ctx.newUser();
   const auth = factory.auth({ user: { id: user.id } });
-  return { auth, user, service: new TripTextsService(ctx.getMock(JobRepository), new TripTextsRepository(db)) };
+  return {
+    auth,
+    user,
+    service: new TripTextsService(
+      LoggingRepository.create(),
+      new AccessRepository(db),
+      ctx.getMock(JobRepository),
+      new TripTextsRepository(db),
+    ),
+  };
 };
 
 const openAi = { url: 'https://api.openai.com/v1', model: 'gpt-5-mini', allowUpload: true };

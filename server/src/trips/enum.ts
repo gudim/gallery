@@ -51,3 +51,10 @@ export enum TripGeoService {
   Overpass = 'overpass',
   Nominatim = 'nominatim',
 }
+
+// Why a user cannot generate trip texts (trips PLAN §2.6).
+export enum TripTextsProblem {
+  NoSettings = 'noSettings',
+  NoConsent = 'noConsent',
+  KeyUnreadable = 'keyUnreadable',
+}

@@ -17,6 +17,48 @@ export const isReplaceableText = (value: string | null, source: string | null, o
 export const isReplaceableCaption = (description: string | null, generated: string | null, overwrite: boolean) =>
   overwrite || !description || description === generated;
 
+export type TripTextPlanStop = {
+  ownerId: string;
+  isAtCenter: boolean;
+  title: string | null;
+  titleSource: string | null;
+  story: string | null;
+  storySource: string | null;
+};
+export type TripTextPlanAsset = {
+  id: string;
+  ownerId: string;
+  description: string | null;
+  generatedCaption: string | null;
+};
+
+/**
+ * What generation of a stop writes and how many calls it takes, and how many of the owner's texts it leaves alone
+ * without "replace my texts too". One function for the estimate and the job, so the window promises what the job does
+ * (travel-album's stop_work). Only the album owner's own assets get captions: a caption is the asset's description.
+ */
+export const planStopTexts = (stop: TripTextPlanStop, assets: TripTextPlanAsset[], overwrite: boolean) => {
+  const hasTitle = !stop.isAtCenter;
+  const ownAssets = assets.filter((asset) => asset.ownerId === stop.ownerId);
+  const wantTitle = hasTitle && isReplaceableText(stop.title, stop.titleSource, overwrite);
+  const wantStory = isReplaceableText(stop.story, stop.storySource, overwrite);
+  const captionIds = ownAssets
+    .filter((asset) => isReplaceableCaption(asset.description, asset.generatedCaption, overwrite))
+    .map((asset) => asset.id);
+  const isNeeded = assets.length > 0 && (wantTitle || wantStory || captionIds.length > 0);
+  const ownTexts =
+    Number(hasTitle && !isReplaceableText(stop.title, stop.titleSource, false)) +
+    Number(!isReplaceableText(stop.story, stop.storySource, false)) +
+    ownAssets.filter((asset) => !isReplaceableCaption(asset.description, asset.generatedCaption, false)).length;
+  return {
+    wantTitle,
+    wantStory,
+    captionIds,
+    calls: isNeeded ? Math.ceil(assets.length / TRIP_TEXTS_CHUNK) : 0,
+    ownTexts,
+  };
+};
+
 /** The short and the long caption in one Immich description, after a blank line (trips ADR 0002). */
 export const joinCaption = (caption: string, long: string | null) => (long ? `${caption}\n\n${long}` : caption);
 

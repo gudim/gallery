@@ -8,6 +8,7 @@ import { TripLlmSettingsTable } from 'src/trips/schema/tables/trip-llm-settings.
 import { TripOverlayTable } from 'src/trips/schema/tables/trip-overlay.table.js';
 import { TripPlaceTable } from 'src/trips/schema/tables/trip-place.table.js';
 import { TripStopTable } from 'src/trips/schema/tables/trip-stop.table.js';
+import { TripTextTaskTable } from 'src/trips/schema/tables/trip-text-task.table.js';
 import { TripTable } from 'src/trips/schema/tables/trip.table.js';
 
 // Trip tables, spread into ImmichDatabase.tables after Gallery's and merged into DB by src/schema/index.ts.
@@ -23,6 +24,7 @@ export const tripTables = [
   TripGeoCacheTable,
   TripGeoHostTable,
   TripLlmSettingsTable,
+  TripTextTaskTable,
 ];
 
 export interface TripsDB {
@@ -37,4 +39,5 @@ export interface TripsDB {
   trip_geo_cache: TripGeoCacheTable;
   trip_geo_host: TripGeoHostTable;
   trip_llm_settings: TripLlmSettingsTable;
+  trip_text_task: TripTextTaskTable;
 }

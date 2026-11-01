@@ -4809,6 +4809,41 @@ export type TripStopSplitDto = {
     /** The stop’s asset that begins the new stop, with every later one */
     assetId: string;
 };
+export type TripTextsFailureDto = {
+    /** Why it failed */
+    error: string;
+    /** Place ID */
+    placeId: string | null;
+    /** Stop ID */
+    stopId: string | null;
+    /** Title of the stop or place */
+    title: string | null;
+};
+export type TripTextsProgressDto = {
+    /** Stops and places that failed after their retries */
+    failed: TripTextsFailureDto[];
+    /** Stops and places still to write */
+    pending: number;
+};
+export type TripTextsStartDto = {
+    /** Replace the owner’s own texts too */
+    overwrite?: boolean;
+    /** Only this stop; omitted for the whole trip with its places */
+    stopId?: string;
+};
+export type TripTextsEstimateDto = {
+    /** Assets sent to the model */
+    assets: number;
+    /** Model calls the run makes */
+    calls: number;
+    /** The owner’s own texts in scope, kept unless overwrite is set */
+    ownTexts: number;
+    /** Places that get an article */
+    places: number;
+    problem: TripTextsProblem | null;
+    /** Stops that get texts */
+    stops: number;
+};
 export type TripTransitUpdateDto = {
     /** Shot on the way; false declines the suggestion for good, null leaves it undecided */
     isTransit: boolean | null;
@@ -11806,6 +11841,67 @@ export function splitStop({ id, stopId, tripStopSplitDto }: {
     })));
 }
 /**
+ * Retrieve the progress of a trip’s texts
+ */
+export function getTripTextsProgress({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripTextsProgressDto;
+    }>(`/trips/${encodeURIComponent(id)}/texts`, {
+        ...opts
+    }));
+}
+/**
+ * Generate a trip’s texts
+ */
+export function startTripTexts({ id, tripTextsStartDto }: {
+    id: string;
+    tripTextsStartDto: TripTextsStartDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripTextsProgressDto;
+    }>(`/trips/${encodeURIComponent(id)}/texts`, oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: tripTextsStartDto
+    })));
+}
+/**
+ * Estimate generating a trip’s texts
+ */
+export function estimateTripTexts({ id, overwrite, stopId }: {
+    id: string;
+    overwrite?: boolean;
+    stopId?: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: TripTextsEstimateDto;
+    }>(`/trips/${encodeURIComponent(id)}/texts/estimate${QS.query(QS.explode({
+        overwrite,
+        stopId
+    }))}`, {
+        ...opts
+    }));
+}
+/**
+ * Retry a trip’s failed texts
+ */
+export function retryTripTexts({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: TripTextsProgressDto;
+    }>(`/trips/${encodeURIComponent(id)}/texts/retry`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
  * Mark trip stops as shot on the way
  */
 export function setTransit({ id, tripTransitUpdateDto }: {
@@ -12884,7 +12980,8 @@ export enum JobName {
     TripFileSweep = "TripFileSweep",
     TripRouteLegs = "TripRouteLegs",
     TripName = "TripName",
-    TripFavorites = "TripFavorites"
+    TripFavorites = "TripFavorites",
+    TripTexts = "TripTexts"
 }
 export enum QueueJobStatus {
     Active = "active",
@@ -13142,6 +13239,12 @@ export enum TripStopRole {
 export enum TripStationSide {
     Departure = "departure",
     Arrival = "arrival"
+}
+export enum TripTextsProblem {
+    NoSettings = "noSettings",
+    NoConsent = "noConsent",
+    KeyUnreadable = "keyUnreadable",
+    Null
 }
 export enum WorkflowResult {
     Completed = "completed",

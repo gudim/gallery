@@ -1062,12 +1062,13 @@ export enum JobName {
   AssetClassify = 'AssetClassify',
 
   // Trips: filing new album assets into stops (trips PLAN D12), routing legs and naming stops (PLAN §2.5), and
-  // mirroring stars into the Favorites trip (D15)
+  // mirroring stars into the Favorites trip (D15), LLM texts (§2.6)
   TripFile = 'TripFile',
   TripFileSweep = 'TripFileSweep',
   TripRouteLegs = 'TripRouteLegs',
   TripName = 'TripName',
   TripFavorites = 'TripFavorites',
+  TripTexts = 'TripTexts',
 }
 
 export const JobNameSchema = z.enum(JobName).describe('Job name').meta({ id: 'JobName' });

@@ -1,10 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
-import { JobName } from 'src/enum.js';
+import type { JobOf } from 'src/types.js';
+import { OnJob } from 'src/decorators.js';
+import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
+import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
+import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { StorageService } from 'src/services/storage.service.js';
-import { TripLlmSettingsResponseDto, TripLlmSettingsUpdateDto } from 'src/trips/dtos/trip-texts.dto.js';
-import { TripKind } from 'src/trips/enum.js';
+import {
+  TripLlmSettingsResponseDto,
+  TripLlmSettingsUpdateDto,
+  TripTextsEstimateDto,
+  TripTextsEstimateQueryDto,
+  TripTextsProgressDto,
+  TripTextsStartDto,
+} from 'src/trips/dtos/trip-texts.dto.js';
+import { TripKind, TripTextsProblem } from 'src/trips/enum.js';
 import { TripTextsRepository } from 'src/trips/repositories/trip-texts.repository.js';
 import { TRIPS_USER_AGENT_VARIABLE, defaultTripGeoUserAgent } from 'src/trips/utils/geo-services.js';
 import { TripLlmConfig, completeTripText } from 'src/trips/utils/llm-client.js';
@@ -22,14 +33,25 @@ import {
   TripTextsError,
   checkPlaceAnswer,
   checkStopAnswer,
-  isReplaceableCaption,
   isReplaceableText,
   joinCaption,
   placeRequest,
+  planStopTexts,
   stopRequest,
 } from 'src/trips/utils/texts.js';
+import { checkAccess } from 'src/utils/access.js';
 
 const mimeTypeOf = (path: string) => (/\.webp$/i.test(path) ? 'image/webp' : 'image/jpeg');
+
+/** A failed stop or place runs again on its own until this many attempts (trips DECISIONS-LOG 2026-11-01). */
+export const TRIP_TEXTS_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 60_000;
+
+const PROBLEM_MESSAGES: Record<TripTextsProblem, string> = {
+  [TripTextsProblem.NoSettings]: 'No LLM settings',
+  [TripTextsProblem.NoConsent]: 'Sending photos to the LLM server is not allowed in the settings',
+  [TripTextsProblem.KeyUnreadable]: 'The saved LLM key cannot be read: TRIPS_LLM_SECRET is missing or changed',
+};
 
 // LLM texts of trips (trips PLAN §2.6).
 @Injectable()
@@ -39,9 +61,13 @@ export class TripTextsService {
   private readonly defaultLanguage = resolveTripNamingLanguages()[0];
 
   constructor(
+    private logger: LoggingRepository,
+    private accessRepository: AccessRepository,
     private jobRepository: JobRepository,
     private tripTextsRepository: TripTextsRepository,
-  ) {}
+  ) {
+    this.logger.setContext(TripTextsService.name);
+  }
 
   async getSettings(auth: AuthDto): Promise<TripLlmSettingsResponseDto> {
     const settings = await this.tripTextsRepository.getSettings(auth.user.id);
@@ -66,21 +92,171 @@ export class TripTextsService {
     return this.getSettings(auth);
   }
 
+  private problemOf(settings: Awaited<ReturnType<TripTextsRepository['getSettings']>>) {
+    if (!settings) {
+      return TripTextsProblem.NoSettings;
+    }
+    if (!settings.allowUpload) {
+      return TripTextsProblem.NoConsent;
+    }
+    if (tripLlmKeyState(settings.keyCipher, this.secret) === TripLlmKeyState.Unreadable) {
+      return TripTextsProblem.KeyUnreadable;
+    }
+    return null;
+  }
+
   /** The user's server, or why generation is off; a settings problem is never retried. */
   private async getConfig(userId: string): Promise<TripLlmConfig> {
     const settings = await this.tripTextsRepository.getSettings(userId);
-    if (!settings) {
-      throw new TripTextsError('No LLM settings', false);
+    const problem = this.problemOf(settings);
+    if (problem || !settings) {
+      throw new TripTextsError(PROBLEM_MESSAGES[problem ?? TripTextsProblem.NoSettings], false);
     }
-    if (!settings.allowUpload) {
-      throw new TripTextsError('Sending photos to the LLM server is not allowed in the settings', false);
-    }
-    const state = tripLlmKeyState(settings.keyCipher, this.secret);
-    if (state === TripLlmKeyState.Unreadable) {
-      throw new TripTextsError('The saved LLM key cannot be read: TRIPS_LLM_SECRET is missing or changed', false);
-    }
-    const key = state === TripLlmKeyState.Set ? decryptLlmKey(settings.keyCipher!, this.secret!) : null;
+    const key = settings.keyCipher ? decryptLlmKey(settings.keyCipher, this.secret!) : null;
     return { url: settings.url, model: settings.model, key, userAgent: this.userAgent };
+  }
+
+  // Only the album owner generates texts, with their own settings (trips DECISIONS-LOG 2026-11-01); a reader who is
+  // not the owner gets 403, anyone else 404, as for a missing album.
+  private async requireOwner(auth: AuthDto, albumId: string) {
+    const readable = await checkAccess(this.accessRepository, {
+      auth,
+      permission: Permission.AlbumRead,
+      ids: [albumId],
+    });
+    if (!readable.has(albumId) || !(await this.tripTextsRepository.hasTrip(albumId))) {
+      throw new NotFoundException('Trip not found');
+    }
+    const owned = await this.accessRepository.album.checkOwnerAccess(auth.user.id, new Set([albumId]));
+    if (auth.sharedLink || !owned.has(albumId)) {
+      throw new ForbiddenException('Only the album owner generates texts');
+    }
+  }
+
+  /** What a run would write, in one pass for the estimate and the start. */
+  private async plan(albumId: string, { stopId, overwrite }: TripTextsEstimateQueryDto) {
+    const stops = await this.tripTextsRepository.getStops(albumId, stopId);
+    if (stopId && stops.length === 0) {
+      throw new BadRequestException('Stop not found in the trip');
+    }
+    const stopPlans = [];
+    for (const stop of stops) {
+      const assets = await this.tripTextsRepository.getStopAssets(stop.id);
+      stopPlans.push({ id: stop.id, assets: assets.length, ...planStopTexts(stop, assets, overwrite) });
+    }
+    const places = [];
+    let ownArticles = 0;
+    if (!stopId) {
+      for (const placeId of await this.tripTextsRepository.getPlaceIds(albumId)) {
+        const place = await this.tripTextsRepository.getPlace(placeId);
+        if (!place || place.kind === TripKind.Plain || place.stops.length === 0) {
+          continue;
+        }
+        if (isReplaceableText(place.article, place.articleSource, overwrite)) {
+          places.push(place.id);
+        }
+        ownArticles += Number(!isReplaceableText(place.article, place.articleSource, false));
+      }
+    }
+    const busy = stopPlans.filter((stop) => stop.calls > 0);
+    return {
+      stopIds: busy.map((stop) => stop.id),
+      placeIds: places,
+      estimate: {
+        calls: busy.reduce((sum, stop) => sum + stop.calls, 0) + places.length,
+        assets: busy.reduce((sum, stop) => sum + stop.assets, 0),
+        stops: busy.length,
+        places: places.length,
+        ownTexts: stopPlans.reduce((sum, stop) => sum + stop.ownTexts, 0) + ownArticles,
+      },
+    };
+  }
+
+  async estimate(auth: AuthDto, albumId: string, dto: TripTextsEstimateQueryDto): Promise<TripTextsEstimateDto> {
+    await this.requireOwner(auth, albumId);
+    const { estimate } = await this.plan(albumId, dto);
+    const problem = this.problemOf(await this.tripTextsRepository.getSettings(auth.user.id));
+    return { ...estimate, problem };
+  }
+
+  /** Starts a run of the trip or one stop, replacing any run before it; places go after the stops. */
+  async start(auth: AuthDto, albumId: string, dto: TripTextsStartDto): Promise<TripTextsProgressDto> {
+    await this.requireOwner(auth, albumId);
+    const problem = this.problemOf(await this.tripTextsRepository.getSettings(auth.user.id));
+    if (problem) {
+      throw new BadRequestException(PROBLEM_MESSAGES[problem]);
+    }
+    const { stopIds, placeIds } = await this.plan(albumId, dto);
+    const taskIds = await this.tripTextsRepository.replaceTasks(albumId, stopIds, placeIds, dto.overwrite);
+    await this.queueTasks(taskIds);
+    await this.queuePlaces(albumId);
+    return this.progress(albumId);
+  }
+
+  async getProgress(auth: AuthDto, albumId: string): Promise<TripTextsProgressDto> {
+    await this.requireOwner(auth, albumId);
+    return this.progress(albumId);
+  }
+
+  /** Sends the stops and places that failed after their retries again. */
+  async retry(auth: AuthDto, albumId: string): Promise<TripTextsProgressDto> {
+    await this.requireOwner(auth, albumId);
+    await this.queueTasks(await this.tripTextsRepository.retryTasks(albumId));
+    await this.queuePlaces(albumId);
+    return this.progress(albumId);
+  }
+
+  private async progress(albumId: string): Promise<TripTextsProgressDto> {
+    const tasks = await this.tripTextsRepository.getTasks(albumId);
+    return {
+      pending: tasks.filter((task) => task.error === null).length,
+      failed: tasks.flatMap(({ error, ...task }) => (error === null ? [] : [{ ...task, error }])),
+    };
+  }
+
+  private async queueTasks(ids: string[], delay?: number) {
+    if (ids.length > 0) {
+      await this.jobRepository.queueAll(ids.map((id) => ({ name: JobName.TripTexts, data: { id, delay } })));
+    }
+  }
+
+  private async queuePlaces(albumId: string) {
+    await this.queueTasks(await this.tripTextsRepository.takePlaceTasks(albumId));
+  }
+
+  /**
+   * One stop or place of a run. A failure retries later with a growing delay, up to TRIP_TEXTS_ATTEMPTS, unless it is
+   * a settings problem; then the task stays failed for "retry".
+   */
+  @OnJob({ name: JobName.TripTexts, queue: QueueName.BackgroundTask })
+  async handleTexts({ id }: JobOf<JobName.TripTexts>): Promise<JobStatus> {
+    const task = await this.tripTextsRepository.getTask(id);
+    if (!task || task.error !== null) {
+      return JobStatus.Skipped;
+    }
+    try {
+      await (task.stopId
+        ? this.generateStop(task.stopId, task.overwrite)
+        : this.generatePlace(task.placeId!, task.overwrite));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isRetryable = !(error instanceof TripTextsError) || error.isRetryable;
+      if (isRetryable && task.attempt < TRIP_TEXTS_ATTEMPTS) {
+        this.logger.warn(
+          `Trip texts of ${task.stopId ? 'stop' : 'place'} failed (attempt ${task.attempt}): ${message}`,
+        );
+        await this.tripTextsRepository.setTaskAttempt(id, task.attempt + 1);
+        await this.queueTasks([id], RETRY_DELAY_MS * 2 ** (task.attempt - 1));
+        return JobStatus.Failed;
+      }
+      this.logger.error(`Trip texts of ${task.stopId ? 'stop' : 'place'} failed for good: ${message}`);
+      await this.tripTextsRepository.failTask(id, message);
+      await this.queuePlaces(task.albumId);
+      return JobStatus.Failed;
+    }
+    await this.tripTextsRepository.finishTask(id);
+    await this.queuePlaces(task.albumId);
+    return JobStatus.Success;
   }
 
   /**
@@ -94,18 +270,8 @@ export class TripTextsService {
       return;
     }
     const assets = await this.tripTextsRepository.getStopAssets(stopId);
-    const wantTitle = !stop.isAtCenter && isReplaceableText(stop.title, stop.titleSource, overwrite);
-    const wantStory = isReplaceableText(stop.story, stop.storySource, overwrite);
-    const wanted = new Set(
-      assets
-        .filter(
-          (asset) =>
-            asset.ownerId === stop.ownerId &&
-            isReplaceableCaption(asset.description, asset.generatedCaption, overwrite),
-        )
-        .map((asset) => asset.id),
-    );
-    if (assets.length === 0 || !(wantTitle || wantStory || wanted.size > 0)) {
+    const { wantTitle, wantStory, captionIds, calls } = planStopTexts(stop, assets, overwrite);
+    if (calls === 0) {
       return;
     }
     const config = await this.getConfig(stop.ownerId);
@@ -146,7 +312,7 @@ export class TripTextsService {
       overwrite,
       title: wantTitle ? written!.title : null,
       story: wantStory ? written!.story : null,
-      captions: [...wanted].flatMap((assetId) => {
+      captions: captionIds.flatMap((assetId) => {
         const { caption, long } = captions.get(assetId)!;
         return caption || long ? [{ assetId, text: joinCaption(caption, long) }] : [];
       }),

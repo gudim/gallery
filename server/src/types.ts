@@ -640,12 +640,13 @@ export type JobItem =
   // Face Repair
   | { name: JobName.FaceRepairScan; data: IFaceRepairScanJob }
 
-  // Trips (trips PLAN D12, §2.5)
+  // Trips (trips PLAN D12, §2.5, §2.6)
   | { name: JobName.TripFile; data: IEntityJob }
   | { name: JobName.TripFileSweep; data?: IBaseJob }
   | { name: JobName.TripRouteLegs; data: IEntityJob }
   | { name: JobName.TripName; data: IEntityJob }
-  | { name: JobName.TripFavorites; data: IBaseJob & { userId: string; canCreate: boolean } };
+  | { name: JobName.TripFavorites; data: IBaseJob & { userId: string; canCreate: boolean } }
+  | { name: JobName.TripTexts; data: IEntityJob & { delay?: number } };
 
 export type VectorExtension = (typeof VECTOR_EXTENSIONS)[number];
 
