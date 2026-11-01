@@ -1628,6 +1628,7 @@
   "trips_texts_problem_keyUnreadable": "Zapisanego klucza API nie da się odczytać. Wpisz go ponownie w ustawieniach.",
   "trips_texts_problem_noConsent": "Najpierw zezwól w ustawieniach na wysyłanie zdjęć do modelu językowego.",
   "trips_texts_problem_noSettings": "Najpierw skonfiguruj model językowy w ustawieniach.",
+  "trips_texts_restart": "Uruchom ponownie",
   "trips_texts_retry": "Ponów nieudane",
   "trips_texts_scope": "Co napisać",
   "trips_texts_scope_stop": "Ten przystanek: {title}",

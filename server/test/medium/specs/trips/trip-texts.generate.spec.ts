@@ -130,7 +130,7 @@ const setup = async () => {
     return db
       .insertInto('trip_text_task')
       .values({ albumId, ...target, overwrite, isQueued: true })
-      .returning(['id', 'placeId', 'overwrite'])
+      .returning(['id', 'placeId', 'overwrite', 'seen'])
       .executeTakeFirstOrThrow();
   };
   const runStop = async (stopId: string, overwrite = false) =>
@@ -466,6 +466,41 @@ describe('a run of trip texts', () => {
     await sut.start(auth, albumId, { stopId, overwrite: false });
     await expect(sut.handleTexts(old)).resolves.toBe(JobStatus.Skipped);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('replaces only the texts the run read when it started, also on a later attempt', async () => {
+    const { sut, auth, job, ctx, newStop } = await setup();
+    const { albumId, stopId, assetIds } = await newStop(2);
+    await ctx.newExif({ assetId: assetIds[0], description: 'My caption.' });
+    await ctx.newExif({ assetId: assetIds[1], description: 'Another of mine.' });
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('busy', { status: 503 })));
+    await sut.start(auth, albumId, { stopId, overwrite: true });
+    let [task] = queued(job);
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Failed);
+
+    await db
+      .updateTable('asset_exif')
+      .set({ description: 'Typed between attempts.' })
+      .where('assetId', '=', assetIds[1])
+      .execute();
+    stubServer();
+    [task] = queued(job);
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Success);
+
+    expect(await captionsOf(assetIds)).toEqual(['Caption 1.1\n\nLong.', 'Typed between attempts.']);
+  });
+
+  it('queues the places when the pending stop was deleted meanwhile', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId } = await newStop(1);
+    await sut.start(auth, albumId, { overwrite: false });
+    const [stopTask] = queued(job);
+    await db.deleteFrom('trip_stop').where('id', '=', stopId).execute();
+    await expect(sut.handleTexts(stopTask)).resolves.toBe(JobStatus.Skipped);
+    expect(queued(job)).toEqual([]);
+
+    await expect(sut.getProgress(auth, albumId)).resolves.toMatchObject({ pending: 1 });
+    expect(queued(job)).toHaveLength(1);
   });
 
   it('keeps one set of tasks when two runs start at once', async () => {

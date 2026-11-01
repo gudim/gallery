@@ -216,12 +216,13 @@ insert into
     "albumId",
     "stopId",
     "overwrite",
+    "seen",
     "isQueued",
     "placeId"
   )
 values
-  ($1, $2, $3, $4, default),
-  ($5, default, $6, default, $7)
+  ($1, $2, $3, $4, $5, default),
+  ($6, default, $7, $8, default, $9)
 returning
   "id",
   "stopId"
@@ -234,6 +235,7 @@ select
   "stopId",
   "placeId",
   "overwrite",
+  "seen",
   "attempt",
   "error"
 from

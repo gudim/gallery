@@ -1640,6 +1640,7 @@
   "trips_texts_problem_keyUnreadable": "無法讀取你儲存的 API 金鑰。請在設定中重新輸入。",
   "trips_texts_problem_noConsent": "請先在設定中允許將你的相片傳送給語言模型。",
   "trips_texts_problem_noSettings": "請先在設定中設定語言模型。",
+  "trips_texts_restart": "重新開始",
   "trips_texts_retry": "重試失敗項目",
   "trips_texts_scope": "要寫什麼",
   "trips_texts_scope_stop": "此站：{title}",

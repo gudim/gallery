@@ -1624,6 +1624,7 @@
   "trips_texts_problem_keyUnreadable": "La tua chiave API salvata non è leggibile. Inseriscila di nuovo nelle tue impostazioni.",
   "trips_texts_problem_noConsent": "Consenti prima nelle tue impostazioni l’invio delle tue foto al modello linguistico.",
   "trips_texts_problem_noSettings": "Configura prima il modello linguistico nelle tue impostazioni.",
+  "trips_texts_restart": "Riavvia",
   "trips_texts_retry": "Riprova i non riusciti",
   "trips_texts_scope": "Cosa scrivere",
   "trips_texts_scope_stop": "Questa tappa: {title}",

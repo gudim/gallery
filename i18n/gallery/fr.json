@@ -1626,6 +1626,7 @@
   "trips_texts_problem_keyUnreadable": "Votre clé d’API enregistrée est illisible. Saisissez-la de nouveau dans vos réglages.",
   "trips_texts_problem_noConsent": "Autorisez d’abord l’envoi de vos photos au modèle de langage dans vos réglages.",
   "trips_texts_problem_noSettings": "Configurez d’abord le modèle de langage dans vos réglages.",
+  "trips_texts_restart": "Relancer",
   "trips_texts_retry": "Réessayer les échecs",
   "trips_texts_scope": "Quoi écrire",
   "trips_texts_scope_stop": "Cette étape : {title}",

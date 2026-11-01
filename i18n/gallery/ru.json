@@ -1625,6 +1625,7 @@
   "trips_texts_problem_keyUnreadable": "Сохранённый ключ API не читается. Введите его заново в настройках.",
   "trips_texts_problem_noConsent": "Сначала разрешите в настройках отправлять ваши кадры языковой модели.",
   "trips_texts_problem_noSettings": "Сначала настройте языковую модель в настройках.",
+  "trips_texts_restart": "Запустить заново",
   "trips_texts_retry": "Повторить неудавшиеся",
   "trips_texts_scope": "Что писать",
   "trips_texts_scope_stop": "Эта остановка: {title}",

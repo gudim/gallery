@@ -49,6 +49,8 @@
   let progress = $state<TripTextsProgressDto>();
   let isStarted = $state(false);
   let isBusy = $state(false);
+  // Back to the scope and estimate while a run is going on, for a run whose job got lost: a new run replaces it.
+  let isRestarting = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const settingsUrl = `/user-settings?${QueryParameter.IS_OPEN}=${TRIP_TEXTS_SETTINGS_KEY}`;
@@ -86,6 +88,7 @@
     try {
       isStarted = true;
       follow(await action());
+      isRestarting = false;
     } catch (error) {
       handleError(error, message);
     } finally {
@@ -108,6 +111,7 @@
   onDestroy(() => clearTimeout(timer));
 
   const isRunning = $derived(!!progress && progress.pending > 0);
+  const isSetup = $derived((!isRunning && !isStarted) || isRestarting);
   const problemTexts = $derived<Record<TripTextsProblem, string>>({
     [TripTextsProblem.NoSettings]: $t('trips_texts_problem_noSettings'),
     [TripTextsProblem.NoConsent]: $t('trips_texts_problem_noConsent'),
@@ -118,7 +122,7 @@
 <Modal title={$t('trips_texts_generate')} icon={mdiTextBoxEditOutline} size="small" onClose={() => onClose(isStarted)}>
   <ModalBody>
     <div class="flex flex-col gap-4" data-testid="trip-texts-modal">
-      {#if progress && (isRunning || isStarted || progress.failed.length > 0)}
+      {#if progress && !isRestarting && (isRunning || isStarted || progress.failed.length > 0)}
         {#if isRunning}
           <div class="flex items-center gap-3">
             <LoadingSpinner />
@@ -137,7 +141,7 @@
           </Alert>
         {/if}
       {/if}
-      {#if !isRunning && !isStarted}
+      {#if isSetup}
         {#if stop}
           <div class="flex flex-col gap-2" role="radiogroup" aria-label={$t('trips_texts_scope')}>
             {#each [{ id: undefined, label: $t('trips_texts_scope_trip') }, { id: stop.id, label: $t( 'trips_texts_scope_stop', { values: { title: stop.title || $t('trips_untitled_stop') } } ) }] as option (option.id ?? 'trip')}
@@ -199,7 +203,12 @@
           >{$t('trips_texts_retry')}</Button
         >
       {/if}
-      {#if !isRunning && !isStarted}
+      {#if isRunning && !isRestarting}
+        <Button shape="round" fullWidth color="secondary" onclick={() => (isRestarting = true)}
+          >{$t('trips_texts_restart')}</Button
+        >
+      {/if}
+      {#if isSetup}
         <Button
           shape="round"
           fullWidth

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthDto } from 'src/dtos/auth.dto.js';
+import type { TripTextSeen } from 'src/trips/schema/tables/trip-text-task.table.js';
 import type { JobOf } from 'src/types.js';
 import { OnJob } from 'src/decorators.js';
 import { JobName, JobStatus, QueueName } from 'src/enum.js';
@@ -41,7 +42,7 @@ import {
   stopRequest,
 } from 'src/trips/utils/texts.js';
 
-type TripTextTask = { id: string; placeId: string | null; overwrite: boolean };
+type TripTextTask = { id: string; placeId: string | null; overwrite: boolean; seen: TripTextSeen | null };
 type TripLlmSettings = NonNullable<Awaited<ReturnType<TripTextsRepository['getSettings']>>>;
 
 /** A trip without a map has no articles, and a place without stops has nothing to write one from. */
@@ -144,7 +145,14 @@ export class TripTextsService {
     const stopPlans = [];
     for (const stop of stops) {
       const assets = await this.tripTextsRepository.getStopAssets(stop.id);
-      stopPlans.push({ id: stop.id, assets: assets.length, ...planStopTexts(stop, assets, overwrite) });
+      const seen = overwrite
+        ? {
+            title: stop.title,
+            story: stop.story,
+            captions: Object.fromEntries(assets.map((asset) => [asset.id, asset.description])),
+          }
+        : null;
+      stopPlans.push({ id: stop.id, seen, assets: assets.length, ...planStopTexts(stop, assets, overwrite) });
     }
     const places = [];
     let ownArticles = 0;
@@ -155,15 +163,15 @@ export class TripTextsService {
           continue;
         }
         if (isReplaceableText(place.article, place.articleSource, overwrite)) {
-          places.push(place.id);
+          places.push({ id: place.id, seen: overwrite ? { article: place.article } : null });
         }
         ownArticles += Number(!isReplaceableText(place.article, place.articleSource, false));
       }
     }
     const busy = stopPlans.filter((stop) => stop.calls > 0);
     return {
-      stopIds: busy.map((stop) => stop.id),
-      placeIds: places,
+      stops: busy.map(({ id, seen }) => ({ id, seen })),
+      places,
       estimate: {
         calls: busy.reduce((sum, stop) => sum + stop.calls, 0) + places.length,
         assets: busy.reduce((sum, stop) => sum + stop.assets, 0),
@@ -188,8 +196,8 @@ export class TripTextsService {
     if (problem) {
       throw new BadRequestException(PROBLEM_MESSAGES[problem]);
     }
-    const { stopIds, placeIds } = await this.plan(albumId, dto);
-    const taskIds = await this.tripTextsRepository.replaceTasks(albumId, stopIds, placeIds, dto.overwrite);
+    const { stops, places } = await this.plan(albumId, dto);
+    const taskIds = await this.tripTextsRepository.replaceTasks(albumId, stops, places, dto.overwrite);
     await this.queueTasks(taskIds);
     await this.queuePlaces(albumId);
     return this.progress(albumId);
@@ -197,6 +205,9 @@ export class TripTextsService {
 
   async getProgress(auth: AuthDto, albumId: string): Promise<TripTextsProgressDto> {
     await this.requireOwner(auth, albumId);
+    // A stop deleted while its task waited takes the task along, and no job then queues the places; the window asks
+    // for the progress every few seconds, so it queues them here.
+    await this.queuePlaces(albumId);
     return this.progress(albumId);
   }
 
@@ -281,7 +292,7 @@ export class TripTextsService {
    * anything is written, then all is written at once; a refused answer writes nothing, and so does a task that a newer
    * run replaced meanwhile.
    */
-  async generateStop({ id: taskId, stopId, overwrite }: TripTextTask & { stopId: string }): Promise<void> {
+  async generateStop({ id: taskId, stopId, overwrite, seen }: TripTextTask & { stopId: string }): Promise<void> {
     const stop = await this.tripTextsRepository.getStop(stopId);
     if (!stop) {
       return;
@@ -319,15 +330,20 @@ export class TripTextsService {
       answered = chunk;
     }
 
-    const descriptions = new Map(assets.map((asset) => [asset.id, asset.description]));
+    // What the run read when it started; an asset added since was not read, so only an empty or generated caption of
+    // it is replaced.
+    const read = seen ?? { title: stop.title, story: stop.story };
+    const descriptions = seen
+      ? new Map(Object.entries(seen.captions ?? {}))
+      : new Map(assets.map((asset) => [asset.id, asset.description]));
     const changed = await this.tripTextsRepository.writeStop({
       taskId,
       stopId: stop.id,
       albumId: stop.albumId,
       ownerId: stop.ownerId,
       overwrite,
-      title: wantTitle ? { text: written!.title, seen: stop.title } : null,
-      story: wantStory ? { text: written!.story, seen: stop.story } : null,
+      title: wantTitle ? { text: written!.title, seen: read.title ?? null } : null,
+      story: wantStory ? { text: written!.story, seen: read.story ?? null } : null,
       captions: captionIds.flatMap((assetId) => {
         const { caption, long } = captions.get(assetId)!;
         const seen = descriptions.get(assetId) ?? null;
@@ -344,7 +360,7 @@ export class TripTextsService {
    * Writes a place's article from the titles and stories of its stops, as travel-album's generate_place; a trip without
    * a map has no articles.
    */
-  async generatePlace({ id: taskId, placeId, overwrite }: TripTextTask): Promise<void> {
+  async generatePlace({ id: taskId, placeId, overwrite, seen }: TripTextTask): Promise<void> {
     if (!placeId) {
       return;
     }
@@ -361,7 +377,7 @@ export class TripTextsService {
         placeId: place.id,
         albumId: place.albumId,
         overwrite,
-        article: { text: article, seen: place.article },
+        article: { text: article, seen: seen ? (seen.article ?? null) : place.article },
       });
     }
   }

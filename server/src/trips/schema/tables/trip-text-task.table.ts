@@ -12,6 +12,17 @@ import { TripPlaceTable } from 'src/trips/schema/tables/trip-place.table.js';
 import { TripStopTable } from 'src/trips/schema/tables/trip-stop.table.js';
 import { TripTable } from 'src/trips/schema/tables/trip.table.js';
 
+/**
+ * What a run with "replace my texts too" read when it started: the stop's title, story and captions by asset, or the
+ * place's article. Only those texts are replaced, never one typed since.
+ */
+export type TripTextSeen = {
+  title?: string | null;
+  story?: string | null;
+  captions?: Record<string, string | null>;
+  article?: string | null;
+};
+
 // One stop or place of a text generation run (trips PLAN §2.6) until its texts are written: pending while `error` is
 // null, failed for good after it. A new run of the trip replaces every row, so a job whose row is gone does nothing.
 @Table('trip_text_task')
@@ -42,6 +53,9 @@ export class TripTextTaskTable {
 
   @Column({ type: 'text', nullable: true })
   error!: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  seen!: TripTextSeen | null;
 
   @CreateDateColumn()
   createdAt!: Generated<Timestamp>;
