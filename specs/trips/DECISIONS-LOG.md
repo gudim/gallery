@@ -131,3 +131,7 @@ One line per choice the plan does not dictate. Newest last. `(owner)` marks a ch
 - 2026-11-01 (owner) On the phone a trip is entered from its album page, as on the web; there is no list of trips.
 - 2026-11-01 (owner) Mobile test builds carry their own application id suffix and install next to Gallery from the Play store; they are checked on an emulator against the dev stack, with phone and tablet screenshots in both themes.
 - 2026-11-01 The first rollout (§2.4) moves after §2.9, so it stays the last stage, and mobile trip data is online only (no Drift tables, no sync stream), since trips are edited on the server and read whole.
+- 2026-11-01 Generation captions only the album owner's own assets: Immich lets only an asset's owner edit its description, and a caption is that description (ADR 0002). Other contributors' assets still go to the model as context.
+- 2026-11-01 A generated caption is written as Immich's own edit writes a description: `description` is added to `lockedProperties` and a `SidecarWrite` job is queued, so the text reaches the XMP sidecar and survives a metadata refresh.
+- 2026-11-01 The model sees each chunk's photos numbered from 1, not by asset id: a short integer is harder to garble than a UUID, and the check still refuses any answer whose numbers differ from those sent.
+- 2026-11-01 The model gets each asset's Immich preview as it is (the edited one when an edit exists), not a copy scaled to travel-album's 1568 px: the preview is already about that size, and the owner wants a small cheap model anyway.
