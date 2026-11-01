@@ -50483,7 +50483,7 @@
             "minItems": 1,
             "type": "array"
           },
-          "centre": {
+          "center": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/TripEndDto"

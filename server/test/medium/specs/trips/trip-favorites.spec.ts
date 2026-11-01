@@ -12,7 +12,10 @@ import { TripCreateDto, TripImportDto } from 'src/trips/dtos/trip.dto.js';
 import { TripKind } from 'src/trips/enum.js';
 import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
 import { TripFavoritesRepository } from 'src/trips/repositories/trip-favorites.repository.js';
+import { TripFilingRepository } from 'src/trips/repositories/trip-filing.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
+import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
+import { TripRouteRepository } from 'src/trips/repositories/trip-route.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripFavoritesService } from 'src/trips/services/trip-favorites.service.js';
 import { TripService } from 'src/trips/services/trip.service.js';
@@ -40,6 +43,9 @@ const setup = async () => {
     new AccessRepository(db),
     job,
     new TripRepository(db),
+    new TripFilingRepository(db),
+    new TripRouteRepository(db),
+    new TripNameRepository(db),
     new TripGeoRepository(db, LoggingRepository.create()),
     new TripEditorRepository(db),
     new AssetFavoriteRepository(db),
@@ -93,7 +99,7 @@ const setup = async () => {
       ])
       .where('trip_asset.albumId', '=', albumId)
       .execute();
-  const mirror = (canCreate = false) => sut.handleMirror({ id: user.id, canCreate });
+  const mirror = (canCreate = false) => sut.handleMirror({ userId: user.id, canCreate });
   return { ctx, job, sut, trips, user, newAsset, star, unstar, favoritesTrip, albumAssetIds, filing, mirror };
 };
 
@@ -105,8 +111,8 @@ describe(TripFavoritesService.name, () => {
     await sut.onAssetFavoritesUpdate({ userId: user.id, ids: [], isFavorite: false });
 
     expect(job.queue.mock.calls).toEqual([
-      [{ name: JobName.TripFavorites, data: { id: user.id, canCreate: true } }],
-      [{ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } }],
+      [{ name: JobName.TripFavorites, data: { userId: user.id, canCreate: true } }],
+      [{ name: JobName.TripFavorites, data: { userId: user.id, canCreate: false } }],
     ]);
   });
 
@@ -172,6 +178,29 @@ describe(TripFavoritesService.name, () => {
     await expect(albumAssetIds(albumId)).resolves.toEqual([far]);
   });
 
+  it("takes out a starred asset the owner can no longer add by hand: an ended partner's, another user's, not a trashed one", async () => {
+    const { ctx, sut, user, newAsset, star, favoritesTrip, albumAssetIds, mirror } = await setup();
+    const { user: partner } = await ctx.newUser();
+    const { user: editor } = await ctx.newUser();
+    await ctx.newPartner({ sharedById: partner.id, sharedWithId: user.id });
+    const own = await newAsset(user.id, VILNIUS);
+    const partners = await newAsset(partner.id, KAUNAS);
+    await star(user.id, own, partners);
+    await mirror(true);
+    const [{ albumId }] = await favoritesTrip();
+    await expect(albumAssetIds(albumId)).resolves.toEqual([own, partners].toSorted());
+
+    // An editor adds their own asset: it is starred for the owner, but stays out of the album.
+    const editors = await newAsset(editor.id, KAUNAS);
+    await ctx.newAlbumAsset({ albumId, assetId: editors });
+    await sut.onAlbumAssetsAdd({ albumId, assetIds: [editors] });
+    await db.deleteFrom('partner').where('sharedById', '=', partner.id).execute();
+    await db.updateTable('asset').set({ deletedAt: new Date() }).where('id', '=', own).execute();
+    await mirror();
+
+    await expect(albumAssetIds(albumId)).resolves.toEqual([own]);
+  });
+
   it('places a starred asset without GPS at its stop in another trip of the owner, as an inferred point', async () => {
     const { ctx, trips, user, newAsset, star, favoritesTrip, filing, mirror } = await setup();
     const anchor = await newAsset(user.id, KAUNAS);
@@ -235,7 +264,10 @@ describe(TripFavoritesService.name, () => {
     // Gallery's "Remove from album": the album rows go first, then the event.
     await db.deleteFrom('album_asset').where('albumId', '=', albumId).where('assetId', 'in', [near, far]).execute();
     await sut.onAlbumAssetsRemove({ albumId, assetIds: [near, far] });
-    expect(job.queue).toHaveBeenCalledWith({ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } });
+    expect(job.queue).toHaveBeenCalledWith({
+      name: JobName.TripFavorites,
+      data: { userId: user.id, canCreate: false },
+    });
     const { contentVersion } = await db
       .selectFrom('trip')
       .select('contentVersion')
@@ -263,7 +295,10 @@ describe(TripFavoritesService.name, () => {
     await mirror();
     await expect(albumAssetIds(albumId)).resolves.toEqual([first]);
     await sut.onAlbumAssetsAdd({ albumId, assetIds: [added] });
-    expect(job.queue).toHaveBeenCalledWith({ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } });
+    expect(job.queue).toHaveBeenCalledWith({
+      name: JobName.TripFavorites,
+      data: { userId: user.id, canCreate: false },
+    });
     await mirror();
 
     await expect(albumAssetIds(albumId)).resolves.toEqual([first, added].toSorted());
@@ -302,14 +337,17 @@ describe(TripFavoritesService.name, () => {
     await expect(
       db.selectFrom('asset_favorite').select('assetId').where('userId', '=', user.id).execute(),
     ).resolves.toEqual([{ assetId }]);
-    expect(job.queue).toHaveBeenCalledWith({ name: JobName.TripFavorites, data: { id: user.id, canCreate: false } });
+    expect(job.queue).toHaveBeenCalledWith({
+      name: JobName.TripFavorites,
+      data: { userId: user.id, canCreate: false },
+    });
     await expect(favoritesTrip()).resolves.toHaveLength(1);
 
     job.queueAll.mockClear();
     await trips.handleFileSweep();
     expect(job.queueAll.mock.calls[0][0]).toContainEqual({
       name: JobName.TripFavorites,
-      data: { id: user.id, canCreate: false },
+      data: { userId: user.id, canCreate: false },
     });
   });
 });

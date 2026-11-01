@@ -17,7 +17,10 @@ import {
 } from 'src/trips/dtos/trip.dto.js';
 import { TripGeoService, TripLegMode, TripLegStatus } from 'src/trips/enum.js';
 import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
+import { TripFilingRepository } from 'src/trips/repositories/trip-filing.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
+import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
+import { TripRouteRepository } from 'src/trips/repositories/trip-route.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { type LatLng, haversineM } from 'src/trips/utils/geo.js';
@@ -161,6 +164,9 @@ const setup = async () => {
     new AccessRepository(db),
     job,
     new TripRepository(db),
+    new TripFilingRepository(db),
+    new TripRouteRepository(db),
+    new TripNameRepository(db),
     geo,
     new TripEditorRepository(db),
     new AssetFavoriteRepository(db),

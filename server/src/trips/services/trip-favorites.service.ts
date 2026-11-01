@@ -45,7 +45,7 @@ export class TripFavoritesService {
 
   @OnEvent({ name: 'AssetFavoritesUpdate' })
   async onAssetFavoritesUpdate({ userId, isFavorite }: ArgOf<'AssetFavoritesUpdate'>) {
-    await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: userId, canCreate: isFavorite } });
+    await this.jobRepository.queue({ name: JobName.TripFavorites, data: { userId, canCreate: isFavorite } });
   }
 
   // Adding to the Favorites trip's album stars the asset for its owner, removing unstars it (trips GLOSSARY). Mirroring
@@ -72,13 +72,13 @@ export class TripFavoritesService {
   }
 
   private async queueMirror(userId: string) {
-    await this.jobRepository.queue({ name: JobName.TripFavorites, data: { id: userId, canCreate: false } });
+    await this.jobRepository.queue({ name: JobName.TripFavorites, data: { userId, canCreate: false } });
   }
 
   @OnJob({ name: JobName.TripFavorites, queue: QueueName.BackgroundTask })
-  async handleMirror({ id, canCreate }: JobOf<JobName.TripFavorites>): Promise<JobStatus> {
+  async handleMirror({ userId, canCreate }: JobOf<JobName.TripFavorites>): Promise<JobStatus> {
     const newTrip = canCreate ? { albumName: favoritesAlbumName(this.language), language: this.language } : null;
-    const { albumId, stops } = await this.tripFavoritesRepository.mirror(id, newTrip);
+    const { albumId, stops } = await this.tripFavoritesRepository.mirror(userId, newTrip);
     if (!albumId) {
       return JobStatus.Skipped;
     }

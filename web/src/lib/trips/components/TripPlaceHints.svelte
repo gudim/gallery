@@ -79,7 +79,7 @@
       )}
     {/each}
     {#if hints.center.length > 0}
-      {@render hint($t('trips_hints_like_none'), hints.center, $t('trips_to_centre'), () =>
+      {@render hint($t('trips_hints_like_none'), hints.center, $t('trips_to_center'), () =>
         run((id) => toCenter({ id, tripAssetsCenterDto: { assetIds: hints!.center } })),
       )}
     {/if}

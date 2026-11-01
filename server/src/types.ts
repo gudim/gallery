@@ -654,7 +654,7 @@ export type JobItem =
   | { name: JobName.TripFileSweep; data?: IBaseJob }
   | { name: JobName.TripRouteLegs; data: IEntityJob }
   | { name: JobName.TripName; data: IEntityJob }
-  | { name: JobName.TripFavorites; data: IEntityJob & { canCreate: boolean } };
+  | { name: JobName.TripFavorites; data: IBaseJob & { userId: string; canCreate: boolean } };
 
 export type VectorExtension = (typeof VECTOR_EXTENSIONS)[number];
 

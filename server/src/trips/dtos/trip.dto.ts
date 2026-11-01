@@ -383,7 +383,7 @@ const TripAssetPointSchema = z
 const TripAssetsCenterSchema = z
   .object({
     assetIds: assetIdsSchema,
-    centre: TripEndSchema.nullable()
+    center: TripEndSchema.nullable()
       .default(null)
       .describe(
         'Where the centre stop is made, when the trip has none yet; its title, such as “Kraków, no exact place”',

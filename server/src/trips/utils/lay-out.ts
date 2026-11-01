@@ -14,10 +14,10 @@ export type LaidOutStop = { index: number; latitude: number | null; longitude: n
 export type LaidOutAsset = { assetId: string; stopIndex: number | null; point: LatLng | null };
 export type TripLayout = { stops: LaidOutStop[]; assets: LaidOutAsset[] };
 
-const toStop = (index: number, items: Array<{ time: Date }>, centre: LatLng | null): LaidOutStop => ({
+const toStop = (index: number, items: Array<{ time: Date }>, center: LatLng | null): LaidOutStop => ({
   index,
-  latitude: centre && round6(centre.latitude),
-  longitude: centre && round6(centre.longitude),
+  latitude: center && round6(center.latitude),
+  longitude: center && round6(center.longitude),
   start: new Date(Math.min(...items.map(({ time }) => time.getTime()))),
   end: new Date(Math.max(...items.map(({ time }) => time.getTime()))),
 });

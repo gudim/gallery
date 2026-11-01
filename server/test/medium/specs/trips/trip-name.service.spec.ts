@@ -10,7 +10,10 @@ import { BaseService } from 'src/services/base.service.js';
 import { TripCreateDto, TripImportDto, TripStopUpdateDto } from 'src/trips/dtos/trip.dto.js';
 import { TripGeoService } from 'src/trips/enum.js';
 import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
+import { TripFilingRepository } from 'src/trips/repositories/trip-filing.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
+import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
+import { TripRouteRepository } from 'src/trips/repositories/trip-route.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripNameService } from 'src/trips/services/trip-name.service.js';
 import { TripService } from 'src/trips/services/trip.service.js';
@@ -78,19 +81,22 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
-  const tripRepository = new TripRepository(db);
+  const tripNameRepository = new TripNameRepository(db);
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   // The rate limit has its own test; here every request goes at once.
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
   const trips = new TripService(
     new AccessRepository(db),
     job,
-    tripRepository,
+    new TripRepository(db),
+    new TripFilingRepository(db),
+    new TripRouteRepository(db),
+    tripNameRepository,
     geo,
     new TripEditorRepository(db),
     new AssetFavoriteRepository(db),
   );
-  const sut = new TripNameService(LoggingRepository.create(), tripRepository, geo);
+  const sut = new TripNameService(LoggingRepository.create(), tripNameRepository, geo);
   const { user: owner } = await ctx.newUser();
   const auth = factory.auth({ user: owner });
 
