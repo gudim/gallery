@@ -461,7 +461,7 @@ export class TripTextsRepository {
     });
   }
 
-  /** The trip's tasks with the titles to show for them. */
+  /** The trip's tasks with the titles to show for them; a run's stops come before its places, created at the same time. */
   @GenerateSql({ params: [DummyValue.UUID] })
   getTasks(albumId: string) {
     return this.db
@@ -476,6 +476,7 @@ export class TripTextsRepository {
       ])
       .where('trip_text_task.albumId', '=', asUuid(albumId))
       .orderBy('trip_text_task.createdAt')
+      .orderBy((eb) => eb('trip_text_task.placeId', 'is not', null))
       .orderBy('trip_text_task.id')
       .execute();
   }

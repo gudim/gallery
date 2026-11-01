@@ -347,4 +347,5 @@ where
   "trip_text_task"."albumId" = $1::uuid
 order by
   "trip_text_task"."createdAt",
+  "trip_text_task"."placeId" is not null,
   "trip_text_task"."id"
