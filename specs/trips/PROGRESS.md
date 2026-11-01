@@ -1,5 +1,17 @@
 # Trips: progress
 
+## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): checked 2026-11-01
+
+Checked against the dev Gallery running the server built from `trips-5` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`. The phone backup is the owner's Galaxy S25 folder `2026/2026-04/LT-Apr-2026 (замки)/2Share` (184 photos, 3–5 April 2026), uploaded with Gallery's CLI (`POST /assets`, as the app's backup) into a new album.
+
+- [x] A new trip is built end to end from a phone backup: album → stops → legs → texts in the editor. The first two days (160 photos) went into the album; "Make a trip" → Route laid out 31 stops and 30 legs; about three minutes later every stop had a name from Nominatim in the trip's language (Раудоне, Юрбаркас, Паланга where OpenStreetMap has `name:ru`, else the Lithuanian name) and every leg was routed, 27 `ok` and 3 `attention`. In the edit mode two stops got a title and a story ("Замок Раудоне", "Замок Панемуне" in place of Nominatim's "Pilis I"), saved by autosave as `manual`; the `attention` leg Pakalniškiai → Kartupėnai (Valhalla's road was a 35 km detour for 1.7 km straight, so it was refused as implausible) was set to "по прямой" and became `ok`.
+- [x] Assets added later are filed without touching existing stops and texts. The third day (24 photos) uploaded afterwards into the same album was filed by the job into two new stops; against a snapshot taken before, none of the 31 stops changed a title, story, source, point or time, none of the 160 assets changed stop, and none of the 30 legs changed mode, status or line (the manual "по прямой" leg included). One new stop stayed untitled: filing ran twice as metadata was read, and the naming queued by the first skipped the stop the second had moved. Fixed (DECISIONS-LOG 2026-11-01, medium test "is queued again by filing into a stop still without a title"); after deleting and uploading the third day again every stop was named.
+- [x] An editor can edit stops; a viewer cannot. Medium specs: `trip.service.spec.ts` "lets the owner and an editor set texts and the place" and "answers 403 to a viewer and the album shared link"; `trip-editor.spec.ts` "lets an editor edit, and answers 403 to a viewer"; `trip-route.spec.ts` for leg modes.
+
+Screenshots (outside git): the album before, the kind dialog, the first layout, the named trip, both stop texts, the leg before and after, and the album, trip and stop at 1440 and 390 px in both themes after the third day.
+
+Also seen: a trip in `ru-RU` (the browser's locale) asked Nominatim in `ru-RU`, `ru` and `en`; the owner had the duplicate dropped (DECISIONS-LOG 2026-11-01). Stops whose assets were all deleted stay in the trip, empty, which the owner keeps (an anchor of the route). The owner approved the screenshots on 2026-11-01.
+
 ## Stage 2.3: guest trip viewer (branch `trips-3`, from `trips-all`): closed 2026-10-31
 
 Revised by the owner on 2026-10-31 (PLAN §2.3): the trip is built into Gallery's map and design. The album's map button opens the trip page: Gallery's map with the route and the stops as Gallery's markers, a panel of stops with the legs between them, a stop's assets in Gallery's timeline; on a phone also the road. Likes: `PUT`/`DELETE /trips/{id}/likes/{assetId}`. Checked against the dev Gallery of stage 2.2 running the server built from `trips-3` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`.
