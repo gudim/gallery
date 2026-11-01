@@ -58,7 +58,8 @@ export const tripLlmKeyState = (keyCipher: string | null, secret: string | undef
 
 /**
  * The cipher to save: a sent key replaces the old one, null clears it, and an unsent key is kept only while the URL
- * stays, so a key is never sent to a server it was not entered for (travel-album intent, stage 9).
+ * stays, so a key is never sent to a server it was not entered for (travel-album intent, stage 9). A kept key this
+ * secret cannot read is dropped, so the settings stop reporting it.
  */
 export const nextLlmKeyCipher = (
   previous: { url: string; keyCipher: string | null } | undefined,
@@ -69,7 +70,8 @@ export const nextLlmKeyCipher = (
     return null;
   }
   if (update.key === undefined) {
-    return previous && previous.url === update.url ? previous.keyCipher : null;
+    const isKept = previous?.url === update.url && tripLlmKeyState(previous.keyCipher, secret) === TripLlmKeyState.Set;
+    return isKept ? previous.keyCipher : null;
   }
   if (!secret) {
     throw new BadRequestException(`Set ${TRIPS_LLM_SECRET_VARIABLE} on the server to save an LLM key`);
