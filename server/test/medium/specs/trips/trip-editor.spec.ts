@@ -27,7 +27,10 @@ import {
 } from 'src/trips/dtos/trip.dto.js';
 import { TripLegMode, TripLegStatus } from 'src/trips/enum.js';
 import { TripEditorRepository } from 'src/trips/repositories/trip-editor.repository.js';
+import { TripFilingRepository } from 'src/trips/repositories/trip-filing.repository.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
+import { TripNameRepository } from 'src/trips/repositories/trip-name.repository.js';
+import { TripRouteRepository } from 'src/trips/repositories/trip-route.repository.js';
 import { TripRepository } from 'src/trips/repositories/trip.repository.js';
 import { TripService } from 'src/trips/services/trip.service.js';
 import { newMediumService } from 'test/medium.factory.js';
@@ -74,6 +77,9 @@ const setup = async (shots: Shot[] = SHOTS, kind = 'route', { withStart = true }
     new AccessRepository(db),
     job,
     new TripRepository(db),
+    new TripFilingRepository(db),
+    new TripRouteRepository(db),
+    new TripNameRepository(db),
     geo,
     new TripEditorRepository(db),
     new AssetFavoriteRepository(db),
@@ -661,7 +667,7 @@ describe('stop editor', () => {
       ['15:00', null],
       ['20:00', null],
     ];
-    const CENTRE = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
+    const CENTER = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
 
     it('makes the centre stop at the point given, and files later assets into it', async () => {
       const { sut, auth, album, assetIds, trip } = await setup(LOOSE, 'places');
@@ -670,15 +676,15 @@ describe('stop editor', () => {
       const first = await sut.toCenter(
         auth,
         album.id,
-        TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[1]], centre: CENTRE }),
+        TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[1]], center: CENTER }),
       );
-      const centre = first.stops.find(({ isAtCenter }) => isAtCenter)!;
-      expect(centre).toMatchObject({ ...CENTRE, titleSource: 'manual', isPositionManual: true });
+      const center = first.stops.find(({ isAtCenter }) => isAtCenter)!;
+      expect(center).toMatchObject({ ...CENTER, titleSource: 'manual', isPositionManual: true });
 
       const second = await sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[2]] }));
-      expect(filed(second, centre.id)).toEqual([assetIds[1], assetIds[2]]);
-      expect(second.stops.find(({ id }) => id === centre.id)).toMatchObject({
-        ...CENTRE,
+      expect(filed(second, center.id)).toEqual([assetIds[1], assetIds[2]]);
+      expect(second.stops.find(({ id }) => id === center.id)).toMatchObject({
+        ...CENTER,
         localStart: '2026-05-01T15:00:00.000Z',
         localEnd: '2026-05-01T20:00:00.000Z',
       });
@@ -687,16 +693,16 @@ describe('stop editor', () => {
     it('refuses a filed asset, a first call without a centre, and a trip that is not Places', async () => {
       const { sut, auth, album, assetIds } = await setup(LOOSE, 'places');
       const route = await setup(LOOSE);
-      const center = (ids: string[], centre: typeof CENTRE | null = CENTRE) =>
-        sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: ids, centre }));
+      const fileToCenter = (ids: string[], center: typeof CENTER | null = CENTER) =>
+        sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: ids, center }));
 
-      await expect(center([assetIds[0]])).rejects.toBeInstanceOf(BadRequestException);
-      await expect(center([assetIds[1]], null)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(fileToCenter([assetIds[0]])).rejects.toBeInstanceOf(BadRequestException);
+      await expect(fileToCenter([assetIds[1]], null)).rejects.toBeInstanceOf(BadRequestException);
       await expect(
         route.sut.toCenter(
           route.auth,
           route.album.id,
-          TripAssetsCenterDto.schema.parse({ assetIds: [route.assetIds[1]], centre: CENTRE }),
+          TripAssetsCenterDto.schema.parse({ assetIds: [route.assetIds[1]], center: CENTER }),
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -767,7 +773,7 @@ describe('stop editor', () => {
       ['18:00', null],
       ['21:00', null],
     ];
-    const CENTRE = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
+    const CENTER = { latitude: 54.69, longitude: 25.27, title: 'Vilnius, no exact place' };
 
     const setupHints = async () => {
       const found = await setup(LOOSE, 'places');
@@ -795,7 +801,7 @@ describe('stop editor', () => {
         center: [],
       });
 
-      await sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[5]], centre: CENTRE }));
+      await sut.toCenter(auth, album.id, TripAssetsCenterDto.schema.parse({ assetIds: [assetIds[5]], center: CENTER }));
       expect(await sut.getPlaceHints(auth, album.id)).toEqual({
         places: [{ stopId: placeOf(2), assetIds: [assetIds[3]] }],
         center: [assetIds[4]],

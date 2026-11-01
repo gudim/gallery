@@ -24,7 +24,6 @@ from
   inner join "asset" on "asset"."id" = "asset_favorite"."assetId"
 where
   "asset_favorite"."userId" = $1::uuid
-  and "asset"."deletedAt" is null
   and (
     (
       "asset"."ownerId" = $2::uuid
@@ -45,6 +44,7 @@ where
       )
     )
   )
+  and "asset"."deletedAt" is null
 commit
 
 -- TripFavoritesRepository.getFavoritesOwnerId

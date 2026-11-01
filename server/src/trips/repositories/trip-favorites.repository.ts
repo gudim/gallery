@@ -6,9 +6,9 @@ import { AlbumUserRole, AssetVisibility } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 import { TripKind } from 'src/trips/enum.js';
 import { refreshStops } from 'src/trips/repositories/trip-editor.repository.js';
+import { fileTripAssets } from 'src/trips/repositories/trip-filing.repository.js';
 import {
   bumpContentVersion,
-  fileTripAssets,
   getFavoritesAlbumId,
   lockOwner,
   lockTrip,
@@ -29,7 +29,8 @@ export class TripFavoritesRepository {
   /**
    * Makes the album of the user's Favorites trip hold their stars. Stars are the truth: a starred asset the user could
    * add to an album by hand (their own, or a partner's, as Immich's `AssetShare` allows) outside the trash joins the
-   * album and is filed, and an album asset the user no longer stars leaves it. Then, as travel-album's
+   * album and is filed, and an album asset that is no longer such a star leaves it, so an ended partnership takes the
+   * partner's assets out too. Then, as travel-album's
    * `favorites.refresh`, a place without assets goes unless it is the centre, and every other place follows its assets,
    * so an asset Gallery took out of the album is caught up too. With `newTrip`, a user without a Favorites trip who has
    * such a star gets a new album and Places trip.
@@ -51,7 +52,7 @@ export class TripFavoritesRepository {
       }
 
       const before = await placesOf(trx, albumId);
-      const removed = await removeUnstarred(trx, albumId, userId);
+      const removed = await removeUnshared(trx, albumId, userId);
       const added = await trx
         .insertInto('album_asset')
         .columns(['albumId', 'assetId'])
@@ -101,14 +102,17 @@ export class TripFavoritesRepository {
   }
 }
 
-// The user's stars that belong in their Favorites album: outside the trash, their own outside the locked folder, or a
-// partner's on the timeline (Immich's `AssetShare`).
+// The user's stars that belong in their Favorites album, outside the trash.
 const starsToAdd = (trx: Transaction<DB>, userId: string) =>
+  starsShared(trx, userId).where('asset.deletedAt', 'is', null);
+
+// The user's stars they could add to an album by hand (Immich's `AssetShare`): their own outside the locked folder, or a
+// partner's on the timeline. A trashed asset still counts, so the album keeps it for a restore.
+const starsShared = (trx: Transaction<DB>, userId: string) =>
   trx
     .selectFrom('asset_favorite')
     .innerJoin('asset', 'asset.id', 'asset_favorite.assetId')
     .where('asset_favorite.userId', '=', asUuid(userId))
-    .where('asset.deletedAt', 'is', null)
     .where(({ and, or, eb, exists, selectFrom }) =>
       or([
         and([eb('asset.ownerId', '=', asUuid(userId)), eb('asset.visibility', '!=', AssetVisibility.Locked)]),
@@ -136,27 +140,14 @@ const createFavoritesTrip = async (trx: Transaction<DB>, userId: string, { album
   return albumId;
 };
 
-// Takes the assets the user no longer stars out of the album; returns how many left.
-const removeUnstarred = async (trx: Transaction<DB>, albumId: string, userId: string) => {
+// Takes out of the album every asset that is not a star the user could add by hand: unstarred, a partner's after the
+// partnership ended, another user's an editor added (trips DECISIONS-LOG). Returns how many left.
+const removeUnshared = async (trx: Transaction<DB>, albumId: string, userId: string) => {
   const rows = await trx
     .selectFrom('album_asset')
-    .leftJoin('trip_asset', (join) =>
-      join
-        .onRef('trip_asset.albumId', '=', 'album_asset.albumId')
-        .onRef('trip_asset.assetId', '=', 'album_asset.assetId'),
-    )
     .select('album_asset.assetId')
     .where('album_asset.albumId', '=', asUuid(albumId))
-    .where(({ not, exists, selectFrom }) =>
-      not(
-        exists(
-          selectFrom('asset_favorite')
-            .select('asset_favorite.assetId')
-            .where('asset_favorite.userId', '=', asUuid(userId))
-            .whereRef('asset_favorite.assetId', '=', 'album_asset.assetId'),
-        ),
-      ),
-    )
+    .where('album_asset.assetId', 'not in', starsShared(trx, userId).select('asset.id'))
     .execute();
   if (rows.length > 0) {
     await trx

@@ -7,7 +7,9 @@
   import type { TripItem } from '$lib/trips/trip-view';
   import {
     createStop,
+    getTrip,
     moveAssets,
+    removeAssetFromAlbum,
     removeAssetPoint,
     setAssetPoint,
     splitStop,
@@ -16,9 +18,10 @@
     TripPointSource,
     type TripEndDto,
   } from '@immich/sdk';
-  import { IconButton, modalManager } from '@immich/ui';
+  import { IconButton, modalManager, toastManager } from '@immich/ui';
   import {
     mdiCallSplit,
+    mdiEyeOffOutline,
     mdiImageMove,
     mdiMapMarkerPlusOutline,
     mdiMapMarkerRadiusOutline,
@@ -29,7 +32,8 @@
 
   // What can be done to the assets picked in a stop's timeline (trips PLAN §2.5, travel-album editor.js
   // selectionBar): move them to another stop, make a stop of them, split the stop at one, set or clear one's point,
-  // and on a Places trip file Unplaced ones to the centre.
+  // on a Places trip file Unplaced ones to the centre, and hide them: they leave the album (trips PLAN D11), and a
+  // Favorites trip unstars them.
 
   interface Props {
     editor: TripEditor;
@@ -68,7 +72,7 @@
 
   /** The split begins with the picked asset; the first asset of a stop would leave nothing behind. */
   const canSplit = $derived(item.type === 'stop' && !!single && item.photos[0]?.id !== single);
-  const centre = $derived(view.stops.find(({ stop }) => stop.isAtCenter));
+  const center = $derived(view.stops.find(({ stop }) => stop.isAtCenter));
 
   const onPoint = async () => {
     const photo = item.photos.find(({ id }) => id === single);
@@ -92,20 +96,35 @@
     }
   };
 
-  const onCentre = async () => {
-    let centreDto: TripEndDto | undefined;
-    if (!centre) {
+  const onCenter = async () => {
+    let centerDto: TripEndDto | undefined;
+    if (!center) {
       const picked = await modalManager.show(TripPointModal, {
         albumId: editor.albumId,
-        title: $t('trips_centre'),
+        title: $t('trips_center'),
         isNamed: true,
       });
       if (!picked) {
         return;
       }
-      centreDto = { latitude: picked.latitude, longitude: picked.longitude, title: picked.title || null };
+      centerDto = { latitude: picked.latitude, longitude: picked.longitude, title: picked.title || null };
     }
-    await done((id) => toCenter({ id, tripAssetsCenterDto: { assetIds: ids, centre: centreDto } }));
+    await done((id) => toCenter({ id, tripAssetsCenterDto: { assetIds: ids, center: centerDto } }));
+  };
+
+  const onHide = async () => {
+    const isConfirmed = await modalManager.showDialog({
+      prompt: $t('remove_assets_album_confirmation', { values: { count: ids.length } }),
+    });
+    if (!isConfirmed) {
+      return;
+    }
+    await done(async (id) => {
+      const results = await removeAssetFromAlbum({ id, bulkIdsDto: { ids } });
+      const count = results.filter(({ success }) => success).length;
+      toastManager.primary($t('assets_removed_count', { values: { count } }));
+      return getTrip({ id });
+    });
   };
 </script>
 
@@ -170,8 +189,18 @@
     color="secondary"
     variant="ghost"
     icon={mdiTarget}
-    aria-label={$t('trips_to_centre')}
-    title={$t('trips_to_centre')}
-    onclick={onCentre}
+    aria-label={$t('trips_to_center')}
+    title={$t('trips_to_center')}
+    onclick={onCenter}
   />
 {/if}
+<IconButton
+  shape="round"
+  color="secondary"
+  variant="ghost"
+  icon={mdiEyeOffOutline}
+  aria-label={$t('trips_hide_from_trip')}
+  title={$t('trips_hide_from_trip')}
+  onclick={onHide}
+  data-testid="trip-hide"
+/>

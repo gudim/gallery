@@ -4640,7 +4640,7 @@ export type TripAssetsCenterDto = {
     /** Album asset IDs, outside the trash */
     assetIds: string[];
     /** Where the centre stop is made, when the trip has none yet; its title, such as “Kraków, no exact place” */
-    centre?: (TripEndDto) | null;
+    center?: (TripEndDto) | null;
 };
 export type TripAssetsMoveDto = {
     /** Album asset IDs, outside the trash */

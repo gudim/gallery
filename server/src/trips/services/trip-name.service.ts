@@ -5,7 +5,7 @@ import { JobName, JobStatus, QueueName } from 'src/enum.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { TripKind, TripStopRole } from 'src/trips/enum.js';
 import { TripGeoRepository } from 'src/trips/repositories/trip-geo.repository.js';
-import { TripRepository, TripStopName } from 'src/trips/repositories/trip.repository.js';
+import { TripNameRepository, TripStopName } from 'src/trips/repositories/trip-name.repository.js';
 import { LatLng } from 'src/trips/utils/geo.js';
 import {
   followsStart,
@@ -26,7 +26,7 @@ export class TripNameService {
 
   constructor(
     private logger: LoggingRepository,
-    private tripRepository: TripRepository,
+    private tripNameRepository: TripNameRepository,
     private tripGeoRepository: TripGeoRepository,
   ) {
     this.logger.setContext(TripNameService.name);
@@ -43,7 +43,7 @@ export class TripNameService {
    */
   @OnJob({ name: JobName.TripName, queue: QueueName.BackgroundTask })
   async handleName({ id }: JobOf<JobName.TripName>): Promise<JobStatus> {
-    const trip = await this.tripRepository.getStopsToName(id);
+    const trip = await this.tripNameRepository.getStopsToName(id);
     if (!trip || trip.kind === TripKind.Plain) {
       return JobStatus.Skipped;
     }
@@ -81,7 +81,7 @@ export class TripNameService {
       status = JobStatus.Failed;
     }
 
-    const named = await this.tripRepository.nameStops(id, names);
+    const named = await this.tripNameRepository.nameStops(id, names);
     this.logger.debug(
       `Named ${named} of ${names.length} stops of trip ${id} in ${[language, ...otherLanguages].join(', ')}`,
     );
