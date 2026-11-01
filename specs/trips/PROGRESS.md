@@ -1,5 +1,16 @@
 # Trips: progress
 
+## Stage 2.6: LLM texts (branch `trips-6`, from `trips-all`): checked 2026-11-01, awaiting the owner's look at the screenshots
+
+Revised by the owner on 2026-11-01 (PLAN §2.6, DECISIONS-LOG): OpenAI-compatible servers only, no Batch API. Checked against the dev Gallery running the server built from `trips-6` (its `dist` mounted into the `v5.9.1` image, `TRIPS_LLM_SECRET` set by a compose override) and `vite dev`, in Chromium with locale `ru-RU`. The owner entered their OpenAI key and model in the new settings section; the key is stored encrypted and was never seen by the agent.
+
+- [x] One trip is generated through an OpenAI-compatible server, and a failed stop retries on its own. "Тест редактора" (Route, 40 assets, 10 stops): the window estimated "10 вызовов модели · 40 кадров · 10 остановок" and "заменить и мои тексты (2)"; the run took 37 s with no failure. Nine geocoded titles became titles such as "Биржай — замок Радзивиллов", the manual "Проверка названия" stayed, all ten stops got a story, and the 40 earlier generated captions were replaced, short and long joined after a blank line. The retries are covered by medium tests with a stubbed server: a 503 queues the task again after 1 and 2 minutes, then it waits for "retry"; a 401 is not retried (`trip-texts.generate.spec.ts`, "a run of trip texts").
+- [x] A caption typed while generation was running is never overwritten. Three seconds after the start, while the calls were in flight, a caption of the largest stop was set through Immich's `PUT /assets/{id}`; after the run it still read "Typed by the owner while generating.", and its `trip_generated_caption` row kept the older text, so it counts as the owner's. Medium test "never overwrites a caption typed while the model was answering".
+
+Screenshots (outside git): the settings page and the trip's edit mode before; the settings section, the edit mode with the new button and the window (no settings, estimate) at 1440 and 390 px in both themes after; the run's progress, "Тексты написаны." and the trip read again.
+
+Also seen: a generated caption, like a hand edit, loses its `description` lock once Immich has written the XMP sidecar (`MetadataService.handleSidecarWrite` unlocks it). Generated texts stay replaceable, so a second run over the same trip estimates and pays for the same calls again; "replace my texts too" is about the owner's own texts only.
+
 ## Stage 2.5: editor and auto-filing (branch `trips-5`, from `trips-all`): closed 2026-11-01
 
 Checked against the dev Gallery running the server built from `trips-5` (its `dist` mounted into the `v5.9.1` image) and `vite dev`, in Chromium with locale `ru-RU`. The phone backup is the owner's Galaxy S25 folder `2026/2026-04/LT-Apr-2026 (замки)/2Share` (184 photos, 3–5 April 2026), uploaded with Gallery's CLI (`POST /assets`, as the app's backup) into a new album.
