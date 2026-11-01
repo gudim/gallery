@@ -1,5 +1,6 @@
 import { Kysely } from 'kysely';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
 import { BaseService } from 'src/services/base.service.js';
@@ -23,10 +24,10 @@ afterEach(() => {
 
 const setup = async (secret?: string) => {
   vi.stubEnv('TRIPS_LLM_SECRET', secret ?? '');
-  const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository] });
+  const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository, JobRepository] });
   const { user } = await ctx.newUser();
   const auth = factory.auth({ user: { id: user.id } });
-  return { auth, user, service: new TripTextsService(new TripTextsRepository(db)) };
+  return { auth, user, service: new TripTextsService(ctx.getMock(JobRepository), new TripTextsRepository(db)) };
 };
 
 const openAi = { url: 'https://api.openai.com/v1', model: 'gpt-5-mini', allowUpload: true };
@@ -81,8 +82,7 @@ describe(TripTextsService.name, () => {
   it('reports a key saved under another secret as unreadable', async () => {
     const first = await setup('secret');
     await first.service.updateSettings(first.auth, { ...openAi, key: 'sk-123' });
-    vi.stubEnv('TRIPS_LLM_SECRET', 'another');
-    const service = new TripTextsService(new TripTextsRepository(db));
+    const { service } = await setup('another');
     await expect(service.getSettings(first.auth)).resolves.toMatchObject({ key: TripLlmKeyState.Unreadable });
   });
 });

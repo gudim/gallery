@@ -28,3 +28,157 @@ set
   "model" = "excluded"."model",
   "keyCipher" = "excluded"."keyCipher",
   "allowUpload" = "excluded"."allowUpload"
+
+-- TripTextsRepository.getStop
+select
+  "trip_stop"."id",
+  "trip_stop"."albumId",
+  "album_user"."userId" as "ownerId",
+  "album"."albumName",
+  "trip"."kind",
+  "trip"."language",
+  "trip_stop"."title",
+  "trip_stop"."titleSource",
+  "trip_stop"."story",
+  "trip_stop"."storySource",
+  "trip_stop"."isAtCenter",
+  "trip_stop"."region",
+  "trip_stop"."country",
+  "trip_stop"."localStart",
+  "trip_stop"."localEnd",
+  "trip_place"."title" as "placeTitle",
+  "trip_place"."article"
+from
+  "trip_stop"
+  inner join "trip" on "trip"."albumId" = "trip_stop"."albumId"
+  inner join "album" on "album"."id" = "trip"."albumId"
+  inner join "album_user" on "album_user"."albumId" = "album"."id"
+  and "album_user"."role" = $1
+  left join "trip_place" on "trip_place"."id" = "trip_stop"."placeId"
+where
+  "trip_stop"."id" = $2::uuid
+  and "album"."deletedAt" is null
+
+-- TripTextsRepository.getStopAssets
+select
+  "asset"."id",
+  "asset"."ownerId",
+  "asset"."localDateTime",
+  "asset"."type" = $1 as "isVideo",
+  "asset_exif"."description",
+  "trip_generated_caption"."text" as "generatedCaption",
+  (
+    select
+      "asset_file"."path"
+    from
+      "asset_file"
+    where
+      "asset_file"."assetId" = "asset"."id"
+      and "asset_file"."type" = $2
+    order by
+      "asset_file"."isEdited" desc
+    limit
+      $3
+  ) as "previewPath"
+from
+  "trip_asset"
+  inner join "asset" on "asset"."id" = "trip_asset"."assetId"
+  left join "asset_exif" on "asset_exif"."assetId" = "asset"."id"
+  left join "trip_generated_caption" on "trip_generated_caption"."assetId" = "asset"."id"
+where
+  "trip_asset"."stopId" = $4::uuid
+  and "asset"."deletedAt" is null
+  and "asset"."visibility" != $5
+order by
+  "asset"."localDateTime",
+  "asset"."id"
+
+-- TripTextsRepository.writeStop
+begin
+update "trip_stop"
+set
+  "title" = $1,
+  "titleSource" = $2
+where
+  "id" = $3::uuid
+  and "isAtCenter" = $4
+  and (
+    coalesce("title", '') = $5
+    or "titleSource" in ($6, $7)
+  )
+update "trip_stop"
+set
+  "story" = $1,
+  "storySource" = $2
+where
+  "id" = $3::uuid
+  and (
+    coalesce("story", '') = $4
+    or "storySource" in ($5, $6)
+  )
+update "asset_exif"
+set
+  "description" = $1,
+  "lockedProperties" = nullif(
+    array(
+      select distinct
+        unnest("asset_exif"."lockedProperties" || $2::text[])
+    ),
+    '{}'
+  )
+from
+  "asset"
+where
+  "asset"."id" = "asset_exif"."assetId"
+  and "asset_exif"."assetId" = $3::uuid
+  and "asset"."ownerId" = $4::uuid
+  and (
+    coalesce("asset_exif"."description", '') = $5
+    or "asset_exif"."description" = (
+      select
+        "trip_generated_caption"."text"
+      from
+        "trip_generated_caption"
+      where
+        "trip_generated_caption"."assetId" = "asset_exif"."assetId"
+    )
+  )
+returning
+  "asset_exif"."assetId"
+commit
+
+-- TripTextsRepository.getPlace
+select
+  "trip_place"."id",
+  "trip_place"."albumId",
+  "trip_place"."key",
+  "trip_place"."title",
+  "trip_place"."article",
+  "trip_place"."articleSource",
+  "album_user"."userId" as "ownerId",
+  "album"."albumName",
+  "trip"."kind",
+  "trip"."language"
+from
+  "trip_place"
+  inner join "trip" on "trip"."albumId" = "trip_place"."albumId"
+  inner join "album" on "album"."id" = "trip"."albumId"
+  inner join "album_user" on "album_user"."albumId" = "album"."id"
+  and "album_user"."role" = $1
+where
+  "trip_place"."id" = $2::uuid
+  and "album"."deletedAt" is null
+
+-- TripTextsRepository.writePlace
+begin
+update "trip_place"
+set
+  "article" = $1,
+  "articleSource" = $2
+where
+  "id" = $3::uuid
+  and (
+    coalesce("article", '') = $4
+    or "articleSource" in ($5, $6)
+  )
+commit
