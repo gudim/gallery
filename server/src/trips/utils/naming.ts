@@ -56,12 +56,21 @@ export const resolveTripNamingLanguages = (env: NodeJS.ProcessEnv = process.env)
 /**
  * The language a trip's stops are named in, the trip's own (the owner's locale when it was made) or else the
  * instance's first, and every instance language but that one, asked for search (trips DECISIONS-LOG 2026-10-31,
- * owner).
+ * owner). An instance language that differs from the trip's only by a region (`ru` for `ru-RU`) is the same language,
+ * since OpenStreetMap names carry no region and Nominatim gives the same names, so it is not asked again
+ * (DECISIONS-LOG 2026-11-01, owner).
  */
 export const tripNamingLanguages = (tripLanguage: string | null, instance: string[]) => {
   const language = tripLanguage ?? instance[0];
-  return { language, otherLanguages: instance.filter((other) => other !== language) };
+  return { language, otherLanguages: instance.filter((other) => withoutRegion(other) !== withoutRegion(language)) };
 };
+
+// A normalized tag without its region (`RU`, `419`); a script (`Hant`) stays, since OpenStreetMap names carry one.
+const withoutRegion = (tag: string) =>
+  tag
+    .split('-')
+    .filter((subtag, index) => index === 0 || !/^([A-Z]{2}|\d{3})$/.test(subtag))
+    .join('-');
 
 /**
  * Nominatim's reverse geocode of a point in one language. The whole answer is cached, with the address and the

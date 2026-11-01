@@ -55,6 +55,16 @@ describe('tripNamingLanguages', () => {
     expect(tripNamingLanguages('en', ['ru', 'en'])).toEqual({ language: 'en', otherLanguages: ['ru'] });
   });
 
+  it('does not ask again in an instance language the trip’s language already covers, or that covers it', () => {
+    expect(tripNamingLanguages('ru-RU', ['ru', 'en'])).toEqual({ language: 'ru-RU', otherLanguages: ['en'] });
+    expect(tripNamingLanguages('en', ['ru', 'en-GB'])).toEqual({ language: 'en', otherLanguages: ['ru'] });
+    expect(tripNamingLanguages('zh-Hant', ['zh-Hans'])).toEqual({ language: 'zh-Hant', otherLanguages: ['zh-Hans'] });
+    // A script is not a region: Nominatim reads `name:zh-Hant` before `name:zh`, so the names may differ.
+    expect(tripNamingLanguages('zh-Hant', ['zh'])).toEqual({ language: 'zh-Hant', otherLanguages: ['zh'] });
+    expect(tripNamingLanguages('sr', ['sr-Latn-RS'])).toEqual({ language: 'sr', otherLanguages: ['sr-Latn-RS'] });
+    expect(tripNamingLanguages('pt-BR', ['pt-PT'])).toEqual({ language: 'pt-BR', otherLanguages: [] });
+  });
+
   it('names a trip without a language in the instance’s first', () => {
     expect(tripNamingLanguages(null, ['ru', 'en'])).toEqual({ language: 'ru', otherLanguages: ['en'] });
   });
