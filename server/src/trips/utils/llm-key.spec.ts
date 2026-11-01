@@ -54,6 +54,11 @@ describe(nextLlmKeyCipher.name, () => {
     expect(nextLlmKeyCipher(previous, { url: 'https://api.openai.com/v1' }, SECRET)).toBe(previous.keyCipher);
   });
 
+  it('drops a saved key the secret cannot read, so it is no longer reported', () => {
+    expect(nextLlmKeyCipher(previous, { url: previous.url }, 'another-secret')).toBeNull();
+    expect(nextLlmKeyCipher(previous, { url: previous.url }, undefined)).toBeNull();
+  });
+
   it('drops the saved key when the URL changes, so it never goes to another server', () => {
     expect(nextLlmKeyCipher(previous, { url: 'https://openrouter.ai/api/v1' }, SECRET)).toBeNull();
   });
