@@ -37,6 +37,7 @@
   import SharingSettings from './SharingSettings.svelte';
   import UserApiKeyList from './UserApiKeyList.svelte';
   import UserProfileSettings from './UserProfileSettings.svelte';
+  import TripTextsSettings from '$lib/trips/components/TripTextsSettings.svelte';
 
   interface Props {
     keys?: ApiKeyResponseDto[];
@@ -101,6 +102,8 @@
 >
   <FeatureSettings />
 </SettingAccordion>
+
+<TripTextsSettings />
 
 <SettingAccordion
   icon={mdiBellOutline}

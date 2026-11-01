@@ -96,6 +96,8 @@ features:
       - web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte
       - web/src/lib/components/album-page/AlbumViewer.svelte
       - web/src/lib/components/shared-components/map/Map.svelte
+      # web: the LLM settings of trip texts are a section of Gallery's user settings (trips PLAN §2.6)
+      - web/src/routes/(user)/user-settings/UserSettingsList.svelte
       - AGENTS.md
       # trip strings under the `trips_` prefix: en plus the nine maintained locales
       - i18n/gallery/en.json
@@ -109,6 +111,6 @@ features:
       - i18n/gallery/zh_Hans.json
       - i18n/gallery/zh_Hant.json
     database:
-      tables: [trips_migrations, trips_migrations_lock, trip, trip_place, trip_stop, trip_asset, trip_leg, trip_overlay, trip_like, trip_generated_caption]
+      tables: [trips_migrations, trips_migrations_lock, trip, trip_place, trip_stop, trip_asset, trip_leg, trip_overlay, trip_like, trip_generated_caption, trip_llm_settings, trip_text_task]
       migration_globs:
         - server/src/schema/migrations-trips/*.ts
