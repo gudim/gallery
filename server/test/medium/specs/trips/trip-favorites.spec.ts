@@ -38,6 +38,7 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
+  job.searchJobs.mockResolvedValue([]);
   const sut = new TripFavoritesService(job, new TripFavoritesRepository(db), new AssetFavoriteRepository(db));
   const trips = new TripService(
     new AccessRepository(db),

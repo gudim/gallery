@@ -158,6 +158,7 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
+  job.searchJobs.mockResolvedValue([]);
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
   const sut = new TripService(

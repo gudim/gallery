@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AlbumUserRole, JobName } from 'src/enum.js';
+import { AlbumUserRole, JobName, QueueName } from 'src/enum.js';
 import { AccessRepository } from 'src/repositories/access.repository.js';
 import { AssetFavoriteRepository } from 'src/repositories/asset-favorite.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
@@ -71,6 +71,7 @@ const setup = async (shots: Shot[] = SHOTS, kind = 'route', { withStart = true }
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
+  job.searchJobs.mockResolvedValue([]);
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   vi.spyOn(geo, 'reserveTurn').mockResolvedValue(0);
   const sut = new TripService(
@@ -210,6 +211,20 @@ describe('stop editor', () => {
       await sut.updateStop(auth, album.id, trip.stops[1].id, stopChanges({ title: ' ' }));
 
       expect(job.queue).toHaveBeenCalledWith(nameJob(album.id));
+    });
+
+    it('tells the editor to wait for names only while a naming of this trip is queued or running', async () => {
+      const { job, sut, auth, album, trip } = await setup();
+      await sut.updateStop(auth, album.id, trip.stops[1].id, stopChanges({ title: ' ' }));
+      job.searchJobs.mockResolvedValue([
+        { name: JobName.TripName, data: { id: 'another-trip' }, timestamp: 0 },
+        { name: JobName.TripTexts, data: { id: album.id }, timestamp: 0 },
+      ]);
+      await expect(read(sut, auth, album.id)).resolves.toMatchObject({ isNaming: false });
+
+      job.searchJobs.mockResolvedValue([{ name: JobName.TripName, data: { id: album.id }, timestamp: 0 }]);
+      await expect(read(sut, auth, album.id)).resolves.toMatchObject({ isNaming: true });
+      expect(job.searchJobs).toHaveBeenCalledWith(QueueName.TripNetwork, { status: expect.any(Array) });
     });
 
     it('refuses to move the start, or a pin of a Plain trip', async () => {

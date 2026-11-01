@@ -4530,6 +4530,8 @@ export type TripResponseDto = {
     isFavorites: boolean;
     /** Picked by an admin for the home page */
     isFeatured: boolean;
+    /** A stop has a point and no title, and a naming of the trip is queued or running */
+    isNaming: boolean;
     /** Marked for the owner’s showcase */
     isShowcased: boolean;
     kind: TripKind;

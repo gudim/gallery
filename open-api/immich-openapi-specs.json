@@ -50075,6 +50075,10 @@
             "description": "Picked by an admin for the home page",
             "type": "boolean"
           },
+          "isNaming": {
+            "description": "A stop has a point and no title, and a naming of the trip is queued or running",
+            "type": "boolean"
+          },
           "isShowcased": {
             "description": "Marked for the owner’s showcase",
             "type": "boolean"
@@ -50126,6 +50130,7 @@
           "contentVersion",
           "isFavorites",
           "isFeatured",
+          "isNaming",
           "isShowcased",
           "kind",
           "language",

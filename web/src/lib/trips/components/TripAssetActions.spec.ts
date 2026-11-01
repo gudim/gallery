@@ -20,6 +20,7 @@ const trip = (contentVersion: number): TripResponseDto => ({
   kind: TripKind.Plain,
   language: 'en',
   contentVersion,
+  isNaming: false,
   isFavorites: false,
   isFeatured: false,
   isShowcased: false,

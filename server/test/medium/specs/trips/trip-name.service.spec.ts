@@ -81,6 +81,7 @@ const setup = async () => {
   const job = ctx.getMock(JobRepository);
   job.queue.mockResolvedValue();
   job.queueAll.mockResolvedValue();
+  job.searchJobs.mockResolvedValue([]);
   const tripNameRepository = new TripNameRepository(db);
   const geo = new TripGeoRepository(db, LoggingRepository.create());
   // The rate limit has its own test; here every request goes at once.
