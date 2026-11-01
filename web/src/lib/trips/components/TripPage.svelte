@@ -13,6 +13,7 @@
   import TripPinDrag from '$lib/trips/components/TripPinDrag.svelte';
   import TripRoad from '$lib/trips/components/TripRoad.svelte';
   import TripRouteLayers from '$lib/trips/components/TripRouteLayers.svelte';
+  import TripTextsModal from '$lib/trips/components/TripTextsModal.svelte';
   import { loadTrip } from '$lib/trips/trip-data';
   import type { TripEditor } from '$lib/trips/trip-editor.svelte';
   import { TripLikes } from '$lib/trips/trip-likes.svelte';
@@ -20,7 +21,7 @@
   import { handleError } from '$lib/utils/handle-error';
   import { lazyComponent } from '$lib/utils/lazy-component.svelte';
   import { TripKind, updateStop, type MapMarkerResponseDto } from '@immich/sdk';
-  import { Button, IconButton, LoadingSpinner } from '@immich/ui';
+  import { Button, IconButton, LoadingSpinner, modalManager } from '@immich/ui';
   import {
     mdiArrowLeft,
     mdiCheck,
@@ -29,6 +30,7 @@
     mdiMapOutline,
     mdiPencilOutline,
     mdiRoadVariant,
+    mdiTextBoxEditOutline,
   } from '@mdi/js';
   import type { Map } from 'maplibre-gl';
   import { onDestroy, untrack } from 'svelte';
@@ -45,30 +47,34 @@
     albumUrl: string;
     /** The album's owner or an editor */
     canEdit?: boolean;
+    /** The album's owner, who alone generates texts (trips PLAN §2.6) */
+    isOwner?: boolean;
   }
 
-  let { albumId, albumName, albumUrl, canEdit = false }: Props = $props();
+  let { albumId, albumName, albumUrl, canEdit = false, isOwner = false }: Props = $props();
 
   let editor = $state<TripEditor | null>();
   let likes = $state<TripLikes>();
   let isEditing = $state(false);
   const view = $derived(editor === undefined ? undefined : (editor?.view ?? null));
 
+  const load = (id: string) => {
+    editor?.destroy();
+    editor = undefined;
+    loadTrip(id)
+      .then((result) => {
+        editor = result;
+        likes = result?.view ? new TripLikes(result.view) : undefined;
+      })
+      .catch((error: unknown) => {
+        editor = null;
+        handleError(error, $t('trips_load_failed'));
+      });
+  };
+
   $effect(() => {
     const id = albumId;
-    untrack(() => {
-      editor?.destroy();
-      editor = undefined;
-      loadTrip(id)
-        .then((result) => {
-          editor = result;
-          likes = result?.view ? new TripLikes(result.view) : undefined;
-        })
-        .catch((error: unknown) => {
-          editor = null;
-          handleError(error, $t('trips_load_failed'));
-        });
-    });
+    untrack(() => load(id));
   });
   onDestroy(() => editor?.destroy());
 
@@ -171,6 +177,15 @@
     }
   };
 
+  // Captions are the assets' descriptions, loaded with the album, so a run that wrote texts reads the trip again.
+  const generateTexts = async () => {
+    const item = openId ? view?.order.find(({ id }) => id === openId) : undefined;
+    const stop = item?.type === 'stop' ? { id: item.id, title: item.title } : undefined;
+    if (await modalManager.show(TripTextsModal, { albumId, stop })) {
+      load(albumId);
+    }
+  };
+
   /** The stop or item the picked assets came from */
   const selectionItem = $derived(openId ? view?.order.find(({ id }) => id === openId) : undefined);
 
@@ -233,6 +248,18 @@
   {:else}
     <ControlAppBar backIcon={mdiArrowLeft} onClose={() => goto(albumUrl)} title={albumName}>
       {#snippet trailing()}
+        {#if isEditing && isOwner && view}
+          <IconButton
+            shape="round"
+            variant="ghost"
+            color="secondary"
+            aria-label={$t('trips_texts_generate')}
+            title={$t('trips_texts_generate')}
+            icon={mdiTextBoxEditOutline}
+            onclick={generateTexts}
+            data-testid="trip-texts-open"
+          />
+        {/if}
         {#if canEdit && view && isPhone}
           <IconButton
             shape="round"

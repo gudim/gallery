@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Route } from '$lib/route';
-  import { isAlbumEditor } from '$lib/services/album.service';
+  import { isAlbumEditor, isAlbumOwner } from '$lib/services/album.service';
   import TripPage from '$lib/trips/components/TripPage.svelte';
   import type { PageData } from './$types';
 
@@ -16,4 +16,5 @@
   albumName={data.album.albumName}
   albumUrl={Route.viewAlbum({ id: data.album.id })}
   canEdit={isAlbumEditor(data.album)}
+  isOwner={isAlbumOwner(data.album)}
 />
