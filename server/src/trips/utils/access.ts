@@ -20,3 +20,12 @@ export const requireAlbumOwner = async (access: AccessRepository, auth: AuthDto,
     throw new ForbiddenException(message);
   }
 };
+
+// A reader who cannot edit (a viewer, a shared link) gets 403; anyone else 404, as for a missing album.
+export const requireTripEdit = async (access: AccessRepository, auth: AuthDto, albumId: string) => {
+  await requireTripRead(access, auth, albumId);
+  const allowed = await checkAccess(access, { auth, permission: Permission.AlbumUpdate, ids: [albumId] });
+  if (!allowed.has(albumId)) {
+    throw new ForbiddenException('Only the album owner and editors edit the trip');
+  }
+};
