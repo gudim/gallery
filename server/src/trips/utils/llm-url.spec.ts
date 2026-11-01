@@ -14,6 +14,9 @@ describe(isInternalAddress.name, () => {
     'fd12::1',
     'fe80::1',
     '::ffff:127.0.0.1',
+    '64:ff9b::a00:1',
+    '2002:c0a8:101::1',
+    'fec0::1',
   ])('refuses %s', (address) => {
     expect(isInternalAddress(address)).toBe(true);
   });

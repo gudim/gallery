@@ -468,6 +468,60 @@ describe('a run of trip texts', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('keeps one set of tasks when two runs start at once', async () => {
+    const { sut, auth, newStop } = await setup();
+    const { albumId } = await newStop(1);
+
+    await Promise.all([sut.start(auth, albumId, { overwrite: false }), sut.start(auth, albumId, { overwrite: false })]);
+
+    const tasks = await db.selectFrom('trip_text_task').select('id').where('albumId', '=', albumId).execute();
+    expect(tasks).toHaveLength(2);
+  });
+
+  it('fails a task whose next attempt the queue refuses, so "retry" can send it', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId } = await newStop(1);
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('busy', { status: 503 })));
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    const [task] = queued(job);
+    job.queueAll.mockRejectedValueOnce(new Error('Redis is gone'));
+
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Failed);
+
+    await expect(sut.getProgress(auth, albumId)).resolves.toEqual({
+      pending: 0,
+      failed: [{ stopId, placeId: null, title: 'Biržai', error: expect.stringContaining('HTTP 503') }],
+    });
+  });
+
+  it('writes no place while one of its stops failed, and writes it after the retried stop', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, placeId } = await newStop(1);
+    const failing = vi.fn<typeof fetch>().mockResolvedValue(new Response('no key', { status: 401 }));
+    vi.stubGlobal('fetch', failing);
+    await sut.start(auth, albumId, { overwrite: false });
+    const [stopTask] = queued(job);
+    await sut.handleTexts(stopTask);
+
+    expect(queued(job)).toEqual([]);
+    expect(failing).toHaveBeenCalledTimes(1);
+    await expect(sut.getProgress(auth, albumId)).resolves.toMatchObject({
+      pending: 0,
+      failed: [{ placeId: null }, { placeId, error: expect.stringContaining('a stop of this place failed') }],
+    });
+
+    const fetchMock = stubServer();
+    await expect(sut.retry(auth, albumId)).resolves.toMatchObject({ pending: 2, failed: [] });
+    const [retried, ...rest] = queued(job);
+    expect(rest).toEqual([]);
+    await expect(sut.handleTexts(retried)).resolves.toBe(JobStatus.Success);
+    const [place] = queued(job);
+    await expect(sut.handleTexts(place)).resolves.toBe(JobStatus.Success);
+
+    expect(prompt(JSON.parse(fetchMock.mock.calls[1][1]!.body as string) as Body)).toContain('Story 1');
+    await expect(sut.getProgress(auth, albumId)).resolves.toEqual({ pending: 0, failed: [] });
+  });
+
   it('writes nothing for a run that a new one replaced while the model was answering', async () => {
     const { sut, auth, job, newStop } = await setup();
     const { albumId, stopId, assetIds } = await newStop(1);

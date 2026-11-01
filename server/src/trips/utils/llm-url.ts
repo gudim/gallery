@@ -22,9 +22,13 @@ for (const [address, prefix] of [
 }
 for (const [address, prefix] of [
   ['::', 127],
+  // NAT64 and 6to4 carry an IPv4 address inside, which may be a private one.
+  ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
+  ['2002::', 16],
   ['fc00::', 7],
   ['fe80::', 10],
+  ['fec0::', 10],
   ['ff00::', 8],
 ] as const) {
   internal.addSubnet(address, prefix, 'ipv6');
