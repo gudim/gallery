@@ -254,7 +254,6 @@
             variant="ghost"
             color="secondary"
             aria-label={$t('trips_texts_generate')}
-            title={$t('trips_texts_generate')}
             icon={mdiTextBoxEditOutline}
             onclick={generateTexts}
             data-testid="trip-texts-open"
