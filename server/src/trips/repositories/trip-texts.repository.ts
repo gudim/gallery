@@ -56,9 +56,7 @@ export class TripTextsRepository {
       .execute();
   }
 
-  /** A stop with what its prompt needs; nothing for a deleted stop or a trip whose album is in the trash. */
-  @GenerateSql({ params: [DummyValue.UUID] })
-  getStop(stopId: string) {
+  private stops() {
     return this.db
       .selectFrom('trip_stop')
       .innerJoin('trip', 'trip.albumId', 'trip_stop.albumId')
@@ -86,9 +84,47 @@ export class TripTextsRepository {
         'trip_place.title as placeTitle',
         'trip_place.article',
       ])
-      .where('trip_stop.id', '=', asUuid(stopId))
-      .where('album.deletedAt', 'is', null)
+      .where('album.deletedAt', 'is', null);
+  }
+
+  /** A stop with what its prompt needs; nothing for a deleted stop or a trip whose album is in the trash. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getStop(stopId: string) {
+    return this.stops().where('trip_stop.id', '=', asUuid(stopId)).executeTakeFirst();
+  }
+
+  /** The trip's stops with assets (not a start or finish), or the one stop of the trip that `stopId` names. */
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
+  getStops(albumId: string, stopId?: string) {
+    return this.stops()
+      .where('trip_stop.albumId', '=', asUuid(albumId))
+      .where('trip_stop.role', 'is', null)
+      .$if(!!stopId, (qb) => qb.where('trip_stop.id', '=', asUuid(stopId!)))
+      .orderBy('trip_stop.localStart', sql`asc nulls first`)
+      .orderBy('trip_stop.sequence')
+      .execute();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async hasTrip(albumId: string) {
+    const trip = await this.db
+      .selectFrom('trip')
+      .select('albumId')
+      .where('albumId', '=', asUuid(albumId))
       .executeTakeFirst();
+    return !!trip;
+  }
+
+  /** The trip's places, for the estimate. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getPlaceIds(albumId: string) {
+    return this.db
+      .selectFrom('trip_place')
+      .select('id')
+      .where('albumId', '=', asUuid(albumId))
+      .orderBy('key')
+      .execute()
+      .then((rows) => rows.map((row) => row.id));
   }
 
   /**
@@ -278,5 +314,110 @@ export class TripTextsRepository {
       await bumpContentVersion(trx, albumId);
       return true;
     });
+  }
+
+  /**
+   * Starts a run: replaces every task of the trip, stops queued at once and places waiting for them. Returns the stop
+   * tasks to queue.
+   */
+  @GenerateSql({ params: [DummyValue.UUID, [DummyValue.UUID], [DummyValue.UUID], false] })
+  replaceTasks(albumId: string, stopIds: string[], placeIds: string[], overwrite: boolean) {
+    return this.db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('trip_text_task').where('albumId', '=', asUuid(albumId)).execute();
+      const rows = [
+        ...stopIds.map((stopId) => ({ albumId, stopId, overwrite, isQueued: true })),
+        ...placeIds.map((placeId) => ({ albumId, placeId, overwrite })),
+      ];
+      if (rows.length === 0) {
+        return [];
+      }
+      const tasks = await trx.insertInto('trip_text_task').values(rows).returning(['id', 'stopId']).execute();
+      return tasks.filter((task) => task.stopId !== null).map((task) => task.id);
+    });
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getTask(id: string) {
+    return this.db
+      .selectFrom('trip_text_task')
+      .select(['id', 'albumId', 'stopId', 'placeId', 'overwrite', 'attempt', 'error'])
+      .where('id', '=', asUuid(id))
+      .executeTakeFirst();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID] })
+  async finishTask(id: string) {
+    await this.db.deleteFrom('trip_text_task').where('id', '=', asUuid(id)).execute();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, 2] })
+  async setTaskAttempt(id: string, attempt: number) {
+    await this.db.updateTable('trip_text_task').set({ attempt }).where('id', '=', asUuid(id)).execute();
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.STRING] })
+  async failTask(id: string, error: string) {
+    await this.db.updateTable('trip_text_task').set({ error }).where('id', '=', asUuid(id)).execute();
+  }
+
+  /**
+   * Marks the trip's waiting places queued once no stop is pending, and returns them. Each row is returned once even
+   * when two stops finish together: the update takes it.
+   */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  takePlaceTasks(albumId: string) {
+    return this.db
+      .updateTable('trip_text_task')
+      .set({ isQueued: true })
+      .where('albumId', '=', asUuid(albumId))
+      .where('placeId', 'is not', null)
+      .where('isQueued', '=', false)
+      .where('error', 'is', null)
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom('trip_text_task as stop_task')
+              .select('stop_task.id')
+              .where('stop_task.albumId', '=', asUuid(albumId))
+              .where('stop_task.stopId', 'is not', null)
+              .where('stop_task.error', 'is', null),
+          ),
+        ),
+      )
+      .returning('id')
+      .execute()
+      .then((rows) => rows.map((row) => row.id));
+  }
+
+  /** Sends the trip's failed tasks again from the first attempt; returns the stop tasks to queue. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  retryTasks(albumId: string) {
+    return this.db
+      .updateTable('trip_text_task')
+      .set((eb) => ({ error: null, attempt: 1, isQueued: eb('stopId', 'is not', null).$castTo<boolean>() }))
+      .where('albumId', '=', asUuid(albumId))
+      .where('error', 'is not', null)
+      .returning(['id', 'stopId'])
+      .execute()
+      .then((rows) => rows.filter((row) => row.stopId !== null).map((row) => row.id));
+  }
+
+  /** The trip's tasks with the titles to show for them. */
+  @GenerateSql({ params: [DummyValue.UUID] })
+  getTasks(albumId: string) {
+    return this.db
+      .selectFrom('trip_text_task')
+      .leftJoin('trip_stop', 'trip_stop.id', 'trip_text_task.stopId')
+      .leftJoin('trip_place', 'trip_place.id', 'trip_text_task.placeId')
+      .select([
+        'trip_text_task.stopId',
+        'trip_text_task.placeId',
+        'trip_text_task.error',
+        (eb) => eb.fn.coalesce('trip_stop.title', 'trip_place.title', 'trip_place.key').as('title'),
+      ])
+      .where('trip_text_task.albumId', '=', asUuid(albumId))
+      .orderBy('trip_text_task.createdAt')
+      .orderBy('trip_text_task.id')
+      .execute();
   }
 }

@@ -69,11 +69,13 @@ features:
       - server/src/schema/index.ts
       - server/src/schema/gallery-upstream-fks.json
       - server/src/schema/gallery-upstream-fks.spec.ts
-      # the filing, routing, naming and Favorites jobs (trips PLAN D12, D13, D15, §2.5): five JobName values, their JobItem lines, the nightly sweep
+      # the filing, routing, naming, Favorites and LLM text jobs (trips PLAN D12, D13, D15, §2.5, §2.6): six JobName values, their JobItem lines, the nightly sweep
       - server/src/enum.ts
       - server/src/types.ts
       - server/src/services/queue.service.ts
       - server/src/services/queue.service.spec.ts
+      # a retried LLM text job waits before it runs again (trips PLAN §2.6): one getJobOptions case
+      - server/src/repositories/job.repository.ts
       # the Favorites trip mirrors stars (trips PLAN D15): one event, emitted by Gallery's PUT /assets/favorites
       - server/src/repositories/event.repository.ts
       - server/src/gallery/services/gallery-asset.service.ts

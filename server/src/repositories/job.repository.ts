@@ -415,6 +415,9 @@ export class JobRepository {
           delay: item.data?.delay,
         };
       }
+      case JobName.TripTexts: {
+        return { delay: item.data.delay };
+      }
       case JobName.StorageTemplateMigrationSingle: {
         return { jobId: item.data.id };
       }

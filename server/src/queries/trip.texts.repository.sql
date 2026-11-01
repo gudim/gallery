@@ -56,8 +56,61 @@ from
   and "album_user"."role" = $1
   left join "trip_place" on "trip_place"."id" = "trip_stop"."placeId"
 where
-  "trip_stop"."id" = $2::uuid
-  and "album"."deletedAt" is null
+  "album"."deletedAt" is null
+  and "trip_stop"."id" = $2::uuid
+
+-- TripTextsRepository.getStops
+select
+  "trip_stop"."id",
+  "trip_stop"."albumId",
+  "album_user"."userId" as "ownerId",
+  "album"."albumName",
+  "trip"."kind",
+  "trip"."language",
+  "trip_stop"."title",
+  "trip_stop"."titleSource",
+  "trip_stop"."story",
+  "trip_stop"."storySource",
+  "trip_stop"."isAtCenter",
+  "trip_stop"."region",
+  "trip_stop"."country",
+  "trip_stop"."localStart",
+  "trip_stop"."localEnd",
+  "trip_place"."title" as "placeTitle",
+  "trip_place"."article"
+from
+  "trip_stop"
+  inner join "trip" on "trip"."albumId" = "trip_stop"."albumId"
+  inner join "album" on "album"."id" = "trip"."albumId"
+  inner join "album_user" on "album_user"."albumId" = "album"."id"
+  and "album_user"."role" = $1
+  left join "trip_place" on "trip_place"."id" = "trip_stop"."placeId"
+where
+  "album"."deletedAt" is null
+  and "trip_stop"."albumId" = $2::uuid
+  and "trip_stop"."role" is null
+  and "trip_stop"."id" = $3::uuid
+order by
+  "trip_stop"."localStart" asc nulls first,
+  "trip_stop"."sequence"
+
+-- TripTextsRepository.hasTrip
+select
+  "albumId"
+from
+  "trip"
+where
+  "albumId" = $1::uuid
+
+-- TripTextsRepository.getPlaceIds
+select
+  "id"
+from
+  "trip_place"
+where
+  "albumId" = $1::uuid
+order by
+  "key"
 
 -- TripTextsRepository.getStopAssets
 select
@@ -182,3 +235,112 @@ where
     or "articleSource" in ($5, $6)
   )
 commit
+
+-- TripTextsRepository.replaceTasks
+begin
+delete from "trip_text_task"
+where
+  "albumId" = $1::uuid
+insert into
+  "trip_text_task" (
+    "albumId",
+    "stopId",
+    "overwrite",
+    "isQueued",
+    "placeId"
+  )
+values
+  ($1, $2, $3, $4, default),
+  ($5, default, $6, default, $7)
+returning
+  "id",
+  "stopId"
+rollback
+
+-- TripTextsRepository.getTask
+select
+  "id",
+  "albumId",
+  "stopId",
+  "placeId",
+  "overwrite",
+  "attempt",
+  "error"
+from
+  "trip_text_task"
+where
+  "id" = $1::uuid
+
+-- TripTextsRepository.finishTask
+delete from "trip_text_task"
+where
+  "id" = $1::uuid
+
+-- TripTextsRepository.setTaskAttempt
+update "trip_text_task"
+set
+  "attempt" = $1
+where
+  "id" = $2::uuid
+
+-- TripTextsRepository.failTask
+update "trip_text_task"
+set
+  "error" = $1
+where
+  "id" = $2::uuid
+
+-- TripTextsRepository.takePlaceTasks
+update "trip_text_task"
+set
+  "isQueued" = $1
+where
+  "albumId" = $2::uuid
+  and "placeId" is not null
+  and "isQueued" = $3
+  and "error" is null
+  and not exists (
+    select
+      "stop_task"."id"
+    from
+      "trip_text_task" as "stop_task"
+    where
+      "stop_task"."albumId" = $4::uuid
+      and "stop_task"."stopId" is not null
+      and "stop_task"."error" is null
+  )
+returning
+  "id"
+
+-- TripTextsRepository.retryTasks
+update "trip_text_task"
+set
+  "error" = $1,
+  "attempt" = $2,
+  "isQueued" = "stopId" is not null
+where
+  "albumId" = $3::uuid
+  and "error" is not null
+returning
+  "id",
+  "stopId"
+
+-- TripTextsRepository.getTasks
+select
+  "trip_text_task"."stopId",
+  "trip_text_task"."placeId",
+  "trip_text_task"."error",
+  coalesce(
+    "trip_stop"."title",
+    "trip_place"."title",
+    "trip_place"."key"
+  ) as "title"
+from
+  "trip_text_task"
+  left join "trip_stop" on "trip_stop"."id" = "trip_text_task"."stopId"
+  left join "trip_place" on "trip_place"."id" = "trip_text_task"."placeId"
+where
+  "trip_text_task"."albumId" = $1::uuid
+order by
+  "trip_text_task"."createdAt",
+  "trip_text_task"."id"

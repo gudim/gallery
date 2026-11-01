@@ -27975,6 +27975,262 @@
         "x-immich-state": "Beta"
       }
     },
+    "/trips/{id}/texts": {
+      "get": {
+        "description": "Returns how many stops and places are still to write and which failed after their retries.",
+        "operationId": "getTripTextsProgress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripTextsProgressDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retrieve the progress of a trip’s texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      },
+      "post": {
+        "description": "Queues generation of stop titles, stories and captions, then place articles, for the whole trip or one stop, replacing any run before it. Empty and generated texts are written; the owner’s own only with overwrite. Album owner only.",
+        "operationId": "startTripTexts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripTextsStartDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripTextsProgressDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Generate a trip’s texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/texts/estimate": {
+      "get": {
+        "description": "Counts the model calls, assets, stops and places a run would take, the owner’s own texts it would keep, and why generation is off if it is. Album owner only.",
+        "operationId": "estimateTripTexts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "overwrite",
+            "required": false,
+            "in": "query",
+            "description": "Replace the owner’s own texts too",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": false,
+            "in": "query",
+            "description": "Only this stop; omitted for the whole trip with its places",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripTextsEstimateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Estimate generating a trip’s texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
+    "/trips/{id}/texts/retry": {
+      "post": {
+        "description": "Sends the stops and places that failed after their retries again.",
+        "operationId": "retryTripTexts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripTextsProgressDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Retry a trip’s failed texts",
+        "tags": [
+          "Trips"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          },
+          {
+            "version": "v1",
+            "state": "Beta"
+          }
+        ],
+        "x-immich-permission": "album.update",
+        "x-immich-state": "Beta"
+      }
+    },
     "/trips/{id}/transit": {
       "put": {
         "description": "Marks stops of assets of a Route trip as shot on the way, not (the suggestion is not made again), or undecided. A stop on the way lies on the leg between the stops around it; that leg becomes a flight unless its mode was set, when a leg it replaces was a flight or the way was faster than 300 km/h. The album owner and editors edit the trip. Returns the whole trip.",
@@ -37064,7 +37320,8 @@
           "TripFileSweep",
           "TripRouteLegs",
           "TripName",
-          "TripFavorites"
+          "TripFavorites",
+          "TripTexts"
         ],
         "type": "string"
       },
@@ -52102,6 +52359,131 @@
           "title": {
             "description": "Stop title; blank clears it",
             "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TripTextsEstimateDto": {
+        "properties": {
+          "assets": {
+            "description": "Assets sent to the model",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "calls": {
+            "description": "Model calls the run makes",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "ownTexts": {
+            "description": "The owner’s own texts in scope, kept unless overwrite is set",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "places": {
+            "description": "Places that get an article",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/TripTextsProblem"
+          },
+          "stops": {
+            "description": "Stops that get texts",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assets",
+          "calls",
+          "ownTexts",
+          "places",
+          "problem",
+          "stops"
+        ],
+        "type": "object"
+      },
+      "TripTextsFailureDto": {
+        "properties": {
+          "error": {
+            "description": "Why it failed",
+            "type": "string"
+          },
+          "placeId": {
+            "description": "Place ID",
+            "nullable": true,
+            "type": "string"
+          },
+          "stopId": {
+            "description": "Stop ID",
+            "nullable": true,
+            "type": "string"
+          },
+          "title": {
+            "description": "Title of the stop or place",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "placeId",
+          "stopId",
+          "title"
+        ],
+        "type": "object"
+      },
+      "TripTextsProblem": {
+        "description": "Why generation is off, or null",
+        "enum": [
+          "noSettings",
+          "noConsent",
+          "keyUnreadable",
+          null
+        ],
+        "nullable": true,
+        "type": "string"
+      },
+      "TripTextsProgressDto": {
+        "properties": {
+          "failed": {
+            "description": "Stops and places that failed after their retries",
+            "items": {
+              "$ref": "#/components/schemas/TripTextsFailureDto"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "description": "Stops and places still to write",
+            "maximum": 2147483647,
+            "minimum": -2147483648,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "failed",
+          "pending"
+        ],
+        "type": "object"
+      },
+      "TripTextsStartDto": {
+        "properties": {
+          "overwrite": {
+            "default": false,
+            "description": "Replace the owner’s own texts too",
+            "type": "boolean"
+          },
+          "stopId": {
+            "description": "Only this stop; omitted for the whole trip with its places",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
             "type": "string"
           }
         },

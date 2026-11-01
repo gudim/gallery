@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AssetFileType, JobName } from 'src/enum.js';
+import { AlbumUserRole, AssetFileType, JobName, JobStatus } from 'src/enum.js';
+import { AccessRepository } from 'src/repositories/access.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { DB } from 'src/schema/index.js';
@@ -12,7 +13,7 @@ import { BaseService } from 'src/services/base.service.js';
 import { StorageService } from 'src/services/storage.service.js';
 import { TripKind } from 'src/trips/enum.js';
 import { TripTextsRepository } from 'src/trips/repositories/trip-texts.repository.js';
-import { TripTextsService } from 'src/trips/services/trip-texts.service.js';
+import { TRIP_TEXTS_ATTEMPTS, TripTextsService } from 'src/trips/services/trip-texts.service.js';
 import { newMediumService } from 'test/medium.factory.js';
 import { factory } from 'test/small.factory.js';
 import { getKyselyDB } from 'test/utils.js';
@@ -73,7 +74,12 @@ const setup = async () => {
   const { ctx } = newMediumService(BaseService, { database: db, real: [], mock: [LoggingRepository, JobRepository] });
   const job = ctx.getMock(JobRepository);
   job.queueAll.mockResolvedValue();
-  const sut = new TripTextsService(job, new TripTextsRepository(db));
+  const sut = new TripTextsService(
+    LoggingRepository.create(),
+    new AccessRepository(db),
+    job,
+    new TripTextsRepository(db),
+  );
   const { user: owner } = await ctx.newUser();
   const auth = factory.auth({ user: { id: owner.id } });
   await sut.updateSettings(auth, { url: 'https://llm.example/v1', model: 'small', key: 'sk-1', allowUpload: true });
@@ -300,5 +306,125 @@ describe(TripTextsService.name, () => {
     await sut.generatePlace(placeId, false);
     await expect(place()).resolves.toEqual({ article: 'Mine.', articleSource: 'manual' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The TripTexts jobs queued since the last call, as the queue would hand them to the worker.
+const queued = (job: Awaited<ReturnType<typeof setup>>['job']) => {
+  const items = job.queueAll.mock.calls.flatMap(([batch]) => batch);
+  job.queueAll.mockClear();
+  return items
+    .filter((item) => item.name === JobName.TripTexts)
+    .map((item) => item.data as { id: string; delay?: number });
+};
+
+describe('a run of trip texts', () => {
+  it('estimates calls, assets and the owner’s texts, and runs stops before places', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId, assetIds } = await newStop(31);
+    await db.updateTable('asset_exif').set({ description: 'Mine.' }).where('assetId', '=', assetIds[0]).execute();
+    const fetchMock = stubServer();
+
+    await expect(sut.estimate(auth, albumId, { overwrite: false })).resolves.toEqual({
+      calls: 3,
+      assets: 31,
+      stops: 1,
+      places: 1,
+      ownTexts: 1,
+      problem: null,
+    });
+    await expect(sut.estimate(auth, albumId, { stopId, overwrite: false })).resolves.toMatchObject({
+      calls: 2,
+      places: 0,
+    });
+
+    await expect(sut.start(auth, albumId, { overwrite: false })).resolves.toEqual({ pending: 2, failed: [] });
+    const [stopTask, ...rest] = queued(job);
+    expect(rest).toEqual([]);
+    await expect(sut.handleTexts(stopTask)).resolves.toBe(JobStatus.Success);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [placeTask] = queued(job);
+    await expect(sut.handleTexts(placeTask)).resolves.toBe(JobStatus.Success);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(sut.getProgress(auth, albumId)).resolves.toEqual({ pending: 0, failed: [] });
+    const place = await db
+      .selectFrom('trip_place')
+      .select('article')
+      .where('albumId', '=', albumId)
+      .executeTakeFirstOrThrow();
+    expect(place.article).toBe('First.\n\nSecond.');
+  });
+
+  it('retries a failed stop on its own with a growing delay, then gives up until "retry"', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId } = await newStop(1);
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('busy', { status: 503 })));
+
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    let [task] = queued(job);
+    const delays = [];
+    for (let attempt = 1; attempt < TRIP_TEXTS_ATTEMPTS; attempt++) {
+      await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Failed);
+      [task] = queued(job);
+      delays.push(task.delay);
+    }
+    expect(delays).toEqual([60_000, 120_000]);
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Failed);
+    expect(queued(job)).toEqual([]);
+    await expect(sut.getProgress(auth, albumId)).resolves.toEqual({
+      pending: 0,
+      failed: [{ stopId, placeId: null, title: 'Biržai', error: expect.stringContaining('HTTP 503') }],
+    });
+
+    stubServer();
+    await expect(sut.retry(auth, albumId)).resolves.toMatchObject({ pending: 1, failed: [] });
+    [task] = queued(job);
+    expect(task.delay).toBeUndefined();
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Success);
+    await expect(stopRow(stopId)).resolves.toMatchObject({ title: 'Title 1' });
+  });
+
+  it('does not retry a settings error', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId } = await newStop(1);
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response('bad key', { status: 401 })));
+
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    const [task] = queued(job);
+    await expect(sut.handleTexts(task)).resolves.toBe(JobStatus.Failed);
+    expect(queued(job)).toEqual([]);
+    await expect(sut.getProgress(auth, albumId)).resolves.toMatchObject({ pending: 0, failed: [{ stopId }] });
+  });
+
+  it('lets a new run replace the old one, whose queued jobs then do nothing', async () => {
+    const { sut, auth, job, newStop } = await setup();
+    const { albumId, stopId } = await newStop(1);
+    const fetchMock = stubServer();
+
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    const [old] = queued(job);
+    await sut.start(auth, albumId, { stopId, overwrite: false });
+    await expect(sut.handleTexts(old)).resolves.toBe(JobStatus.Skipped);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('is for the album owner only, and refused without settings', async () => {
+    const { sut, ctx, auth, newStop } = await setup();
+    const { albumId } = await newStop(1);
+    const { user: editor } = await ctx.newUser();
+    await ctx.newAlbumUser({ albumId, userId: editor.id, role: AlbumUserRole.Editor });
+    const editorAuth = factory.auth({ user: { id: editor.id } });
+    const { user: stranger } = await ctx.newUser();
+
+    await expect(sut.estimate(editorAuth, albumId, { overwrite: false })).rejects.toThrow('Only the album owner');
+    await expect(sut.start(editorAuth, albumId, { overwrite: false })).rejects.toThrow('Only the album owner');
+    await expect(sut.getProgress(factory.auth({ user: { id: stranger.id } }), albumId)).rejects.toThrow(
+      'Trip not found',
+    );
+
+    await sut.updateSettings(auth, { url: 'https://llm.example/v1', model: 'small', allowUpload: false });
+    await expect(sut.estimate(auth, albumId, { overwrite: false })).resolves.toMatchObject({ problem: 'noConsent' });
+    await expect(sut.start(auth, albumId, { overwrite: false })).rejects.toThrow('not allowed');
   });
 });
