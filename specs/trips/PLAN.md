@@ -160,8 +160,7 @@ Done when:
 
 ### 2.4 First rollout
 
-Done last, after §2.9, and by the owner: every other stage is built and checked on the local dev
-stack (DECISIONS-LOG 2026-10-31).
+Done by the owner after §2.6, ahead of §2.7–§2.9 (DECISIONS-LOG 2026-11-07).
 
 - The trips build replaces the Gallery already running on ThinkCentre next to travel-album; no
   third instance. Data under `/mnt/sata_500/gallery`; reachable on the local network only at
@@ -204,6 +203,8 @@ Done when:
 
 ### 2.7 Search
 
+Postponed by the owner on 2026-11-07: Gallery already covers most of it; to be discussed again.
+
 - The trip viewer's search and the Cmd+K provider (D17). Port from travel-album's
   `atlas/search.py` and `PLAN §5.15`.
 
@@ -211,6 +212,8 @@ Done when:
 - A guest never finds an asset or a stop outside the shared album.
 
 ### 2.8 Showcase, home, globe, wall, export
+
+Postponed by the owner on 2026-11-07, as §2.7.
 
 - Port from travel-album's `atlas/albums/{showcase,globe,wall,export}.py` and
   `PLAN §5.18, §5.20`.
@@ -222,7 +225,7 @@ Done when:
 ### 2.9 Mobile app
 
 Added by the owner on 2026-11-01, revising D18: Gallery's Flutter app shows and edits trips as the
-web does. It comes after §2.8; the first rollout (§2.4) stays last.
+web does. It comes after §2.6; §2.7 and §2.8 are postponed (DECISIONS-LOG 2026-11-07).
 
 - **Entry**: the album page. "Open the trip" when the album has one; "Make a trip" for the
   album's owner when it has none. One hook line in the upstream album page.
