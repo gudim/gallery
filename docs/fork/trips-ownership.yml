@@ -37,6 +37,8 @@ fork_surface:
       - web/src/routes/(user)/s/[slug]/trip/**
     database:
       - server/src/schema/migrations-trips/**
+    mobile:
+      - mobile/lib/trips/**
     ci:
       - .github/workflows/trips-*.yml
     config:
@@ -46,7 +48,7 @@ features:
   trips:
     title: Trips (routes, stops, stories, LLM texts, guest trip viewer)
     risk: high
-    domains: [server, web, database, ci, docs, config]
+    domains: [server, web, mobile, database, ci, docs, config]
     owned_paths:
       - server/src/trips/**
       - web/src/lib/trips/**
@@ -56,6 +58,9 @@ features:
       - docs/fork/trips-ownership.yml
       - server/test/medium/specs/trips/**
       - server/src/queries/trip*.sql
+      - mobile/lib/trips/**
+      - mobile/test/trips/**
+      - mobile/android/app/trips.gradle
       - web/src/routes/(user)/trips/**
       - web/src/routes/(user)/share/[key]/trip/**
       - web/src/routes/(user)/s/[slug]/trip/**
@@ -102,6 +107,11 @@ features:
       - web/src/lib/components/shared-components/map/Map.svelte
       # web: the LLM settings of trip texts are a section of Gallery's user settings (trips PLAN §2.6)
       - web/src/routes/(user)/user-settings/UserSettingsList.svelte
+      # mobile (trips PLAN §2.9): the trip pages in the router, "Open the trip" in the album menu, the .trips build
+      - mobile/lib/routing/router.dart
+      - mobile/lib/presentation/pages/remote_album.page.dart
+      - mobile/lib/presentation/widgets/remote_album/album_option.widget.dart
+      - mobile/android/app/build.gradle
       - AGENTS.md
       # trip strings under the `trips_` prefix: en plus the nine maintained locales
       - i18n/gallery/en.json
