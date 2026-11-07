@@ -8,25 +8,48 @@ import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/widgets/action_buttons/base_action_button.widget.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_create_dialog.dart';
 
-/// The album menu's way into the trip (trips PLAN §2.9): "Open the trip" when the album has one, nothing otherwise.
+/// The album menu's way into the trip (trips PLAN §2.9): "Open the trip" when the album has one; "Make a trip" for the
+/// owner of an album with assets and no trip (web TripMapButton.svelte); nothing while it is unknown.
 class TripAlbumMenuItem extends ConsumerWidget {
   final RemoteAlbum album;
+  final bool isOwner;
 
-  const TripAlbumMenuItem({super.key, required this.album});
+  const TripAlbumMenuItem({super.key, required this.album, required this.isOwner});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasTrip = ref.watch(tripExistsProvider(album.id)).valueOrNull ?? false;
-    if (!hasTrip) {
-      return const SizedBox.shrink();
+    final hasTrip = ref.watch(tripExistsProvider(album.id)).valueOrNull;
+    if (hasTrip == true) {
+      return BaseActionButton(
+        key: const ValueKey('trip-open'),
+        label: context.t.trips_open_trip,
+        iconData: Icons.route,
+        menuItem: true,
+        onPressed: () => unawaited(_open(context)),
+      );
     }
-    return BaseActionButton(
-      key: const ValueKey('trip-open'),
-      label: context.t.trips_open_trip,
-      iconData: Icons.route,
-      menuItem: true,
-      onPressed: () => unawaited(context.pushRoute(TripRoute(albumId: album.id, title: album.name))),
-    );
+    if (hasTrip == false && isOwner && album.assetCount > 0) {
+      return BaseActionButton(
+        key: const ValueKey('trip-create'),
+        label: context.t.trips_create_title,
+        iconData: Icons.add_road,
+        menuItem: true,
+        onPressed: () => unawaited(_create(context, ref)),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Future<void> _open(BuildContext context) => context.pushRoute(TripRoute(albumId: album.id, title: album.name));
+
+  Future<void> _create(BuildContext context, WidgetRef ref) async {
+    if (!await showTripCreateDialog(context, albumId: album.id) || !context.mounted) {
+      return;
+    }
+    ref.invalidate(tripExistsProvider(album.id));
+    ref.invalidate(tripDataProvider(album.id));
+    await _open(context);
   }
 }

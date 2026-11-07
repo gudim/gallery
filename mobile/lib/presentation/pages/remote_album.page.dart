@@ -519,7 +519,7 @@ class _AlbumKebabMenu extends ConsumerWidget {
       onShowOptions: onShowOptions,
       // L15: gated to owned albums (mirrors web's isOwned gate on the same affordance).
       onLinkToSpace: isOwner && ref.watch(serverSupportsSpacesProvider) ? onLinkToSpace : null,
-      extraItems: [TripAlbumMenuItem(album: album)],
+      extraItems: [TripAlbumMenuItem(album: album, isOwner: isOwner)],
     );
   }
 }
