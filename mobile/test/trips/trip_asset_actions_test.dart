@@ -223,6 +223,20 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
   });
 
+  testWidgets('tells how many assets left even when the server removed none', (tester) async {
+    when(() => repository.hideAssets('album', any())).thenAnswer((_) async => (trip: _route, count: 0));
+    await open(tester, 'b', ['a1']);
+
+    await tester.tap(action('trip-hide'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextButton).last);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Removed 0 assets'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+  });
+
   testWidgets('keeps the album when the hide is cancelled', (tester) async {
     await open(tester, 'b', ['a1']);
 
