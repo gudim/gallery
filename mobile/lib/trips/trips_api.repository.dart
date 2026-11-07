@@ -172,6 +172,35 @@ class TripsApiRepository extends ApiRepository {
     return (trip: trip, count: results.where((result) => result.success).length);
   }
 
+  // Leg edits (web TripLegEdit.svelte).
+
+  /// Sets the leg's mode by hand; null returns it to the mode its distance gives.
+  Future<TripResponseDto> setLegMode(String albumId, String legId, TripLegMode? mode) =>
+      checkNull(_api.setLegMode(albumId, legId, TripLegModeUpdateDto(mode: mode)));
+
+  /// Railway stations near both ends of a train leg, nearest first.
+  Future<TripLegStationsDto> getLegStations(String albumId, String legId) =>
+      checkNull(_api.getLegStations(albumId, legId));
+
+  Future<TripResponseDto> setLegStation(String albumId, String legId, TripStationSide side, TripStationDto station) =>
+      checkNull(
+        _api.setLegStation(
+          albumId,
+          legId,
+          TripLegStationUpdateDto(
+            side: side,
+            latitude: station.latitude,
+            longitude: station.longitude,
+            name: station.name,
+          ),
+        ),
+      );
+
+  Future<TripResponseDto> retryLeg(String albumId, String legId) => checkNull(_api.retryLeg(albumId, legId));
+
+  /// Routes again every leg that could not be routed.
+  Future<TripResponseDto> retryLegs(String albumId) => checkNull(_api.retryLegs(albumId));
+
   /// Places Nominatim finds for `query`, in the trip's language.
   Future<List<TripGeoPlaceDto>> searchPlaces(String albumId, String query) async =>
       (await checkNull(_api.searchTripPlaces(albumId, query))).places;
