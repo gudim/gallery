@@ -103,18 +103,17 @@ class TripAssetActions extends ConsumerWidget {
     if (isSure != true || !context.mounted) {
       return;
     }
-    var count = 0;
     await _run(context, ref, (repository, albumId) async {
       final result = await repository.hideAssets(albumId, ids);
-      count = result.count;
+      // Told as soon as the server answers, as on the web: once the trip updates, this bar is gone.
+      if (context.mounted) {
+        ImmichToast.show(
+          context: context,
+          msg: t.assets_removed_count(count: result.count),
+        );
+      }
       return result.trip;
     });
-    if (count > 0 && context.mounted) {
-      ImmichToast.show(
-        context: context,
-        msg: t.assets_removed_count(count: count),
-      );
-    }
   }
 
   @override
