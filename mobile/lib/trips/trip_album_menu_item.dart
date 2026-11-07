@@ -36,7 +36,7 @@ class TripAlbumMenuItem extends ConsumerWidget {
         label: context.t.trips_create_title,
         iconData: Icons.add_road,
         menuItem: true,
-        onPressed: () => unawaited(_create(context, ref)),
+        onPressed: () => unawaited(_create(context)),
       );
     }
     return const SizedBox.shrink();
@@ -44,12 +44,15 @@ class TripAlbumMenuItem extends ConsumerWidget {
 
   Future<void> _open(BuildContext context) => context.pushRoute(TripRoute(albumId: album.id, title: album.name));
 
-  Future<void> _create(BuildContext context, WidgetRef ref) async {
-    if (!await showTripCreateDialog(context, albumId: album.id) || !context.mounted) {
+  Future<void> _create(BuildContext context) async {
+    // The menu closes and unmounts this item while the dialog is open, so take what is needed afterwards now.
+    final router = context.router;
+    final container = ProviderScope.containerOf(context, listen: false);
+    if (!await showTripCreateDialog(context, albumId: album.id)) {
       return;
     }
-    ref.invalidate(tripExistsProvider(album.id));
-    ref.invalidate(tripDataProvider(album.id));
-    await _open(context);
+    container.invalidate(tripExistsProvider(album.id));
+    container.invalidate(tripDataProvider(album.id));
+    await router.push(TripRoute(albumId: album.id, title: album.name));
   }
 }
