@@ -133,7 +133,7 @@ void main() {
         ['Vilnius', 'Biržai'],
         ['Riga'],
       ]);
-      expect(view.stops.map((stop) => (stop.id, stop.number, stop.day, stop.t0, stop.t1)).toList(), [
+      expect(view.stops.map((stop) => (stop.id, stop.number, stop.day, stop.startTime, stop.endTime)).toList(), [
         ('start', null, 0, '—', '—'),
         ('a', 1, 0, '10:00', '11:00'),
         ('b', 2, 0, '14:00', '14:00'),
@@ -150,7 +150,7 @@ void main() {
     test('puts assets shot on the way on the leg between the stops around them', () {
       final way = buildTripView(_trip(), _assets).transit.single;
 
-      expect((way.fromStopId, way.toStopId, way.day, way.t0), ('a', 'b', 0, '13:00'));
+      expect((way.fromStopId, way.toStopId, way.day, way.startTime), ('a', 'b', 0, '13:00'));
       expect(way.stopIds, ['way']);
       // 13:00 between the end of A (11:00) and the start of B (14:00)
       expect(way.fraction, 0.667);

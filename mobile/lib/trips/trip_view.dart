@@ -87,14 +87,18 @@ sealed class TripItem {
   List<TripPhoto> get photos;
   int videoCount = 0;
 
-  /// `HH:MM` of the first and last asset, or of the stop's window; '—' when there is none
-  String t0 = '—';
-  String t1 = '—';
+  /// Where the item sits on the map; null for Unplaced and for a stop without a position.
+  double? get latitude => null;
+  double? get longitude => null;
+
+  /// `HH:MM` of the first and last asset, or of the stop's window; '—' when there is none (web `t0`, `t1`)
+  String startTime = '—';
+  String endTime = '—';
 
   void _span() {
     videoCount = photos.where((photo) => photo.isVideo).length;
-    t0 = photos.isEmpty || photos.first.time.isEmpty ? '—' : photos.first.time;
-    t1 = photos.isEmpty || photos.last.time.isEmpty ? '—' : photos.last.time;
+    startTime = photos.isEmpty || photos.first.time.isEmpty ? '—' : photos.first.time;
+    endTime = photos.isEmpty || photos.last.time.isEmpty ? '—' : photos.last.time;
   }
 }
 
@@ -110,7 +114,9 @@ class TripViewStop extends TripItem {
   final String story;
   final String region;
   final String country;
+  @override
   final double? latitude;
+  @override
   final double? longitude;
   final String date;
 
@@ -149,7 +155,9 @@ class TripTransit extends TripItem {
   final String fromStopId;
   final String toStopId;
   final List<String> stopIds = [];
+  @override
   final double? latitude;
+  @override
   final double? longitude;
 
   /// Where on the leg, as a share of its length (0.05–0.95)
@@ -339,8 +347,8 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
       placeId: stop.placeId,
       article: stop.placeId == null ? null : articles[stop.placeId],
     ).._span();
-    item.t0 = isTimed ? tripLocalTime(stop.localStart) : '—';
-    item.t1 = isTimed ? tripLocalTime(stop.localEnd ?? stop.localStart) : '—';
+    item.startTime = isTimed ? tripLocalTime(stop.localStart) : '—';
+    item.endTime = isTimed ? tripLocalTime(stop.localEnd ?? stop.localStart) : '—';
     return item;
   }).toList();
 
@@ -544,5 +552,6 @@ bool isWhiteInkOn(int argb) {
   return 1.05 / (luminance + 0.05) >= 4.5;
 }
 
-/// `t0–t1`, or one time when they are equal.
-String tripTimeSpan(TripItem item) => item.t0 == item.t1 ? item.t0 : '${item.t0}–${item.t1}';
+/// `start–end`, or one time when they are equal.
+String tripTimeSpan(TripItem item) =>
+    item.startTime == item.endTime ? item.startTime : '${item.startTime}–${item.endTime}';
