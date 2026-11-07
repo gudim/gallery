@@ -148,7 +148,7 @@ void main() {
 
       final isDone = await container
           .read(tripDataProvider('album').notifier)
-          .run((albumId) async => _trip(kind: TripKind.places, contentVersion: 2));
+          .run((_, albumId) async => _trip(kind: TripKind.places, contentVersion: 2));
 
       final data = container.read(tripDataProvider('album')).valueOrNull;
       expect(isDone, isTrue);
@@ -164,7 +164,7 @@ void main() {
 
       final isDone = await container
           .read(tripDataProvider('album').notifier)
-          .run((albumId) async => throw ApiException(400, 'refused'));
+          .run((_, albumId) async => throw ApiException(400, 'refused'));
 
       final data = container.read(tripDataProvider('album')).valueOrNull;
       expect(isDone, isFalse);
@@ -179,7 +179,7 @@ void main() {
       await container.read(tripDataProvider('album').future);
       final answer = Completer<TripResponseDto>();
 
-      final edit = container.read(tripDataProvider('album').notifier).run((albumId) => answer.future);
+      final edit = container.read(tripDataProvider('album').notifier).run((_, albumId) => answer.future);
       expect(container.read(tripDataProvider('album')).valueOrNull?.isBusy, isTrue);
       answer.complete(_trip(contentVersion: 2));
       await edit;
@@ -198,7 +198,7 @@ void main() {
         final subscription = container.listen(tripDataProvider('album'), (_, _) {});
         async.flushMicrotasks();
         final answer = Completer<TripResponseDto>();
-        unawaited(container.read(tripDataProvider('album').notifier).run((albumId) => answer.future));
+        unawaited(container.read(tripDataProvider('album').notifier).run((_, albumId) => answer.future));
 
         async.elapse(TripDataNotifier.pollInterval);
         expect(calls, 2);

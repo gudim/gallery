@@ -14,14 +14,13 @@ import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_asset_actions.dart';
 import 'package:immich_mobile/trips/trip_clock.page.dart';
+import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_leg_edit.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_place_hints.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
-import 'package:immich_mobile/trips/trips_api.repository.dart';
-import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
@@ -111,18 +110,14 @@ class _TripPageState extends ConsumerState<TripPage> {
     if (moving == null) {
       return;
     }
-    final message = context.t.trips_edit_failed;
-    final repository = ref.read(tripsApiRepositoryProvider);
-    final isSaved = await ref
-        .read(tripDataProvider(widget.albumId).notifier)
-        .run((albumId) => repository.moveStop(albumId, moving.stopId, moving.at.latitude, moving.at.longitude));
-    if (!mounted) {
-      return;
-    }
-    if (isSaved) {
+    final isSaved = await runTripEdit(
+      context,
+      ref,
+      widget.albumId,
+      (repository, albumId) => repository.moveStop(albumId, moving.stopId, moving.at.latitude, moving.at.longitude),
+    );
+    if (isSaved && mounted) {
       setState(() => _moving = null);
-    } else {
-      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
     }
   }
 
@@ -574,7 +569,16 @@ class _TripPanel extends ConsumerWidget {
                         if (attentionCount > 0)
                           OutlinedButton.icon(
                             key: const ValueKey('trip-retry-legs'),
-                            onPressed: data.isBusy ? null : () => unawaited(_retryLegs(context, ref)),
+                            onPressed: data.isBusy
+                                ? null
+                                : () => unawaited(
+                                    runTripEdit(
+                                      context,
+                                      ref,
+                                      view.albumId,
+                                      (repository, albumId) => repository.retryLegs(albumId),
+                                    ),
+                                  ),
                             icon: const Icon(Icons.refresh, size: 18),
                             label: Text(t.trips_retry_legs(count: attentionCount)),
                             style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
@@ -597,15 +601,6 @@ class _TripPanel extends ConsumerWidget {
   String _stopName(Translations t, String stopId) {
     final stop = view.stops.where((stop) => stop.id == stopId).firstOrNull;
     return stop == null ? '' : tripRowTitle(t, stop);
-  }
-
-  Future<void> _retryLegs(BuildContext context, WidgetRef ref) async {
-    final message = context.t.trips_edit_failed;
-    final repository = ref.read(tripsApiRepositoryProvider);
-    final isDone = await ref.read(tripDataProvider(view.albumId).notifier).run(repository.retryLegs);
-    if (!isDone && context.mounted) {
-      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
-    }
   }
 
   List<Widget> _rows(BuildContext context, String lang) {

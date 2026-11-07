@@ -7,6 +7,9 @@ import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:openapi/api.dart';
 
+/// One edit of a trip: it acts on the album's trip and answers with the whole trip.
+typedef TripEdit = Future<TripResponseDto> Function(TripsApiRepository repository, String albumId);
+
 /// A trip as the screen shows it: the read, its derived view, and the album's assets for the viewer.
 class TripData {
   final TripResponseDto trip;
@@ -98,14 +101,14 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
 
   /// Runs one edit; on success the trip it answers replaces the view. Returns whether the edit went through; the caller
   /// tells the user when it did not.
-  Future<bool> run(Future<TripResponseDto> Function(String albumId) edit) async {
+  Future<bool> run(TripEdit edit) async {
     final shown = state.valueOrNull;
     if (shown == null) {
       return false;
     }
     state = AsyncData(TripData(trip: shown.trip, view: shown.view, assets: shown.assets, isBusy: true));
     try {
-      final trip = await edit(arg);
+      final trip = await edit(ref.read(tripsApiRepositoryProvider), arg);
       if (!_isDisposed) {
         state = AsyncData(_show(trip));
         _schedule(trip);
