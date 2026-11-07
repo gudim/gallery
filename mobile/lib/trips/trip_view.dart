@@ -555,3 +555,19 @@ bool isWhiteInkOn(int argb) {
 /// `start–end`, or one time when they are equal.
 String tripTimeSpan(TripItem item) =>
     item.startTime == item.endTime ? item.startTime : '${item.startTime}–${item.endTime}';
+
+/// How a Places trip lists its places (web TripPanel `placeSort`).
+enum TripPlaceSort { frames, name }
+
+/// The places of a Places trip as its list shows them (web TripPanel `places`): most frames first, or by name, ties by
+/// id so the order holds between reads. Only edit mode lists a place without assets.
+List<TripViewStop> tripPlaces(TripView view, TripPlaceSort sort, {required bool isEditing}) {
+  final places = view.stops.where((stop) => isEditing || stop.photos.isNotEmpty).toList();
+  return places..sort((a, b) {
+    final order = switch (sort) {
+      TripPlaceSort.frames => b.photos.length.compareTo(a.photos.length),
+      TripPlaceSort.name => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    };
+    return order != 0 ? order : a.id.compareTo(b.id);
+  });
+}
