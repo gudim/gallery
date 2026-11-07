@@ -13,11 +13,11 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_asset_actions.dart';
-import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_leg_edit.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_place_hints.dart';
+import 'package:immich_mobile/trips/trip_route_actions.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
@@ -432,7 +432,6 @@ class _TripPanel extends ConsumerWidget {
     final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
     final isSheet = controller != null;
     final leg = openLeg;
-    final attentionCount = data.trip.legs.where((leg) => leg.status == TripLegStatus.attention).length;
 
     return CustomScrollView(
       controller: controller,
@@ -552,40 +551,7 @@ class _TripPanel extends ConsumerWidget {
                 children: [
                   Text(tripRangeLine(t, view, lang), key: const ValueKey('trip-range')),
                   Text(tripStatsLine(t, view, lang), key: const ValueKey('trip-stats'), style: muted),
-                  if (isEditing) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      key: const ValueKey('trip-route-actions'),
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        OutlinedButton.icon(
-                          key: const ValueKey('trip-clock'),
-                          onPressed: () => unawaited(showTripClockPage(context, view.albumId)),
-                          icon: const Icon(Icons.more_time, size: 18),
-                          label: Text(t.trips_clock),
-                          style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                        ),
-                        if (attentionCount > 0)
-                          OutlinedButton.icon(
-                            key: const ValueKey('trip-retry-legs'),
-                            onPressed: data.isBusy
-                                ? null
-                                : () => unawaited(
-                                    runTripEdit(
-                                      context,
-                                      ref,
-                                      view.albumId,
-                                      (repository, albumId) => repository.retryLegs(albumId),
-                                    ),
-                                  ),
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: Text(t.trips_retry_legs(count: attentionCount)),
-                            style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-                          ),
-                      ],
-                    ),
-                  ],
+                  if (isEditing) ...[const SizedBox(height: 8), TripRouteActions(data: data)],
                 ],
               ),
             ),
