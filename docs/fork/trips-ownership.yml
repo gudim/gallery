@@ -112,6 +112,8 @@ features:
       - mobile/lib/presentation/pages/remote_album.page.dart
       - mobile/lib/presentation/widgets/remote_album/album_option.widget.dart
       - mobile/android/app/build.gradle
+      # mobile: the trip range's year is text, not a number to group (one _kParamTypeOverrides line)
+      - mobile/bin/generate_keys.dart
       - AGENTS.md
       # trip strings under the `trips_` prefix: en plus the nine maintained locales
       - i18n/gallery/en.json

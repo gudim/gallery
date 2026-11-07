@@ -100,7 +100,7 @@ String tripRangeLine(Translations t, TripView view, String lang) {
   return t.trips_range(
     from: tripDayLabel(first, lang),
     to: tripDayLabel(last, lang),
-    year: int.parse(last.substring(0, 4)),
+    year: last.substring(0, 4),
     count: view.days.length,
   );
 }

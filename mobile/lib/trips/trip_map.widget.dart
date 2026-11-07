@@ -65,7 +65,10 @@ class TripMap extends StatefulWidget {
 class _TripMapState extends State<TripMap> {
   MapLibreMapController? _controller;
   bool _isReady = false;
-  final _images = <String>{};
+
+  /// Physical pixels per logical one, so markers are drawn sharp at their logical size.
+  double _ratio = 1;
+  final _images = <String, Future<void>>{};
 
   TripView get _view => widget.view;
 
@@ -111,8 +114,11 @@ class _TripMapState extends State<TripMap> {
     if (controller == null) {
       return;
     }
-    // A theme switch loads a new style without our sources and images.
+    // A theme switch loads a new style without our sources and images. The images go in before the layers that use
+    // them: MapLibre Android drops an icon added in the same frame as data that shows it (maplibre_gl's
+    // addGeoJsonSource notes the bug).
     _images.clear();
+    await _addImages();
     const empty = {'type': 'FeatureCollection', 'features': <Object>[]};
     for (final id in ['trip-trails', 'trip-legs', 'trip-ends', 'trip-badges', 'trip-stops']) {
       await controller.addGeoJsonSource(id, empty);
@@ -162,7 +168,7 @@ class _TripMapState extends State<TripMap> {
     );
     const symbol = SymbolLayerProperties(
       iconImage: ['get', 'image'],
-      iconSize: 0.5,
+      iconSize: 1,
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
     );
@@ -179,6 +185,7 @@ class _TripMapState extends State<TripMap> {
     if (controller == null) {
       return;
     }
+    await _addImages();
     await controller.setGeoJsonSource('trip-trails', {
       'type': 'FeatureCollection',
       'features': [
@@ -233,9 +240,6 @@ class _TripMapState extends State<TripMap> {
       if (latitude == null || longitude == null || item.photos.isEmpty) {
         continue;
       }
-      final color = _colorOf(item.day);
-      final label = item is TripViewStop ? '${item.number ?? ''}' : '';
-      final image = await _image('stop-$color-$label', color, text: label, small: item is TripTransit);
       stops.add({
         'type': 'Feature',
         'id': item.id,
@@ -243,7 +247,7 @@ class _TripMapState extends State<TripMap> {
           'type': 'Point',
           'coordinates': [longitude, latitude],
         },
-        'properties': {'image': image},
+        'properties': {'image': _stopImage(item).name},
       });
     }
     await controller.setGeoJsonSource('trip-stops', {'type': 'FeatureCollection', 'features': stops});
@@ -275,45 +279,70 @@ class _TripMapState extends State<TripMap> {
       if (meters / metersPerPixel < 90) {
         continue;
       }
-      final image = await _image(
-        'badge-${leg.color}-${leg.leg.mode.toJson()}',
-        leg.color,
-        icon: tripModeIcon(leg.leg.mode),
-      );
       features.add({
         'type': 'Feature',
         'geometry': {
           'type': 'Point',
           'coordinates': [at.$2, at.$1],
         },
-        'properties': {'image': image},
+        'properties': {'image': _badgeImage(leg).name},
       });
     }
     await controller.setGeoJsonSource('trip-badges', {'type': 'FeatureCollection', 'features': features});
   }
 
-  /// A round marker in `color` with white or black ink, drawn at twice its size and shown at half.
-  Future<String> _image(String name, int color, {String text = '', IconData? icon, bool small = false}) async {
-    if (_images.contains(name)) {
-      return name;
-    }
-    final size = small ? 32.0 : 52.0;
+  ({String name, int color, String text, IconData? icon, bool small}) _stopImage(TripItem item) {
+    final color = _colorOf(item.day);
+    final text = item is TripViewStop ? '${item.number ?? ''}' : '';
+    return (name: 'trip-stop-$color-$text', color: color, text: text, icon: null, small: item is TripTransit);
+  }
+
+  ({String name, int color, String text, IconData? icon, bool small}) _badgeImage(TripViewLeg leg) => (
+    name: 'trip-badge-${leg.color}-${leg.leg.mode.toJson()}',
+    color: leg.color,
+    text: '',
+    icon: tripModeIcon(leg.leg.mode),
+    small: false,
+  );
+
+  /// Every marker and badge image the view needs, each added once per style.
+  Future<void> _addImages() async {
+    final images = [
+      for (final item in _view.order)
+        if (item is! TripUnplaced) _stopImage(item),
+      for (final leg in _view.legs)
+        if (_badgeModes.contains(leg.leg.mode)) _badgeImage(leg),
+    ];
+    await Future.wait([
+      for (final image in images)
+        _images.putIfAbsent(
+          image.name,
+          () => _image(image.name, image.color, text: image.text, icon: image.icon, small: image.small),
+        ),
+    ]);
+  }
+
+  /// A round marker in `color` with white or black ink, 24 logical pixels (16 for assets shot on
+  /// the way), drawn at the screen's pixel ratio.
+  Future<void> _image(String name, int color, {String text = '', IconData? icon, bool small = false}) async {
+    final unit = _ratio;
+    final size = (small ? 16.0 : 24.0) * unit;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final center = Offset(size / 2, size / 2);
     canvas.drawCircle(center, size / 2, Paint()..color = Colors.white);
-    canvas.drawCircle(center, size / 2 - 4, Paint()..color = Color(color));
+    canvas.drawCircle(center, size / 2 - 2 * unit, Paint()..color = Color(color));
     final ink = isWhiteInkOn(color) ? Colors.white : Colors.black;
     final painter = TextPainter(
       textDirection: TextDirection.ltr,
       text: icon != null
           ? TextSpan(
               text: String.fromCharCode(icon.codePoint),
-              style: TextStyle(fontFamily: icon.fontFamily, package: icon.fontPackage, fontSize: 30, color: ink),
+              style: TextStyle(fontFamily: icon.fontFamily, package: icon.fontPackage, fontSize: 14 * unit, color: ink),
             )
           : TextSpan(
               text: text,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: ink),
+              style: TextStyle(fontSize: 12 * unit, fontWeight: FontWeight.w600, color: ink),
             ),
     )..layout();
     painter.paint(canvas, center - Offset(painter.width / 2, painter.height / 2));
@@ -321,8 +350,6 @@ class _TripMapState extends State<TripMap> {
     final rendered = await picture.toImage(size.toInt(), size.toInt());
     final bytes = await rendered.toByteData(format: ui.ImageByteFormat.png);
     await _controller?.addImage(name, bytes!.buffer.asUint8List());
-    _images.add(name);
-    return name;
   }
 
   /// The map fits the stops; the start, finish and legs may reach further.
@@ -366,6 +393,7 @@ class _TripMapState extends State<TripMap> {
 
   @override
   Widget build(BuildContext context) {
+    _ratio = MediaQuery.devicePixelRatioOf(context);
     return MapThemeOverride(
       mapBuilder: (style) => style.widgetWhen(
         onData: (style) => MapLibreMap(
