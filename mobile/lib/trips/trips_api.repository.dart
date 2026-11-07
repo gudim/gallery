@@ -124,6 +124,54 @@ class TripsApiRepository extends ApiRepository {
     ),
   );
 
+  // Asset edits (web TripAssetActions.svelte).
+
+  Future<TripResponseDto> moveAssets(String albumId, List<String> assetIds, String stopId) =>
+      checkNull(_api.moveAssets(albumId, TripAssetsMoveDto(assetIds: assetIds, stopId: stopId)));
+
+  /// Makes a new stop of the assets.
+  Future<TripResponseDto> createStop(String albumId, List<String> assetIds) =>
+      checkNull(_api.createStop(albumId, TripStopCreateDto(assetIds: assetIds)));
+
+  /// Splits the stop so that a new stop begins with the asset.
+  Future<TripResponseDto> splitStop(String albumId, String stopId, String assetId) =>
+      checkNull(_api.splitStop(albumId, stopId, TripStopSplitDto(assetId: assetId)));
+
+  /// Files assets of a Places trip to its centre; `center` makes the centre when the trip has none.
+  Future<TripResponseDto> toCenter(String albumId, List<String> assetIds, TripPoint? center) => checkNull(
+    _api.toCenter(
+      albumId,
+      TripAssetsCenterDto(
+        assetIds: assetIds,
+        center: center == null
+            ? const Optional.absent()
+            : Optional.present(
+                TripEndDto(
+                  latitude: center.latitude,
+                  longitude: center.longitude,
+                  title: Optional.present(center.titleOrNull),
+                ),
+              ),
+      ),
+    ),
+  );
+
+  /// Sets an asset's point by hand.
+  Future<TripResponseDto> setAssetPoint(String albumId, String assetId, TripPoint point) => checkNull(
+    _api.setAssetPoint(assetId, albumId, TripAssetPointDto(latitude: point.latitude, longitude: point.longitude)),
+  );
+
+  /// Gives an asset back the point of its own location.
+  Future<TripResponseDto> removeAssetPoint(String albumId, String assetId) =>
+      checkNull(_api.removeAssetPoint(assetId, albumId));
+
+  /// Hides assets from the trip: they leave the album (trips PLAN D11). Answers the trip read again and how many left.
+  Future<({TripResponseDto trip, int count})> hideAssets(String albumId, List<String> assetIds) async {
+    final results = await checkNull(_apiService.albumsApi.removeAssetFromAlbum(albumId, BulkIdsDto(ids: assetIds)));
+    final trip = await checkNull(_api.getTrip(albumId));
+    return (trip: trip, count: results.where((result) => result.success).length);
+  }
+
   /// Places Nominatim finds for `query`, in the trip's language.
   Future<List<TripGeoPlaceDto>> searchPlaces(String albumId, String query) async =>
       (await checkNull(_api.searchTripPlaces(albumId, query))).places;

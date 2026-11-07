@@ -12,6 +12,7 @@ import 'package:immich_mobile/presentation/widgets/images/thumbnail_tile.widget.
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_asset_actions.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
@@ -48,19 +49,37 @@ class _TripPageState extends ConsumerState<TripPage> {
   /// The stop whose pin is being moved, and where the map's centre points now (web TripPage `moving`)
   ({String stopId, LatLng at})? _moving;
 
+  /// Assets picked in the open stop's grid in edit mode (web assetMultiSelectManager)
+  Set<String> _picked = const {};
+
   void _open(TripItem item) => setState(() {
     _openId = item.id;
     _moving = null;
+    _picked = const {};
   });
 
   void _back() => setState(() {
     _openId = null;
     _moving = null;
+    _picked = const {};
   });
 
   void _toggleEditing() => setState(() {
     _isEditing = !_isEditing;
     _moving = null;
+    _picked = const {};
+  });
+
+  void _togglePicked(String assetId) => setState(() {
+    _picked = _picked.contains(assetId) ? ({..._picked}..remove(assetId)) : {..._picked, assetId};
+  });
+
+  // The assets went to `stopId`, which opens, as on the web; otherwise the stop stays open.
+  void _onAssetsDone(String? stopId) => setState(() {
+    _picked = const {};
+    if (stopId != null) {
+      _openId = stopId;
+    }
   });
 
   void _startMoving(TripViewStop stop) {
@@ -98,12 +117,14 @@ class _TripPageState extends ConsumerState<TripPage> {
     ref.watch(tripLikesProvider(widget.albumId));
 
     return PopScope(
-      canPop: _openId == null && _moving == null,
+      canPop: _openId == null && _moving == null && _picked.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           return;
         }
-        if (_moving != null) {
+        if (_picked.isNotEmpty) {
+          setState(() => _picked = const {});
+        } else if (_moving != null) {
           setState(() => _moving = null);
         } else {
           _back();
@@ -144,13 +165,47 @@ class _TripPageState extends ConsumerState<TripPage> {
   }
 
   Widget _body(BuildContext context, TripData data) {
+    final openItem = _openId == null ? null : _find(data.view, _openId!);
+    final picked = openItem == null || !_isEditing
+        ? const <String>[]
+        : [
+            for (final photo in openItem.photos)
+              if (_picked.contains(photo.id)) photo.id,
+          ];
+    final layout = _layout(context, data, openItem, picked);
+    if (openItem == null || picked.isEmpty) {
+      return layout;
+    }
+    return Stack(
+      children: [
+        Positioned.fill(child: layout),
+        Positioned(
+          left: 8,
+          right: 8,
+          bottom: 16,
+          child: SafeArea(
+            child: TripAssetActions(
+              data: data,
+              item: openItem,
+              ids: picked,
+              onDone: _onAssetsDone,
+              onClear: () => setState(() => _picked = const {}),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _layout(BuildContext context, TripData data, TripItem? openItem, List<String> picked) {
     final view = data.view;
-    final openItem = _openId == null ? null : _find(view, _openId!);
 
     Widget panel(ScrollController? controller) => _TripPanel(
       data: data,
       openItem: openItem,
       isEditing: _isEditing,
+      picked: picked,
+      onPick: _togglePicked,
       controller: controller,
       onOpen: _open,
       onBack: _back,
@@ -317,6 +372,10 @@ class _TripPanel extends ConsumerWidget {
   final TripData data;
   final TripItem? openItem;
   final bool isEditing;
+
+  /// Assets picked in the open stop's grid
+  final List<String> picked;
+  final void Function(String assetId) onPick;
   final ScrollController? controller;
   final void Function(TripItem item) onOpen;
   final VoidCallback onBack;
@@ -326,6 +385,8 @@ class _TripPanel extends ConsumerWidget {
     required this.data,
     required this.openItem,
     required this.isEditing,
+    required this.picked,
+    required this.onPick,
     required this.controller,
     required this.onOpen,
     required this.onBack,
@@ -376,6 +437,10 @@ class _TripPanel extends ConsumerWidget {
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
                         if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),
+                        if (isEditing && item.photos.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(t.trips_select_hint, style: muted),
+                        ],
                       ],
                     ),
                   ),
@@ -392,17 +457,25 @@ class _TripPanel extends ConsumerWidget {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(2, 0, 2, 24),
+              // Room for the action bar over the last row while assets are picked.
+              padding: EdgeInsets.fromLTRB(2, 0, 2, picked.isEmpty ? 24 : 96),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 120,
                   mainAxisSpacing: 2,
                   crossAxisSpacing: 2,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  childCount: item.photos.length,
-                  (context, index) => _Thumbnail(data: data, photo: item.photos[index]),
-                ),
+                delegate: SliverChildBuilderDelegate(childCount: item.photos.length, (context, index) {
+                  final photo = item.photos[index];
+                  return _Thumbnail(
+                    data: data,
+                    photo: photo,
+                    isPicked: picked.contains(photo.id),
+                    // In edit mode a long press picks, and while anything is picked a tap does too, as in Gallery.
+                    onPick: !isEditing ? null : () => onPick(photo.id),
+                    isPicking: picked.isNotEmpty,
+                  );
+                }),
               ),
             ),
         ] else ...[
@@ -431,7 +504,7 @@ class _TripPanel extends ConsumerWidget {
     final rows = <Widget>[];
     switch (view.kind) {
       case TripKind.places:
-        final places = view.stops.where((stop) => stop.photos.isNotEmpty).toList()
+        final places = view.stops.where((stop) => isEditing || stop.photos.isNotEmpty).toList()
           ..sort((a, b) => b.photos.length.compareTo(a.photos.length));
         rows.add(_Header(title: t.trips_places_title));
         rows.addAll(places.map((stop) => _StopRow(stop: stop, isRoute: false, onOpen: onOpen)));
@@ -442,7 +515,7 @@ class _TripPanel extends ConsumerWidget {
       case TripKind.plain:
         rows.addAll(
           view.stops
-              .where((stop) => stop.photos.isNotEmpty)
+              .where((stop) => isEditing || stop.photos.isNotEmpty)
               .map((stop) => _StopRow(stop: stop, isRoute: false, onOpen: onOpen)),
         );
       default:
@@ -659,8 +732,21 @@ class _LegRow extends StatelessWidget {
 class _Thumbnail extends ConsumerWidget {
   final TripData data;
   final TripPhoto photo;
+  final bool isPicked;
 
-  const _Thumbnail({required this.data, required this.photo});
+  /// Picks or unpicks the asset; null outside edit mode
+  final VoidCallback? onPick;
+
+  /// Some asset is picked, so a tap picks instead of opening the viewer
+  final bool isPicking;
+
+  const _Thumbnail({
+    required this.data,
+    required this.photo,
+    this.isPicked = false,
+    this.onPick,
+    this.isPicking = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -668,8 +754,15 @@ class _Thumbnail extends ConsumerWidget {
     if (asset == null) {
       return const SizedBox.shrink();
     }
+    final onPick = this.onPick;
     return GestureDetector(
+      key: ValueKey('trip-thumbnail-${photo.id}'),
+      onLongPress: onPick,
       onTap: () {
+        if (onPick != null && isPicking) {
+          onPick();
+          return;
+        }
         // The viewer pages through every asset of the trip, in the trip's order (web TripPhoto `photos`).
         final assets = data.assetsOf(data.view.photos);
         final index = assets.indexWhere((candidate) => candidate.id == asset.id);
@@ -684,7 +777,34 @@ class _Thumbnail extends ConsumerWidget {
           ),
         );
       },
-      child: ThumbnailTile(asset),
+      child: isPicked ? _Picked(child: ThumbnailTile(asset)) : ThumbnailTile(asset),
+    );
+  }
+}
+
+/// A picked asset: inset, with a check, as Gallery's timeline shows it.
+class _Picked extends StatelessWidget {
+  final Widget child;
+
+  const _Picked({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('trip-thumbnail-picked'),
+      color: context.colorScheme.primaryContainer,
+      padding: const EdgeInsets.all(8),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(borderRadius: BorderRadius.circular(12), child: child),
+          Positioned(
+            top: 4,
+            left: 4,
+            child: Icon(Icons.check_circle_rounded, color: context.colorScheme.primary, size: 22),
+          ),
+        ],
+      ),
     );
   }
 }
