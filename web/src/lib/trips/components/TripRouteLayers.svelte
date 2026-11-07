@@ -4,7 +4,7 @@
   import { TripKind, TripLegMode, TripOverlayKind } from '@immich/sdk';
   import { Icon } from '@immich/ui';
   import type { Feature, LineString, Point, Position } from 'geojson';
-  import { LngLatBounds, type Map } from 'maplibre-gl';
+  import { LngLatBounds, type DataDrivenPropertyValueSpecification, type Map } from 'maplibre-gl';
   import { onMount } from 'svelte';
   import { t } from 'svelte-i18n';
   import { CircleLayer, GeoJSON, LineLayer, Marker } from 'svelte-maplibre';
@@ -19,9 +19,14 @@
     onReady?: (map: Map) => void;
     /** Set in edit mode: a leg's badge opens the leg. */
     onOpenLeg?: (legId: string) => void;
+    /** The leg opened in edit mode: it glows, and the other legs fade. */
+    openLegId?: string;
   }
 
-  let { map, view, onReady, onOpenLeg }: Props = $props();
+  let { map, view, onReady, onOpenLeg, openLegId }: Props = $props();
+
+  // How much of its own opacity a leg keeps while another leg is open.
+  const FADED = 0.35;
 
   type LineStyle = { width: number; opacity: number; dash?: number[] };
   // Widths in px and dashes in line widths, after travel-album's leg styles.
@@ -46,9 +51,16 @@
     features: view.legs.map((leg): Feature<LineString> => ({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: leg.points.map(([lat, lng]) => [lng, lat]) },
-      properties: { mode: leg.mode, color: leg.color },
+      properties: { id: leg.id, mode: leg.mode, color: leg.color },
     })),
   });
+
+  const openLeg = $derived({
+    type: 'FeatureCollection' as const,
+    features: legs.features.filter(({ properties }) => openLegId && properties?.id === openLegId),
+  });
+  const legOpacity = (opacity: number): DataDrivenPropertyValueSpecification<number> =>
+    openLegId ? ['case', ['==', ['get', 'id'], openLegId], opacity, opacity * FADED] : opacity;
 
   const ends = $derived({
     type: 'FeatureCollection' as const,
@@ -117,6 +129,14 @@
   />
 </GeoJSON>
 
+<GeoJSON id="trip-leg-open" data={openLeg}>
+  <LineLayer
+    id="trip-leg-open"
+    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+    paint={{ 'line-color': ['get', 'color'], 'line-width': 12, 'line-opacity': 0.35, 'line-blur': 2 }}
+  />
+</GeoJSON>
+
 <GeoJSON id="trip-legs" data={legs}>
   {#each modes as mode (mode)}
     <LineLayer
@@ -126,7 +146,7 @@
       paint={{
         'line-color': ['get', 'color'],
         'line-width': STYLES[mode].width,
-        'line-opacity': STYLES[mode].opacity,
+        'line-opacity': legOpacity(STYLES[mode].opacity),
         ...(STYLES[mode].dash && { 'line-dasharray': STYLES[mode].dash }),
       }}
     />
