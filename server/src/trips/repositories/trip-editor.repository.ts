@@ -181,15 +181,15 @@ export class TripEditorRepository {
       if (first.isAddedByHand || second.isAddedByHand) {
         return TripEditResult.StopIsPoint;
       }
-      await trx
-        .updateTable('trip_stop')
-        .set({
-          ...(!first.title && second.title && { title: second.title, titleSource: second.titleSource }),
-          ...(!first.story && second.story && { story: second.story, storySource: second.storySource }),
-          ...(first.placeId === null && second.placeId !== null && { placeId: second.placeId }),
-        })
-        .where('id', '=', first.id)
-        .execute();
+      // The texts and the place the first stop lacks; a stop that lacks nothing is left as it is.
+      const taken = {
+        ...(!first.title && second.title && { title: second.title, titleSource: second.titleSource }),
+        ...(!first.story && second.story && { story: second.story, storySource: second.storySource }),
+        ...(first.placeId === null && second.placeId !== null && { placeId: second.placeId }),
+      };
+      if (Object.keys(taken).length > 0) {
+        await trx.updateTable('trip_stop').set(taken).where('id', '=', first.id).execute();
+      }
       await trx.updateTable('trip_asset').set({ stopId: first.id }).where('stopId', '=', second.id).execute();
       await trx.deleteFrom('trip_stop').where('id', '=', second.id).execute();
       touch(first.id);

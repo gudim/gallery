@@ -283,6 +283,18 @@ describe('stop editor', () => {
       expect(job.queue).toHaveBeenCalledWith(routeJob(album.id));
     });
 
+    it('merges a stop that lacks nothing the next one has', async () => {
+      const { sut, auth, album, assetIds, trip } = await setup();
+      const [start, a, , c] = trip.stops;
+      await sut.updateStop(auth, album.id, a.id, stopChanges({ title: 'A' }));
+
+      const edited = await sut.mergeNextStop(auth, album.id, a.id);
+
+      expect(edited.stops.map(({ id }) => id)).toEqual([start.id, a.id, c.id]);
+      expect(edited.stops[1]).toMatchObject({ title: 'A' });
+      expect(filed(edited, a.id)).toEqual(assetIds.slice(0, 5));
+    });
+
     it('refuses the start, and the last stop', async () => {
       const { sut, auth, album, trip } = await setup();
 
