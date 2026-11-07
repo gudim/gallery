@@ -89,6 +89,23 @@ void main() {
     expect(result?.title, 'Biržai');
   });
 
+  testWidgets('clearing the search drops the answer of a search still on its way', (tester) async {
+    when(() => repository.searchPlaces('album', 'Bir')).thenAnswer((_) async {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      return [_place('Biržai', 56.2, 24.75)];
+    });
+    await open(tester);
+
+    await tester.enterText(find.byKey(const ValueKey('trip-point-search')), 'Bir');
+    await tester.pump(const Duration(milliseconds: 500));
+    verify(() => repository.searchPlaces('album', 'Bir')).called(1);
+    await tester.enterText(find.byKey(const ValueKey('trip-point-search')), '');
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Biržai'), findsNothing);
+  });
+
   testWidgets('a point tapped on the map takes the name Nominatim gives it', (tester) async {
     when(
       () => repository.reversePlace('album', 56.2, 24.75),

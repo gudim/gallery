@@ -70,7 +70,9 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
   final _query = TextEditingController();
   final _name = TextEditingController();
   MapLibreMapController? _controller;
-  Symbol? _marker;
+
+  /// Added once; a tap while it is still being added waits for it.
+  Future<Symbol?>? _marker;
   LatLng? _point;
   List<TripGeoPlaceDto> _places = const [];
   bool _isSearching = false;
@@ -97,6 +99,8 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
     _searchTimer?.cancel();
     final text = value.trim();
     if (text.isEmpty) {
+      // A search still on its way answers a query that is gone.
+      _searchId++;
       setState(() {
         _places = const [];
         _isSearching = false;
@@ -165,9 +169,13 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
     }
     final marker = _marker;
     if (marker == null) {
-      _marker = await controller.addMarkerAtLatLng(point);
-    } else {
-      await controller.updateSymbol(marker, SymbolOptions(geometry: point));
+      _marker = controller.addMarkerAtLatLng(point);
+      await _marker;
+      return;
+    }
+    final symbol = await marker;
+    if (symbol != null) {
+      await controller.updateSymbol(symbol, SymbolOptions(geometry: point));
     }
   }
 
