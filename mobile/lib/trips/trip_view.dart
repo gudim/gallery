@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:immich_mobile/extensions/string_extensions.dart';
 import 'package:openapi/api.dart';
 
 // What the trip screen shows, derived from the trip read and the album's assets (trips PLAN §2.9). Ported from
@@ -561,12 +562,15 @@ enum TripPlaceSort { frames, name }
 
 /// The places of a Places trip as its list shows them (web TripPanel `places`): most frames first, or by name, ties by
 /// id so the order holds between reads. Only edit mode lists a place without assets.
+// A letter with a diacritic sorts with its base letter, near the web's localeCompare: Ėriškiai among the E's.
+String _nameKey(String title) => title.toLowerCase().removeDiacritics();
+
 List<TripViewStop> tripPlaces(TripView view, TripPlaceSort sort, {required bool isEditing}) {
   final places = view.stops.where((stop) => isEditing || stop.photos.isNotEmpty).toList();
   return places..sort((a, b) {
     final order = switch (sort) {
       TripPlaceSort.frames => b.photos.length.compareTo(a.photos.length),
-      TripPlaceSort.name => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      TripPlaceSort.name => _nameKey(a.title).compareTo(_nameKey(b.title)),
     };
     return order != 0 ? order : a.id.compareTo(b.id);
   });

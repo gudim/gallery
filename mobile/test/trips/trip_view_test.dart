@@ -216,6 +216,8 @@ void main() {
       places.stops = places.stops.where((stop) => stop.role == null && stop.isTransit != true).toList();
       places.stops.firstWhere((stop) => stop.id == 'c').title = 'Anykščiai';
       places.stops.firstWhere((stop) => stop.id == 'd').title = 'Zarasai';
+      // Sorted among the E's, as the web's localeCompare does, not after the Z.
+      places.stops.firstWhere((stop) => stop.id == 'b').title = 'Ėriškiai';
       final view = buildTripView(places, _assets);
       List<String> ids(TripPlaceSort sort, {bool isEditing = false}) =>
           tripPlaces(view, sort, isEditing: isEditing).map((stop) => stop.id).toList();
