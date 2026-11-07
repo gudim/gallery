@@ -30,6 +30,10 @@ class TripsApiRepository extends ApiRepository {
     }
   }
 
+  /// Makes a trip of the album; the server lays it out and names its stops in `language` (web TripCreateModal).
+  Future<void> createTrip(String albumId, TripKind kind, String? language) =>
+      checkNull(_api.createTrip(TripCreateDto(albumId: albumId, kind: kind, language: Optional.present(language))));
+
   /// Every asset of the album the caller may see, with exif, oldest first (web trip-data.ts loadAlbumAssets).
   Future<List<AssetResponseDto>> getAlbumAssets(String albumId) async {
     final assets = <AssetResponseDto>[];

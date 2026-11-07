@@ -7,7 +7,7 @@ import 'package:immich_mobile/trips/trip_album_menu_item.dart';
 
 import '../widget_tester_extensions.dart';
 
-final _album = RemoteAlbum(
+RemoteAlbum _album({int assetCount = 79}) => RemoteAlbum(
   id: 'album-1',
   name: 'Biržai',
   ownerId: 'owner',
@@ -16,15 +16,22 @@ final _album = RemoteAlbum(
   updatedAt: DateTime(2026, 1, 1),
   isActivityEnabled: false,
   order: AlbumAssetOrder.desc,
-  assetCount: 79,
+  assetCount: assetCount,
   ownerName: 'Owner',
   isShared: false,
 );
 
-Future<void> _openMenu(WidgetTester tester, {required bool hasTrip}) async {
+Future<void> _openMenu(WidgetTester tester, {required bool? hasTrip, bool isOwner = false, int assetCount = 79}) async {
+  final album = _album(assetCount: assetCount);
   await tester.pumpConsumerWidget(
-    RemoteAlbumOption(extraItems: [TripAlbumMenuItem(album: _album)]),
-    overrides: [tripExistsProvider(_album.id).overrideWith((ref) async => hasTrip)],
+    RemoteAlbumOption(
+      extraItems: [TripAlbumMenuItem(album: album, isOwner: isOwner)],
+    ),
+    overrides: [
+      tripExistsProvider(
+        album.id,
+      ).overrideWith((ref) => hasTrip == null ? Future<bool>.error(Exception('offline')) : Future.value(hasTrip)),
+    ],
   );
   await tester.tap(find.byIcon(Icons.more_vert_rounded));
   await tester.pumpAndSettle();
@@ -32,14 +39,36 @@ Future<void> _openMenu(WidgetTester tester, {required bool hasTrip}) async {
 
 void main() {
   testWidgets('offers "Open the trip" when the album has a trip', (tester) async {
-    await _openMenu(tester, hasTrip: true);
+    await _openMenu(tester, hasTrip: true, isOwner: true);
 
     expect(find.byKey(const ValueKey('trip-open')), findsOneWidget);
+    expect(find.byKey(const ValueKey('trip-create')), findsNothing);
   });
 
-  testWidgets('offers nothing when the album has no trip', (tester) async {
+  testWidgets('offers "Make a trip" to the owner of an album without a trip', (tester) async {
+    await _openMenu(tester, hasTrip: false, isOwner: true);
+
+    expect(find.byKey(const ValueKey('trip-create')), findsOneWidget);
+    expect(find.byKey(const ValueKey('trip-open')), findsNothing);
+  });
+
+  testWidgets('offers nothing to anyone else when the album has no trip', (tester) async {
     await _openMenu(tester, hasTrip: false);
 
     expect(find.byKey(const ValueKey('trip-open')), findsNothing);
+    expect(find.byKey(const ValueKey('trip-create')), findsNothing);
+  });
+
+  testWidgets('offers no trip of an empty album', (tester) async {
+    await _openMenu(tester, hasTrip: false, isOwner: true, assetCount: 0);
+
+    expect(find.byKey(const ValueKey('trip-create')), findsNothing);
+  });
+
+  testWidgets('offers nothing while it is unknown whether the album has a trip', (tester) async {
+    await _openMenu(tester, hasTrip: null, isOwner: true);
+
+    expect(find.byKey(const ValueKey('trip-open')), findsNothing);
+    expect(find.byKey(const ValueKey('trip-create')), findsNothing);
   });
 }
