@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trips test builds (trips.gradle): their own name, so they are told apart from Gallery on the phone. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <application android:label="Gallery Trips" tools:replace="android:label" />
+</manifest>
