@@ -15,6 +15,7 @@ class RemoteAlbumOption extends StatelessWidget {
     this.onEditAlbum,
     this.onShowOptions,
     this.onLinkToSpace,
+    this.extraItems = const [],
     this.iconColor,
     this.iconShadows,
   });
@@ -32,6 +33,9 @@ class RemoteAlbumOption extends StatelessWidget {
   /// the selected space. Null hides the menu item (gated to owned albums by
   /// the caller, mirroring the other owner-only options here).
   final VoidCallback? onLinkToSpace;
+
+  /// Fork menu items, added after the others (trips: "Open the trip").
+  final List<Widget> extraItems;
   final Color? iconColor;
   final List<Shadow>? iconShadows;
 
@@ -117,6 +121,8 @@ class RemoteAlbumOption extends StatelessWidget {
         ),
       );
     }
+
+    menuChildren.addAll(extraItems);
 
     if (onDeleteAlbum != null) {
       menuChildren.add(const Divider(height: 1));

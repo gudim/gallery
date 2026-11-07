@@ -1,0 +1,9 @@
+// Trips test builds (trips PLAN §2.9): `TRIPS_BUILD=1 flutter build apk --release` gives an app with its own
+// application id, so it installs next to Gallery from the Play store. Applied by one line in build.gradle.
+if (System.getenv("TRIPS_BUILD")) {
+  android.buildTypes.release {
+    applicationIdSuffix ".trips"
+    versionNameSuffix "-trips"
+    resValue "string", "app_name", "Gallery Trips"
+  }
+}

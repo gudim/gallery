@@ -120,6 +120,8 @@ dependencies {
   implementation libs.material
 }
 
+apply from: 'trips.gradle'
+
 // This is uncommented in F-Droid build script
 //f configurations.all {
 //f     exclude group: 'com.google.android.gms'
