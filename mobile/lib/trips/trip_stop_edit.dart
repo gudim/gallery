@@ -114,6 +114,8 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     if (!isLeaving) {
       setState(() => _saveState = _SaveState.saving);
     }
+    // Leaving the stop calls this from dispose or didUpdateWidget, while the tree builds; the trip may change after it.
+    await Future<void>.delayed(Duration.zero);
     final isSaved = await _editor.run((albumId) => _repository.updateStop(albumId, id, change));
     // The owner may have left, or opened another stop meanwhile; its texts are not these.
     if (!mounted) {
