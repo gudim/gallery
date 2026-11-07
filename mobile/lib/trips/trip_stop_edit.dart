@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_point.page.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:immich_mobile/widgets/common/confirm_dialog.dart';
@@ -12,8 +13,7 @@ import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:openapi/api.dart';
 
 // The opened stop in edit mode (trips PLAN §2.9), after web TripStopEdit.svelte: its title and story, saved a second
-// after typing stops, and what can be done to it. The actions that pick a point (the start's or finish's place, a point
-// after this one, moving the pin) come with the point picker.
+// after typing stops, and what can be done to it.
 
 class TripStopEdit extends ConsumerStatefulWidget {
   final TripData data;
@@ -22,7 +22,16 @@ class TripStopEdit extends ConsumerStatefulWidget {
   /// The stop is gone (merged, deleted, or folded into the way)
   final VoidCallback onGone;
 
-  const TripStopEdit({super.key, required this.data, required this.item, required this.onGone});
+  /// Puts a fixed pin for the stop on the map, to pan the map under
+  final void Function(TripViewStop stop) onMovePin;
+
+  const TripStopEdit({
+    super.key,
+    required this.data,
+    required this.item,
+    required this.onGone,
+    required this.onMovePin,
+  });
 
   @override
   ConsumerState<TripStopEdit> createState() => _TripStopEditState();
@@ -141,6 +150,41 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
   ) async {
     if (await _run(edit)) {
       widget.onGone();
+    }
+  }
+
+  Future<TripPoint?> _pickPoint(String title) {
+    final (latitude, longitude) = switch (widget.item) {
+      TripViewStop(:final latitude, :final longitude) => (latitude, longitude),
+      TripTransit(:final latitude, :final longitude) => (latitude, longitude),
+      _ => (null, null),
+    };
+    return showTripPointPage(
+      context,
+      albumId: _view.albumId,
+      title: title,
+      latitude: latitude,
+      longitude: longitude,
+      isNamed: true,
+    );
+  }
+
+  Future<void> _changeEnd(TripStopRole role) async {
+    final t = context.t;
+    final point = await _pickPoint(role == TripStopRole.start ? t.trips_start : t.trips_finish);
+    if (point != null && mounted) {
+      await _run(
+        (repository, albumId) =>
+            role == TripStopRole.start ? repository.setStart(albumId, point) : repository.setFinish(albumId, point),
+      );
+    }
+  }
+
+  Future<void> _addPointAfter(TripStopRole? role) async {
+    final point = await _pickPoint(context.t.trips_add_point);
+    if (point != null && mounted) {
+      final afterStopId = role == TripStopRole.start ? null : widget.item.id;
+      await _run((repository, albumId) => repository.addPoint(albumId, point, afterStopId));
     }
   }
 
@@ -274,6 +318,13 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
           spacing: 8,
           runSpacing: 4,
           children: [
+            if (role != null)
+              action(
+                t.trips_change_place,
+                Icons.edit_location_alt_outlined,
+                () => unawaited(_changeEnd(role)),
+                key: const ValueKey('trip-change-place'),
+              ),
             if (role == TripStopRole.finish && stop?.stop.isFinishAtStart != true)
               action(
                 t.trips_finish_at_start,
@@ -293,6 +344,13 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
 
                 key: const ValueKey('trip-remove-end'),
               ),
+            if (stop != null && role == null && hasMap && stop.latitude != null && stop.longitude != null)
+              action(
+                t.trips_move_pin,
+                Icons.open_with,
+                () => widget.onMovePin(stop),
+                key: const ValueKey('trip-move-pin'),
+              ),
             if (stop != null && role == null && hasMap && stop.stop.isPositionManual && hasAssets)
               action(
                 t.trips_pin_to_assets,
@@ -306,6 +364,13 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
                     ),
                   ),
                 ),
+              ),
+            if (isRoute && (role == TripStopRole.start || (stop != null && role == null)))
+              action(
+                t.trips_add_point_after,
+                Icons.add_location_alt_outlined,
+                () => unawaited(_addPointAfter(role)),
+                key: const ValueKey('trip-add-point'),
               ),
             if (stop != null && role == null && hasAssets) ...[
               action(
