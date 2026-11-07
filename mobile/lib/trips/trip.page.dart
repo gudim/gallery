@@ -57,33 +57,25 @@ class _TripPageState extends ConsumerState<TripPage> {
   /// Assets picked in the open stop's grid in edit mode (web assetMultiSelectManager)
   Set<String> _picked = const {};
 
-  void _open(TripItem item) => setState(() {
-    _openId = item.id;
-    _openLegId = null;
-    _moving = null;
-    _picked = const {};
-  });
-
-  void _openLeg(String legId) => setState(() {
-    _openId = null;
+  /// Shows an item, a leg, or the whole trip when both are null; a pin move and picked assets are left behind.
+  void _show({String? itemId, String? legId}) => setState(() {
+    _openId = itemId;
     _openLegId = legId;
     _moving = null;
     _picked = const {};
   });
 
-  void _back() => setState(() {
-    _openId = null;
-    _openLegId = null;
-    _moving = null;
-    _picked = const {};
-  });
+  void _open(TripItem item) => _show(itemId: item.id);
 
-  void _toggleEditing() => setState(() {
-    _isEditing = !_isEditing;
-    _openLegId = null;
-    _moving = null;
-    _picked = const {};
-  });
+  void _openLeg(String legId) => _show(legId: legId);
+
+  void _back() => _show();
+
+  // The open item stays open; a leg is opened in edit mode only.
+  void _toggleEditing() {
+    setState(() => _isEditing = !_isEditing);
+    _show(itemId: _openId);
+  }
 
   void _togglePicked(String assetId) => setState(() {
     _picked = _picked.contains(assetId) ? ({..._picked}..remove(assetId)) : {..._picked, assetId};
@@ -218,10 +210,12 @@ class _TripPageState extends ConsumerState<TripPage> {
       openLeg: openLeg,
       onOpenLeg: _openLeg,
       isEditing: _isEditing,
-      picked: picked,
-      onPick: _togglePicked,
-      onPickAll: (ids) => setState(() => _picked = ids.toSet()),
-      onClearPicked: () => setState(() => _picked = const {}),
+      picking: _Picking(
+        ids: picked,
+        toggle: _togglePicked,
+        only: (ids) => setState(() => _picked = ids.toSet()),
+        clear: () => setState(() => _picked = const {}),
+      ),
       controller: controller,
       onOpen: _open,
       onBack: _back,
@@ -386,6 +380,18 @@ class _Message extends StatelessWidget {
   }
 }
 
+/// Assets picked in the open stop's grid in edit mode (web assetMultiSelectManager), and the ways to change them.
+class _Picking {
+  final List<String> ids;
+  final void Function(String assetId) toggle;
+
+  /// Picks just these assets, as a place hint's "Select" does
+  final void Function(List<String> assetIds) only;
+  final VoidCallback clear;
+
+  const _Picking({required this.ids, required this.toggle, required this.only, required this.clear});
+}
+
 class _TripPanel extends ConsumerWidget {
   final TripData data;
   final TripItem? openItem;
@@ -395,13 +401,7 @@ class _TripPanel extends ConsumerWidget {
   final void Function(String legId) onOpenLeg;
   final bool isEditing;
 
-  /// Assets picked in the open stop's grid
-  final List<String> picked;
-  final void Function(String assetId) onPick;
-
-  /// Picks just these assets, as a place hint's "Select" does
-  final void Function(List<String> assetIds) onPickAll;
-  final VoidCallback onClearPicked;
+  final _Picking picking;
   final ScrollController? controller;
   final void Function(TripItem item) onOpen;
   final VoidCallback onBack;
@@ -413,10 +413,7 @@ class _TripPanel extends ConsumerWidget {
     required this.openLeg,
     required this.onOpenLeg,
     required this.isEditing,
-    required this.picked,
-    required this.onPick,
-    required this.onPickAll,
-    required this.onClearPicked,
+    required this.picking,
     required this.controller,
     required this.onOpen,
     required this.onBack,
@@ -499,7 +496,7 @@ class _TripPanel extends ConsumerWidget {
                         ],
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
                         if (item is TripUnplaced && isEditing && view.kind == TripKind.places)
-                          TripPlaceHints(data: data, onSelect: onPickAll, onMoved: onClearPicked),
+                          TripPlaceHints(data: data, onSelect: picking.only, onMoved: picking.clear),
                         if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),
                         if (isEditing && item.photos.isNotEmpty) ...[
@@ -523,7 +520,7 @@ class _TripPanel extends ConsumerWidget {
           else
             SliverPadding(
               // Room for the action bar over the last row while assets are picked.
-              padding: EdgeInsets.fromLTRB(2, 0, 2, picked.isEmpty ? 24 : 96),
+              padding: EdgeInsets.fromLTRB(2, 0, 2, picking.ids.isEmpty ? 24 : 96),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 120,
@@ -535,10 +532,10 @@ class _TripPanel extends ConsumerWidget {
                   return _Thumbnail(
                     data: data,
                     photo: photo,
-                    isPicked: picked.contains(photo.id),
+                    isPicked: picking.ids.contains(photo.id),
                     // In edit mode a long press picks, and while anything is picked a tap does too, as in Gallery.
-                    onPick: !isEditing ? null : () => onPick(photo.id),
-                    isPicking: picked.isNotEmpty,
+                    onPick: !isEditing ? null : () => picking.toggle(photo.id),
+                    isPicking: picking.ids.isNotEmpty,
                   );
                 }),
               ),
