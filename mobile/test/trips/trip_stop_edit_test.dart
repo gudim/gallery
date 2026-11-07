@@ -72,7 +72,7 @@ void main() {
             return const SizedBox.shrink();
           }
           return SingleChildScrollView(
-            child: TripStopEdit(data: data, item: item, onGone: () => gone++),
+            child: TripStopEdit(data: data, item: item, onGone: () => gone++, onMovePin: (_) {}),
           );
         },
       ),

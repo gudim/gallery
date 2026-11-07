@@ -56,7 +56,21 @@ class TripMap extends StatefulWidget {
   /// Space the bottom sheet covers, so fitting the route keeps it visible.
   final double bottomPadding;
 
-  const TripMap({super.key, required this.view, required this.onOpen, this.focused, this.bottomPadding = 0});
+  /// A stop's pin being moved: the map centres here, and a fixed pin at its centre marks where the map is panned to.
+  final LatLng? pin;
+
+  /// Where the fixed pin points once the map stops moving.
+  final ValueChanged<LatLng>? onPinMoved;
+
+  const TripMap({
+    super.key,
+    required this.view,
+    required this.onOpen,
+    this.focused,
+    this.bottomPadding = 0,
+    this.pin,
+    this.onPinMoved,
+  });
 
   @override
   State<TripMap> createState() => _TripMapState();
@@ -83,6 +97,19 @@ class _TripMapState extends State<TripMap> {
     }
     if (old.focused?.id != widget.focused?.id) {
       unawaited(_focus());
+    }
+    final pin = widget.pin;
+    if (old.pin == null && pin != null) {
+      final zoom = math.max(_controller?.cameraPosition?.zoom ?? 15, 15).toDouble();
+      unawaited(_controller?.animateCamera(CameraUpdate.newLatLngZoom(pin, zoom)));
+    }
+  }
+
+  void _onCameraIdle() {
+    unawaited(_updateBadges());
+    final target = _controller?.cameraPosition?.target;
+    if (widget.pin != null && target != null) {
+      widget.onPinMoved?.call(target);
     }
   }
 
@@ -394,7 +421,7 @@ class _TripMapState extends State<TripMap> {
   @override
   Widget build(BuildContext context) {
     _ratio = MediaQuery.devicePixelRatioOf(context);
-    return MapThemeOverride(
+    final map = MapThemeOverride(
       mapBuilder: (style) => style.widgetWhen(
         onData: (style) => MapLibreMap(
           initialCameraPosition: const CameraPosition(target: LatLng(0, 0), zoom: 1),
@@ -405,10 +432,34 @@ class _TripMapState extends State<TripMap> {
           styleString: style,
           onMapCreated: _onMapCreated,
           onStyleLoadedCallback: () => unawaited(_onStyleLoaded()),
-          onCameraIdle: () => unawaited(_updateBadges()),
+          onCameraIdle: _onCameraIdle,
           attributionButtonPosition: AttributionButtonPosition.bottomRight,
         ),
       ),
+    );
+    if (widget.pin == null) {
+      return map;
+    }
+    const pinSize = 48.0;
+    return Stack(
+      children: [
+        Positioned.fill(child: map),
+        // The pin's tip sits on the map's centre; the map is panned under it.
+        IgnorePointer(
+          child: Center(
+            child: Transform.translate(
+              offset: const Offset(0, -pinSize / 2),
+              child: Icon(
+                Icons.location_on,
+                key: const ValueKey('trip-pin'),
+                size: pinSize,
+                color: Theme.of(context).colorScheme.primary,
+                shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

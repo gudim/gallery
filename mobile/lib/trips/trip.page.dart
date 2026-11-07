@@ -16,6 +16,9 @@ import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
+import 'package:immich_mobile/trips/trips_api.repository.dart';
+import 'package:immich_mobile/widgets/common/immich_toast.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 // A trip on the phone (trips PLAN §2.9), after web/src/lib/trips/components/TripPage.svelte and TripPanel.svelte:
@@ -42,9 +45,51 @@ class _TripPageState extends ConsumerState<TripPage> {
   String? _openId;
   bool _isEditing = false;
 
-  void _open(TripItem item) => setState(() => _openId = item.id);
+  /// The stop whose pin is being moved, and where the map's centre points now (web TripPage `moving`)
+  ({String stopId, LatLng at})? _moving;
 
-  void _back() => setState(() => _openId = null);
+  void _open(TripItem item) => setState(() {
+    _openId = item.id;
+    _moving = null;
+  });
+
+  void _back() => setState(() {
+    _openId = null;
+    _moving = null;
+  });
+
+  void _toggleEditing() => setState(() {
+    _isEditing = !_isEditing;
+    _moving = null;
+  });
+
+  void _startMoving(TripViewStop stop) {
+    final (latitude, longitude) = (stop.latitude, stop.longitude);
+    if (latitude != null && longitude != null) {
+      setState(() => _moving = (stopId: stop.id, at: LatLng(latitude, longitude)));
+    }
+  }
+
+  // Written only when the owner saves it, as travel-album's pin move waited for confirmation.
+  Future<void> _saveMoving() async {
+    final moving = _moving;
+    if (moving == null) {
+      return;
+    }
+    final message = context.t.trips_edit_failed;
+    final repository = ref.read(tripsApiRepositoryProvider);
+    final isSaved = await ref
+        .read(tripDataProvider(widget.albumId).notifier)
+        .run((albumId) => repository.moveStop(albumId, moving.stopId, moving.at.latitude, moving.at.longitude));
+    if (!mounted) {
+      return;
+    }
+    if (isSaved) {
+      setState(() => _moving = null);
+    } else {
+      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,9 +98,14 @@ class _TripPageState extends ConsumerState<TripPage> {
     ref.watch(tripLikesProvider(widget.albumId));
 
     return PopScope(
-      canPop: _openId == null,
+      canPop: _openId == null && _moving == null,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
+        if (didPop) {
+          return;
+        }
+        if (_moving != null) {
+          setState(() => _moving = null);
+        } else {
           _back();
         }
       },
@@ -70,13 +120,13 @@ class _TripPageState extends ConsumerState<TripPage> {
                       tooltip: context.t.done,
                       // The app bar paints its icons in the primary colour, the button's own fill.
                       icon: Icon(Icons.check, color: context.colorScheme.onPrimary),
-                      onPressed: () => setState(() => _isEditing = false),
+                      onPressed: _toggleEditing,
                     )
                   : IconButton(
                       key: const ValueKey('trip-edit-toggle'),
                       tooltip: context.t.edit,
                       icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => setState(() => _isEditing = true),
+                      onPressed: _toggleEditing,
                     ),
             const SizedBox(width: 8),
           ],
@@ -104,7 +154,42 @@ class _TripPageState extends ConsumerState<TripPage> {
       controller: controller,
       onOpen: _open,
       onBack: _back,
+      onMovePin: _startMoving,
     );
+
+    final moving = _moving;
+    Widget map({double bottomPadding = 0}) => TripMap(
+      view: view,
+      onOpen: _open,
+      focused: openItem,
+      bottomPadding: moving == null ? bottomPadding : 0,
+      pin: moving?.at,
+      onPinMoved: (at) {
+        final current = _moving;
+        if (current != null) {
+          setState(() => _moving = (stopId: current.stopId, at: at));
+        }
+      },
+    );
+    Widget withPinBar(Widget map) => moving == null
+        ? map
+        : Stack(
+            children: [
+              Positioned.fill(child: map),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 24,
+                child: SafeArea(
+                  child: _PinBar(
+                    isBusy: data.isBusy,
+                    onCancel: () => setState(() => _moving = null),
+                    onSave: _saveMoving,
+                  ),
+                ),
+              ),
+            ],
+          );
 
     if (view.kind == TripKind.plain) {
       return panel(null);
@@ -115,10 +200,7 @@ class _TripPageState extends ConsumerState<TripPage> {
         if (constraints.maxWidth >= _wideWidth) {
           return Row(
             children: [
-              Expanded(
-                flex: 2,
-                child: TripMap(view: view, onOpen: _open, focused: openItem),
-              ),
+              Expanded(flex: 2, child: withPinBar(map())),
               const VerticalDivider(width: 1),
               Expanded(child: panel(null)),
             ],
@@ -126,16 +208,13 @@ class _TripPageState extends ConsumerState<TripPage> {
         }
         // In edit mode the stop's fields take two thirds of the screen, as on the web.
         final initialSize = _isEditing ? 0.67 : 0.45;
+        // While a pin moves, the map takes the whole screen.
+        if (moving != null) {
+          return withPinBar(map());
+        }
         return Stack(
           children: [
-            Positioned.fill(
-              child: TripMap(
-                view: view,
-                onOpen: _open,
-                focused: openItem,
-                bottomPadding: constraints.maxHeight * initialSize,
-              ),
-            ),
+            Positioned.fill(child: map(bottomPadding: constraints.maxHeight * initialSize)),
             DraggableScrollableSheet(
               key: ValueKey(_isEditing),
               initialChildSize: initialSize,
@@ -172,6 +251,42 @@ class _TripPageState extends ConsumerState<TripPage> {
   }
 }
 
+class _PinBar extends StatelessWidget {
+  final bool isBusy;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+
+  const _PinBar({required this.isBusy, required this.onCancel, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        key: const ValueKey('trip-pin-bar'),
+        elevation: 6,
+        color: context.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 6, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: Text(context.t.trips_pan_to_pin)),
+              const SizedBox(width: 8),
+              TextButton(onPressed: onCancel, child: Text(context.t.cancel)),
+              FilledButton(
+                key: const ValueKey('trip-pin-save'),
+                onPressed: isBusy ? null : onSave,
+                child: Text(context.t.save),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Message extends StatelessWidget {
   final String text;
   final VoidCallback? onRetry;
@@ -205,6 +320,7 @@ class _TripPanel extends ConsumerWidget {
   final ScrollController? controller;
   final void Function(TripItem item) onOpen;
   final VoidCallback onBack;
+  final void Function(TripViewStop stop) onMovePin;
 
   const _TripPanel({
     required this.data,
@@ -213,6 +329,7 @@ class _TripPanel extends ConsumerWidget {
     required this.controller,
     required this.onOpen,
     required this.onBack,
+    required this.onMovePin,
   });
 
   TripView get view => data.view;
@@ -251,7 +368,7 @@ class _TripPanel extends ConsumerWidget {
                         Text(tripItemMeta(t, item, view, lang).join(' · '), style: muted),
                         if (isEditing && item is! TripUnplaced) ...[
                           const SizedBox(height: 12),
-                          TripStopEdit(data: data, item: item, onGone: onBack),
+                          TripStopEdit(data: data, item: item, onGone: onBack, onMovePin: onMovePin),
                         ] else if (item is TripViewStop && item.story.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(item.story, maxLines: 6, overflow: TextOverflow.ellipsis),

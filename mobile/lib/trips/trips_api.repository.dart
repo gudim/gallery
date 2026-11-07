@@ -82,4 +82,64 @@ class TripsApiRepository extends ApiRepository {
   Future<TripResponseDto> removeStart(String albumId) => checkNull(_api.removeStart(albumId));
 
   Future<TripResponseDto> removeFinish(String albumId) => checkNull(_api.removeFinish(albumId));
+
+  /// Moves a stop's pin; the stop keeps the point by hand until it is pinned back to its assets.
+  Future<TripResponseDto> moveStop(String albumId, String stopId, double latitude, double longitude) => checkNull(
+    _api.updateStop(
+      albumId,
+      stopId,
+      TripStopUpdateDto(latitude: Optional.present(latitude), longitude: Optional.present(longitude)),
+    ),
+  );
+
+  /// Sets the route's start; an empty title is left to naming.
+  Future<TripResponseDto> setStart(String albumId, TripPoint point) => checkNull(
+    _api.setStart(
+      albumId,
+      TripEndDto(latitude: point.latitude, longitude: point.longitude, title: Optional.present(point.titleOrNull)),
+    ),
+  );
+
+  Future<TripResponseDto> setFinish(String albumId, TripPoint point) => checkNull(
+    _api.setFinish(
+      albumId,
+      TripFinishUpdateDto(
+        latitude: Optional.present(point.latitude),
+        longitude: Optional.present(point.longitude),
+        title: Optional.present(point.titleOrNull),
+      ),
+    ),
+  );
+
+  /// Adds a point by hand right after `afterStopId`, or right after the start when null.
+  Future<TripResponseDto> addPoint(String albumId, TripPoint point, String? afterStopId) => checkNull(
+    _api.addPoint(
+      albumId,
+      TripPointCreateDto(
+        latitude: point.latitude,
+        longitude: point.longitude,
+        title: Optional.present(point.titleOrNull),
+        afterStopId: Optional.present(afterStopId),
+      ),
+    ),
+  );
+
+  /// Places Nominatim finds for `query`, in the trip's language.
+  Future<List<TripGeoPlaceDto>> searchPlaces(String albumId, String query) async =>
+      (await checkNull(_api.searchTripPlaces(albumId, query))).places;
+
+  /// The place at a point, in the trip's language.
+  Future<List<TripGeoPlaceDto>> reversePlace(String albumId, double latitude, double longitude) async =>
+      (await checkNull(_api.reverseTripPlace(albumId, latitude, longitude))).places;
+}
+
+/// A point picked for a trip: a stop's place, or an asset's point by hand (web TripPointModal `TripPoint`).
+class TripPoint {
+  final double latitude;
+  final double longitude;
+  final String title;
+
+  const TripPoint({required this.latitude, required this.longitude, this.title = ''});
+
+  String? get titleOrNull => title.isEmpty ? null : title;
 }
