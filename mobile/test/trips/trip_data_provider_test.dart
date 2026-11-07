@@ -115,6 +115,30 @@ void main() {
     expect(calls, 3);
   });
 
+  test('follows a clock shift for a while, and reads the assets again with the first trip that changed', () {
+    fakeAsync((async) {
+      var calls = 0;
+      // The shift lands on the third read after it; nothing is pending, so only follow() keeps reading.
+      when(() => repository.getTrip('album')).thenAnswer((_) async => _trip(contentVersion: calls++ < 3 ? 1 : 2));
+      final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+      final subscription = container.listen(tripDataProvider('album'), (_, _) {});
+      async.flushMicrotasks();
+      verify(() => repository.getAlbumAssets('album')).called(1);
+
+      container.read(tripDataProvider('album').notifier).follow();
+      async.elapse(const Duration(seconds: 12));
+      expect(container.read(tripDataProvider('album')).valueOrNull?.trip.contentVersion, 2);
+      verify(() => repository.getAlbumAssets('album')).called(1);
+
+      // It stops after about two minutes.
+      async.elapse(const Duration(minutes: 5));
+      expect(calls, 1 + TripDataNotifier.followPolls);
+      verifyNever(() => repository.getAlbumAssets('album'));
+      subscription.close();
+      container.dispose();
+    });
+  });
+
   group('run', () {
     test('shows the trip an edit answers', () async {
       when(() => repository.getTrip('album')).thenAnswer((_) async => _trip());

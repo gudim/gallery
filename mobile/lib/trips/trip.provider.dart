@@ -46,7 +46,14 @@ final tripExistsProvider = FutureProvider.autoDispose.family<bool, String>((ref,
 class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String> {
   static const pollInterval = Duration(seconds: 4);
 
+  /// Reads after a clock shift, while the assets' metadata is read again: about two minutes (web FOLLOW_POLLS).
+  static const followPolls = 30;
+
   Timer? _timer;
+  int _followPolls = 0;
+
+  /// The assets' dates moved since they were read, so the next changed trip reads them again.
+  bool _isAssetsStale = false;
   bool _isDisposed = false;
   List<TripAssetInfo> _infos = const [];
   Map<String, RemoteAsset> _assets = const {};
@@ -62,11 +69,26 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
     if (trip == null) {
       return null;
     }
-    final assets = await repository.getAlbumAssets(albumId);
-    _infos = assets.map(tripAssetInfo).toList();
-    _assets = {for (final asset in assets) asset.id: asset.toDto()};
+    await _readAssets(repository);
     _schedule(trip);
     return _show(trip);
+  }
+
+  Future<void> _readAssets(TripsApiRepository repository) async {
+    final assets = await repository.getAlbumAssets(arg);
+    _infos = assets.map(tripAssetInfo).toList();
+    _assets = {for (final asset in assets) asset.id: asset.toDto()};
+  }
+
+  /// Reads the trip again for a while after a change it learns of later, such as the dates a clock shift moved; the
+  /// assets are read again with the first trip that changed.
+  void follow() {
+    _followPolls = followPolls;
+    _isAssetsStale = true;
+    final trip = state.valueOrNull?.trip;
+    if (trip != null) {
+      _schedule(trip);
+    }
   }
 
   TripData _show(TripResponseDto trip, {bool isBusy = false}) =>
@@ -101,15 +123,17 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
   void _schedule(TripResponseDto trip) {
     _timer?.cancel();
     final isRouting = trip.legs.any((leg) => leg.status == TripLegStatus.pending);
-    if (isRouting || trip.isNaming) {
+    if (isRouting || trip.isNaming || _followPolls > 0) {
       _timer = Timer(pollInterval, () => unawaited(_poll(trip)));
     }
   }
 
   Future<void> _poll(TripResponseDto polled) async {
     var next = polled;
+    _followPolls = _followPolls > 0 ? _followPolls - 1 : 0;
     try {
-      final trip = await ref.read(tripsApiRepositoryProvider).getTrip(arg);
+      final repository = ref.read(tripsApiRepositoryProvider);
+      final trip = await repository.getTrip(arg);
       if (_isDisposed) {
         return;
       }
@@ -118,6 +142,18 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
       next = shown;
       if (trip != null && !_isBusy) {
         if (trip.contentVersion != shown.contentVersion) {
+          if (_isAssetsStale) {
+            await _readAssets(repository);
+            _isAssetsStale = false;
+            if (_isDisposed) {
+              return;
+            }
+            // An edit started meanwhile answers with a newer trip, shown with these assets.
+            if (_isBusy) {
+              _schedule(trip);
+              return;
+            }
+          }
           state = AsyncData(_show(trip));
         }
         next = trip;

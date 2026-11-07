@@ -201,6 +201,18 @@ class TripsApiRepository extends ApiRepository {
   /// Routes again every leg that could not be routed.
   Future<TripResponseDto> retryLegs(String albumId) => checkNull(_api.retryLegs(albumId));
 
+  /// The album's cameras, with a suggested clock shift for those without GPS (trips PLAN D9).
+  Future<List<TripCameraDto>> getCameras(String albumId) async =>
+      (await checkNull(_api.getTripCameras(albumId))).cameras;
+
+  /// Shifts the dates of the caller's own assets by whole minutes, through Immich's bulk asset update.
+  Future<void> shiftDates(List<String> assetIds, int minutes) => _apiService.assetsApi.updateAssets(
+    AssetBulkUpdateDto(ids: assetIds, dateTimeRelative: Optional.present(minutes)),
+  );
+
+  /// Places offered to the Unplaced assets of a Places trip.
+  Future<TripPlaceHintsDto> getPlaceHints(String albumId) => checkNull(_api.getTripPlaceHints(albumId));
+
   /// Places Nominatim finds for `query`, in the trip's language.
   Future<List<TripGeoPlaceDto>> searchPlaces(String albumId, String query) async =>
       (await checkNull(_api.searchTripPlaces(albumId, query))).places;

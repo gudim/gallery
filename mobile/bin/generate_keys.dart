@@ -103,6 +103,7 @@ const _kParamTypeOverrides = <String, String>{
   'backup_controller_page_storage_format.used': 'String',
   'cleanup_found_assets_with_size.size': 'String',
   'trips_range.year': 'String', // a year, not a number to group ("2,026")
+  'trips_clock_suggestion.offset': 'String', // a signed label, "−39 min"
 };
 
 final _usedParamTypeOverrides = <String>{};

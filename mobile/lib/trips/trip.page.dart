@@ -13,8 +13,10 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_asset_actions.dart';
+import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trip_leg_edit.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
+import 'package:immich_mobile/trips/trip_place_hints.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
@@ -223,6 +225,8 @@ class _TripPageState extends ConsumerState<TripPage> {
       isEditing: _isEditing,
       picked: picked,
       onPick: _togglePicked,
+      onPickAll: (ids) => setState(() => _picked = ids.toSet()),
+      onClearPicked: () => setState(() => _picked = const {}),
       controller: controller,
       onOpen: _open,
       onBack: _back,
@@ -398,6 +402,10 @@ class _TripPanel extends ConsumerWidget {
   /// Assets picked in the open stop's grid
   final List<String> picked;
   final void Function(String assetId) onPick;
+
+  /// Picks just these assets, as a place hint's "Select" does
+  final void Function(List<String> assetIds) onPickAll;
+  final VoidCallback onClearPicked;
   final ScrollController? controller;
   final void Function(TripItem item) onOpen;
   final VoidCallback onBack;
@@ -411,6 +419,8 @@ class _TripPanel extends ConsumerWidget {
     required this.isEditing,
     required this.picked,
     required this.onPick,
+    required this.onPickAll,
+    required this.onClearPicked,
     required this.controller,
     required this.onOpen,
     required this.onBack,
@@ -493,6 +503,8 @@ class _TripPanel extends ConsumerWidget {
                           Text(item.story, maxLines: 6, overflow: TextOverflow.ellipsis),
                         ],
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
+                        if (item is TripUnplaced && isEditing && view.kind == TripKind.places)
+                          TripPlaceHints(data: data, onSelect: onPickAll, onMoved: onClearPicked),
                         if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),
                         if (isEditing && item.photos.isNotEmpty) ...[
@@ -545,14 +557,29 @@ class _TripPanel extends ConsumerWidget {
                 children: [
                   Text(tripRangeLine(t, view, lang), key: const ValueKey('trip-range')),
                   Text(tripStatsLine(t, view, lang), key: const ValueKey('trip-stats'), style: muted),
-                  if (isEditing && attentionCount > 0) ...[
+                  if (isEditing) ...[
                     const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      key: const ValueKey('trip-retry-legs'),
-                      onPressed: data.isBusy ? null : () => unawaited(_retryLegs(context, ref)),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: Text(t.trips_retry_legs(count: attentionCount)),
-                      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                    Wrap(
+                      key: const ValueKey('trip-route-actions'),
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const ValueKey('trip-clock'),
+                          onPressed: () => unawaited(showTripClockPage(context, view.albumId)),
+                          icon: const Icon(Icons.more_time, size: 18),
+                          label: Text(t.trips_clock),
+                          style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                        ),
+                        if (attentionCount > 0)
+                          OutlinedButton.icon(
+                            key: const ValueKey('trip-retry-legs'),
+                            onPressed: data.isBusy ? null : () => unawaited(_retryLegs(context, ref)),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: Text(t.trips_retry_legs(count: attentionCount)),
+                            style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                          ),
+                      ],
                     ),
                   ],
                 ],
