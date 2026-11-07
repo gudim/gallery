@@ -13,6 +13,9 @@ import 'package:openapi/api.dart';
 // A leg in edit mode (trips PLAN §2.9), after web TripLegEdit.svelte: its mode, a train's stations near both ends, and
 // a retry when routing failed. A trail is drawn by an overlay, so it is never offered as a mode.
 
+/// Where a station stands
+typedef _StationPoint = ({double? latitude, double? longitude});
+
 class TripLegEdit extends ConsumerStatefulWidget {
   final TripData data;
   final TripLegDto leg;
@@ -43,8 +46,8 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
   /// The leg and mode the stations were asked for; the leg object is replaced by every read of the trip.
   String? _stationsFor;
 
-  /// Bumped when an edit fails, so the fields show the leg as it is again rather than what was picked.
-  int _resets = 0;
+  /// Bumped when an edit fails, so the fields are built anew and show the leg as it is rather than what was picked.
+  int _failedEdits = 0;
 
   TripLegDto get _leg => widget.leg;
 
@@ -91,11 +94,12 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
 
   Future<void> _run(TripEdit edit) async {
     if (!await runTripEdit(context, ref, widget.data.view.albumId, edit) && mounted) {
-      setState(() => _resets++);
+      setState(() => _failedEdits++);
     }
   }
 
-  static String _stationKey(double? latitude, double? longitude) => '$latitude,$longitude';
+  /// Where a station stands, which tells the leg's station apart among those listed
+  static _StationPoint _pointOf(TripStationDto station) => (latitude: station.latitude, longitude: station.longitude);
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +114,7 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
       children: [
         // A field shows its own pick until it is built anew: keyed by what the server holds.
         KeyedSubtree(
-          key: ValueKey('${leg.isModeManual ? leg.mode.toJson() : _auto}-$_resets'),
+          key: ValueKey('${leg.isModeManual ? leg.mode.toJson() : _auto}-$_failedEdits'),
           child: DropdownButtonFormField<String>(
             key: const ValueKey('trip-leg-mode'),
             isExpanded: true,
@@ -197,14 +201,14 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
         label: t.trips_station_departure,
         list: stations.departure,
         name: leg.departureName,
-        key: _stationKey(leg.departureLatitude, leg.departureLongitude),
+        point: (latitude: leg.departureLatitude, longitude: leg.departureLongitude),
       ),
       (
         side: TripStationSide.arrival,
         label: t.trips_station_arrival,
         list: stations.arrival,
         name: leg.arrivalName,
-        key: _stationKey(leg.arrivalLatitude, leg.arrivalLongitude),
+        point: (latitude: leg.arrivalLatitude, longitude: leg.arrivalLongitude),
       ),
     ];
     return [
@@ -215,18 +219,16 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
             child: Text(t.trips_station_none, style: muted),
           )
         else
-          DropdownButtonFormField<String>(
-            key: ValueKey('trip-leg-station-${end.side.toJson()}-${end.key}-$_resets'),
+          DropdownButtonFormField<_StationPoint>(
+            key: ValueKey(('trip-leg-station', end.side, end.point, _failedEdits)),
             isExpanded: true,
-            initialValue: end.list.any((station) => _stationKey(station.latitude, station.longitude) == end.key)
-                ? end.key
-                : null,
+            initialValue: end.list.any((station) => _pointOf(station) == end.point) ? end.point : null,
             hint: Text(end.name ?? t.trips_station_pick),
             decoration: InputDecoration(labelText: end.label),
             items: [
               for (final station in end.list)
                 DropdownMenuItem(
-                  value: _stationKey(station.latitude, station.longitude),
+                  value: _pointOf(station),
                   child: Text(
                     '${station.name.isEmpty ? t.trips_station_unnamed : station.name} · '
                     '${t.trips_km(km: (station.distance / 1000).toStringAsFixed(1))}',
@@ -236,10 +238,8 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
             ],
             onChanged: isBusy
                 ? null
-                : (key) {
-                    final station = end.list
-                        .where((station) => _stationKey(station.latitude, station.longitude) == key)
-                        .firstOrNull;
+                : (point) {
+                    final station = end.list.where((station) => _pointOf(station) == point).firstOrNull;
                     if (station != null) {
                       unawaited(
                         _run((repository, albumId) => repository.setLegStation(albumId, leg.id, end.side, station)),
