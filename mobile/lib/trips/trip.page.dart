@@ -13,6 +13,7 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_asset_actions.dart';
+import 'package:immich_mobile/trips/trip_leg_edit.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
@@ -46,6 +47,9 @@ class _TripPageState extends ConsumerState<TripPage> {
   String? _openId;
   bool _isEditing = false;
 
+  /// The leg opened in edit mode (web TripPage `openLegId`)
+  String? _openLegId;
+
   /// The stop whose pin is being moved, and where the map's centre points now (web TripPage `moving`)
   ({String stopId, LatLng at})? _moving;
 
@@ -54,18 +58,28 @@ class _TripPageState extends ConsumerState<TripPage> {
 
   void _open(TripItem item) => setState(() {
     _openId = item.id;
+    _openLegId = null;
+    _moving = null;
+    _picked = const {};
+  });
+
+  void _openLeg(String legId) => setState(() {
+    _openId = null;
+    _openLegId = legId;
     _moving = null;
     _picked = const {};
   });
 
   void _back() => setState(() {
     _openId = null;
+    _openLegId = null;
     _moving = null;
     _picked = const {};
   });
 
   void _toggleEditing() => setState(() {
     _isEditing = !_isEditing;
+    _openLegId = null;
     _moving = null;
     _picked = const {};
   });
@@ -117,7 +131,7 @@ class _TripPageState extends ConsumerState<TripPage> {
     ref.watch(tripLikesProvider(widget.albumId));
 
     return PopScope(
-      canPop: _openId == null && _moving == null && _picked.isEmpty,
+      canPop: _openId == null && _openLegId == null && _moving == null && _picked.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           return;
@@ -200,9 +214,12 @@ class _TripPageState extends ConsumerState<TripPage> {
   Widget _layout(BuildContext context, TripData data, TripItem? openItem, List<String> picked) {
     final view = data.view;
 
+    final openLeg = _isEditing ? data.trip.legs.where((leg) => leg.id == _openLegId).firstOrNull : null;
     Widget panel(ScrollController? controller) => _TripPanel(
       data: data,
       openItem: openItem,
+      openLeg: openLeg,
+      onOpenLeg: _openLeg,
       isEditing: _isEditing,
       picked: picked,
       onPick: _togglePicked,
@@ -371,6 +388,10 @@ class _Message extends StatelessWidget {
 class _TripPanel extends ConsumerWidget {
   final TripData data;
   final TripItem? openItem;
+
+  /// The leg opened in edit mode
+  final TripLegDto? openLeg;
+  final void Function(String legId) onOpenLeg;
   final bool isEditing;
 
   /// Assets picked in the open stop's grid
@@ -384,6 +405,8 @@ class _TripPanel extends ConsumerWidget {
   const _TripPanel({
     required this.data,
     required this.openItem,
+    required this.openLeg,
+    required this.onOpenLeg,
     required this.isEditing,
     required this.picked,
     required this.onPick,
@@ -402,12 +425,46 @@ class _TripPanel extends ConsumerWidget {
     final item = openItem;
     final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
     final isSheet = controller != null;
+    final leg = openLeg;
+    final attentionCount = data.trip.legs.where((leg) => leg.status == TripLegStatus.attention).length;
 
     return CustomScrollView(
       controller: controller,
       slivers: [
         if (isSheet) const SliverToBoxAdapter(child: _Handle()),
-        if (item != null) ...[
+        if (leg != null)
+          SliverToBoxAdapter(
+            key: const ValueKey('trip-leg'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextButton.icon(
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: Text(t.trips_back_route),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          '${_stopName(t, leg.fromStopId)} → ${_stopName(t, leg.toStopId)}',
+                          style: context.textTheme.titleMedium,
+                        ),
+                        Text(tripLegLine(t, leg), style: muted),
+                        const SizedBox(height: 16),
+                        TripLegEdit(data: data, leg: leg),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (item != null) ...[
           SliverToBoxAdapter(
             key: const ValueKey('trip-stop'),
             child: Padding(
@@ -487,6 +544,16 @@ class _TripPanel extends ConsumerWidget {
                 children: [
                   Text(tripRangeLine(t, view, lang), key: const ValueKey('trip-range')),
                   Text(tripStatsLine(t, view, lang), key: const ValueKey('trip-stats'), style: muted),
+                  if (isEditing && attentionCount > 0) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const ValueKey('trip-retry-legs'),
+                      onPressed: data.isBusy ? null : () => unawaited(_retryLegs(context, ref)),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(t.trips_retry_legs(count: attentionCount)),
+                      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -497,6 +564,20 @@ class _TripPanel extends ConsumerWidget {
         ],
       ],
     );
+  }
+
+  String _stopName(Translations t, String stopId) {
+    final stop = view.stops.where((stop) => stop.id == stopId).firstOrNull;
+    return stop == null ? '' : tripRowTitle(t, stop);
+  }
+
+  Future<void> _retryLegs(BuildContext context, WidgetRef ref) async {
+    final message = context.t.trips_edit_failed;
+    final repository = ref.read(tripsApiRepositoryProvider);
+    final isDone = await ref.read(tripDataProvider(view.albumId).notifier).run(repository.retryLegs);
+    if (!isDone && context.mounted) {
+      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
+    }
   }
 
   List<Widget> _rows(BuildContext context, String lang) {
@@ -538,8 +619,10 @@ class _TripPanel extends ConsumerWidget {
                 ),
               );
             }
-            for (final leg in view.legs.where((leg) => leg.leg.fromStopId == stop.id)) {
-              rows.add(_LegRow(leg: leg.leg));
+            // In edit mode every leg is listed, a leg still being routed included.
+            final legs = isEditing ? data.trip.legs : view.legs.map((leg) => leg.leg);
+            for (final leg in legs.where((leg) => leg.fromStopId == stop.id)) {
+              rows.add(_LegRow(leg: leg, onTap: isEditing ? () => onOpenLeg(leg.id) : null));
             }
           }
         }
@@ -709,13 +792,16 @@ class _ItemRow extends StatelessWidget {
 class _LegRow extends StatelessWidget {
   final TripLegDto leg;
 
-  const _LegRow({required this.leg});
+  /// Opens the leg; null outside edit mode
+  final VoidCallback? onTap;
+
+  const _LegRow({required this.leg, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+    final row = Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: onTap == null ? 2 : 8),
       child: Row(
         children: [
           SizedBox(
@@ -723,9 +809,19 @@ class _LegRow extends StatelessWidget {
             child: Icon(tripModeIcon(leg.mode), size: 16, color: context.colorScheme.onSurfaceVariant),
           ),
           Expanded(child: Text(tripLegLine(context.t, leg), style: muted)),
+          if (onTap != null && leg.status == TripLegStatus.pending)
+            const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
+          else if (onTap != null && leg.status == TripLegStatus.attention)
+            Icon(
+              Icons.error_outline,
+              size: 16,
+              color: context.colorScheme.error,
+              semanticLabel: context.t.trips_leg_attention,
+            ),
         ],
       ),
     );
+    return onTap == null ? row : InkWell(key: ValueKey('trip-leg-row-${leg.id}'), onTap: onTap, child: row);
   }
 }
 
