@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/extensions/asset_extensions.dart';
@@ -34,19 +36,70 @@ final tripExistsProvider = FutureProvider.autoDispose.family<bool, String>((ref,
 });
 
 /// The album's trip, or null when it has none. Only a trip album pays for loading every asset (web trip-data.ts).
-final tripDataProvider = FutureProvider.autoDispose.family<TripData?, String>((ref, albumId) async {
-  final repository = ref.watch(tripsApiRepositoryProvider);
-  final trip = await repository.getTrip(albumId);
-  if (trip == null) {
-    return null;
+///
+/// While the server still names stops or routes legs, the trip is read again every few seconds and shown anew when
+/// its content changed (web trip-editor.svelte.ts); the assets are not read again.
+class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String> {
+  static const pollInterval = Duration(seconds: 4);
+
+  Timer? _timer;
+  bool _isDisposed = false;
+  List<TripAssetInfo> _infos = const [];
+  Map<String, RemoteAsset> _assets = const {};
+
+  @override
+  Future<TripData?> build(String albumId) async {
+    ref.onDispose(() {
+      _isDisposed = true;
+      _timer?.cancel();
+    });
+    final repository = ref.watch(tripsApiRepositoryProvider);
+    final trip = await repository.getTrip(albumId);
+    if (trip == null) {
+      return null;
+    }
+    final assets = await repository.getAlbumAssets(albumId);
+    _infos = assets.map(tripAssetInfo).toList();
+    _assets = {for (final asset in assets) asset.id: asset.toDto()};
+    _schedule(trip);
+    return _show(trip);
   }
-  final assets = await repository.getAlbumAssets(albumId);
-  return TripData(
-    trip: trip,
-    view: buildTripView(trip, assets.map(tripAssetInfo).toList()),
-    assets: {for (final asset in assets) asset.id: asset.toDto()},
-  );
-});
+
+  TripData _show(TripResponseDto trip) => TripData(trip: trip, view: buildTripView(trip, _infos), assets: _assets);
+
+  void _schedule(TripResponseDto trip) {
+    _timer?.cancel();
+    final isRouting = trip.legs.any((leg) => leg.status == TripLegStatus.pending);
+    if (isRouting || trip.isNaming) {
+      _timer = Timer(pollInterval, () => unawaited(_poll(trip)));
+    }
+  }
+
+  Future<void> _poll(TripResponseDto shown) async {
+    var next = shown;
+    try {
+      final trip = await ref.read(tripsApiRepositoryProvider).getTrip(arg);
+      if (_isDisposed) {
+        return;
+      }
+      if (trip != null) {
+        if (trip.contentVersion != shown.contentVersion) {
+          state = AsyncData(_show(trip));
+        }
+        next = trip;
+      }
+    } catch (_) {
+      // A failed read waits for the next one.
+    }
+    if (!_isDisposed) {
+      _schedule(next);
+    }
+  }
+}
+
+final tripDataProvider = AsyncNotifierProvider.autoDispose.family<TripDataNotifier, TripData?, String>(
+  TripDataNotifier.new,
+);
 
 class TripLike {
   final int count;

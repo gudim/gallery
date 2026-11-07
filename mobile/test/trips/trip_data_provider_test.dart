@@ -1,0 +1,111 @@
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trips_api.repository.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:openapi/api.dart';
+
+// Ported from the polling cases of web/src/lib/trips/trip-editor.spec.ts.
+
+class _MockTripsApiRepository extends Mock implements TripsApiRepository {}
+
+TripLegDto _leg(TripLegStatus status) => TripLegDto(
+  id: 'leg',
+  fromStopId: 'a',
+  toStopId: 'b',
+  mode: TripLegMode.driving,
+  isModeManual: false,
+  status: status,
+  polyline: null,
+  distance: null,
+  duration: null,
+  departureName: null,
+  departureLatitude: null,
+  departureLongitude: null,
+  arrivalName: null,
+  arrivalLatitude: null,
+  arrivalLongitude: null,
+);
+
+TripResponseDto _trip({int contentVersion = 1, bool isNaming = false, List<TripLegDto> legs = const []}) =>
+    TripResponseDto(
+      albumId: 'album',
+      kind: TripKind.route,
+      isFavorites: false,
+      isShowcased: false,
+      isFeatured: false,
+      isNaming: isNaming,
+      language: null,
+      contentVersion: contentVersion,
+      legs: legs,
+    );
+
+void main() {
+  late _MockTripsApiRepository repository;
+
+  setUp(() {
+    repository = _MockTripsApiRepository();
+    when(() => repository.getAlbumAssets('album')).thenAnswer((_) async => []);
+  });
+
+  /// Opens the trip, lets `seconds` pass, and returns how often the trip was read and the trip shown last.
+  (int, TripResponseDto?) run(List<TripResponseDto> reads, int seconds) {
+    late (int, TripResponseDto?) result;
+    fakeAsync((async) {
+      var calls = 0;
+      when(() => repository.getTrip('album')).thenAnswer((_) async => reads[(calls++).clamp(0, reads.length - 1)]);
+      final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+      final subscription = container.listen(tripDataProvider('album'), (_, _) {});
+      async.flushMicrotasks();
+      async.elapse(Duration(seconds: seconds));
+      result = (calls, container.read(tripDataProvider('album')).valueOrNull?.trip);
+      subscription.close();
+      container.dispose();
+    });
+    return result;
+  }
+
+  test('reads the trip again while a leg is routed, and shows the new one', () {
+    final (calls, shown) = run([
+      _trip(legs: [_leg(TripLegStatus.pending)]),
+      _trip(contentVersion: 2, legs: [_leg(TripLegStatus.ok)]),
+    ], 30);
+
+    expect(calls, 2);
+    expect(shown?.contentVersion, 2);
+  });
+
+  test('reads the trip again while stops are being named, though nothing a guest sees changed', () {
+    final (calls, _) = run([_trip(isNaming: true), _trip(isNaming: true), _trip()], 30);
+
+    expect(calls, 3);
+  });
+
+  test('does not read a trip with nothing pending', () {
+    final (calls, _) = run([_trip()], 30);
+
+    expect(calls, 1);
+  });
+
+  test('keeps reading after a failed read', () {
+    var calls = 0;
+    fakeAsync((async) {
+      when(() => repository.getTrip('album')).thenAnswer((_) async {
+        calls++;
+        if (calls == 2) {
+          throw ApiException(500, 'down');
+        }
+        return _trip(isNaming: calls < 3, contentVersion: calls);
+      });
+      final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+      final subscription = container.listen(tripDataProvider('album'), (_, _) {});
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 30));
+      expect(container.read(tripDataProvider('album')).valueOrNull?.trip.contentVersion, 3);
+      subscription.close();
+      container.dispose();
+    });
+    expect(calls, 3);
+  });
+}
