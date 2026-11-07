@@ -37,14 +37,20 @@ String tripOffsetLabel(Translations t, int offset) {
       (hours > 0 ? t.trips_duration_hours(hours: hours, minutes: rest) : t.trips_duration_minutes(minutes: rest));
 }
 
+/// A camera as the page tells cameras apart: its make and model, and whether it shot videos.
+typedef _CameraId = ({String? make, String? model, bool isVideo});
+
 class _TripClockPageState extends ConsumerState<TripClockPage> {
   List<TripCameraDto>? _cameras;
-  final _minutes = <String, TextEditingController>{};
+  final _minutes = <_CameraId, TextEditingController>{};
 
   /// The camera whose shift is on its way
-  String? _applying;
+  _CameraId? _applying;
 
-  static String _keyOf(TripCameraDto camera) => '${camera.make}|${camera.model}|${camera.isVideo}';
+  static _CameraId _idOf(TripCameraDto camera) => (make: camera.make, model: camera.model, isVideo: camera.isVideo);
+
+  /// The camera in its widgets' keys
+  static String _tagOf(TripCameraDto camera) => '${camera.make}|${camera.model}|${camera.isVideo}';
 
   @override
   void initState() {
@@ -69,7 +75,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
       setState(() {
         _cameras = cameras;
         for (final camera in cameras) {
-          _minutes[_keyOf(camera)] = TextEditingController(text: '${camera.suggestion?.offsetMinutes ?? 0}');
+          _minutes[_idOf(camera)] = TextEditingController(text: '${camera.suggestion?.offsetMinutes ?? 0}');
         }
       });
     } catch (_) {
@@ -80,7 +86,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
     }
   }
 
-  int? _offsetOf(TripCameraDto camera) => int.tryParse(_minutes[_keyOf(camera)]?.text.trim() ?? '');
+  int? _offsetOf(TripCameraDto camera) => int.tryParse(_minutes[_idOf(camera)]?.text.trim() ?? '');
 
   // A whole number of minutes other than none, on assets of the caller's own.
   bool _canShift(TripCameraDto camera) {
@@ -94,7 +100,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
       return;
     }
     final t = context.t;
-    setState(() => _applying = _keyOf(camera));
+    setState(() => _applying = _idOf(camera));
     try {
       await ref.read(tripsApiRepositoryProvider).shiftDates(camera.ownAssetIds, offset);
       ref.read(tripDataProvider(widget.albumId).notifier).follow();
@@ -141,7 +147,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                 final others = camera.assetCount - camera.ownAssetIds.length;
                 final suggestion = camera.suggestion;
                 return Column(
-                  key: ValueKey('trip-camera-${_keyOf(camera)}'),
+                  key: ValueKey('trip-camera-${_tagOf(camera)}'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_nameOf(t, camera), style: context.textTheme.titleSmall),
@@ -174,8 +180,8 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                           SizedBox(
                             width: 160,
                             child: TextField(
-                              key: ValueKey('trip-camera-minutes-${_keyOf(camera)}'),
-                              controller: _minutes[_keyOf(camera)],
+                              key: ValueKey('trip-camera-minutes-${_tagOf(camera)}'),
+                              controller: _minutes[_idOf(camera)],
                               enabled: camera.ownAssetIds.isNotEmpty && _applying == null,
                               keyboardType: const TextInputType.numberWithOptions(signed: true),
                               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
@@ -185,9 +191,9 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                           ),
                           const SizedBox(width: 12),
                           FilledButton(
-                            key: ValueKey('trip-camera-shift-${_keyOf(camera)}'),
+                            key: ValueKey('trip-camera-shift-${_tagOf(camera)}'),
                             onPressed: _canShift(camera) ? () => unawaited(_shift(camera)) : null,
-                            child: _applying == _keyOf(camera)
+                            child: _applying == _idOf(camera)
                                 ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
                                 : Text(t.trips_clock_apply),
                           ),
