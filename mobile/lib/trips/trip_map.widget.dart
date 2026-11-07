@@ -305,11 +305,7 @@ class _TripMapState extends State<TripMap> {
 
     final stops = <Map<String, Object?>>[];
     for (final item in _view.order) {
-      final (latitude, longitude) = switch (item) {
-        TripViewStop(:final latitude, :final longitude) => (latitude, longitude),
-        TripTransit(:final latitude, :final longitude) => (latitude, longitude),
-        TripUnplaced() => (null, null),
-      };
+      final (latitude, longitude) = (item.latitude, item.longitude);
       if (latitude == null || longitude == null || item.photos.isEmpty) {
         continue;
       }
@@ -474,11 +470,7 @@ class _TripMapState extends State<TripMap> {
   }
 
   Future<void> _focus() async {
-    final (latitude, longitude) = switch (widget.focused) {
-      TripViewStop(:final latitude, :final longitude) => (latitude, longitude),
-      TripTransit(:final latitude, :final longitude) => (latitude, longitude),
-      _ => (null, null),
-    };
+    final (latitude, longitude) = (widget.focused?.latitude, widget.focused?.longitude);
     final controller = _controller;
     if (controller == null || latitude == null || longitude == null) {
       return;

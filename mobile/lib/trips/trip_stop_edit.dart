@@ -145,17 +145,12 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
   }
 
   Future<TripPoint?> _pickPoint(String title) {
-    final (latitude, longitude) = switch (widget.item) {
-      TripViewStop(:final latitude, :final longitude) => (latitude, longitude),
-      TripTransit(:final latitude, :final longitude) => (latitude, longitude),
-      _ => (null, null),
-    };
     return showTripPointPage(
       context,
       albumId: _view.albumId,
       title: title,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: widget.item.latitude,
+      longitude: widget.item.longitude,
       isNamed: true,
     );
   }
