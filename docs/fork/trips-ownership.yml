@@ -61,6 +61,7 @@ features:
       - mobile/lib/trips/**
       - mobile/test/trips/**
       - mobile/android/app/trips.gradle
+      - mobile/android/app/src/trips/**
       - web/src/routes/(user)/trips/**
       - web/src/routes/(user)/share/[key]/trip/**
       - web/src/routes/(user)/s/[slug]/trip/**
