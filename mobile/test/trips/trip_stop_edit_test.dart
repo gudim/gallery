@@ -61,14 +61,15 @@ void main() {
     when(() => repository.getAlbumAssets('album')).thenAnswer((_) async => []);
   });
 
-  Future<void> open(WidgetTester tester, TripResponseDto trip, String stopId) async {
+  Future<void> open(WidgetTester tester, TripResponseDto trip, String stopId, {ValueNotifier<bool>? isOpen}) async {
     when(() => repository.getTrip('album')).thenAnswer((_) async => trip);
+    final shown = isOpen ?? ValueNotifier(true);
     await tester.pumpConsumerWidget(
       Consumer(
         builder: (context, ref, _) {
           final data = ref.watch(tripDataProvider('album')).valueOrNull;
           final item = data?.view.stops.where((stop) => stop.id == stopId).firstOrNull;
-          if (data == null || item == null) {
+          if (data == null || item == null || !shown.value) {
             return const SizedBox.shrink();
           }
           return SingleChildScrollView(
@@ -127,6 +128,26 @@ void main() {
     verify(() => repository.updateStop('album', 'a', any())).called(1);
     expect(sent?.title.orElse(null), 'Biržai');
     expect(sent?.story.isPresent, isFalse);
+  });
+
+  testWidgets('saves the typed title when the stop is closed before the second is up', (tester) async {
+    final isOpen = ValueNotifier(true);
+    when(
+      () => repository.updateStop('album', 'a', any()),
+    ).thenAnswer((_) async => _trip([_stop('a', title: 'Biržai')], contentVersion: 2));
+    await open(tester, _trip([_stop('a')]), 'a', isOpen: isOpen);
+
+    await tester.enterText(find.byKey(const ValueKey('trip-stop-title')), 'Biržai');
+    await tester.pump(const Duration(milliseconds: 300));
+    isOpen.value = false;
+    // The Consumer listens to the provider only; rebuild it the way the page does when the stop closes.
+    tester.element(find.byType(Consumer)).markNeedsBuild();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(TripStopEdit), findsNothing);
+    verify(() => repository.updateStop('album', 'a', any())).called(1);
   });
 
   testWidgets('a start has no story, and offers its removal', (tester) async {
