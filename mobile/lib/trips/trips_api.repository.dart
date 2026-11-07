@@ -58,4 +58,28 @@ class TripsApiRepository extends ApiRepository {
   Future<TripLikeDto> like(String albumId, String assetId) => checkNull(_api.likeAsset(assetId, albumId));
 
   Future<TripLikeDto> unlike(String albumId, String assetId) => checkNull(_api.unlikeAsset(assetId, albumId));
+
+  // Edits (trips PLAN §2.5): each answers with the whole trip.
+
+  Future<TripResponseDto> updateStop(String albumId, String stopId, TripStopUpdateDto change) =>
+      checkNull(_api.updateStop(albumId, stopId, change));
+
+  Future<TripResponseDto> deleteStop(String albumId, String stopId) => checkNull(_api.deleteStop(albumId, stopId));
+
+  Future<TripResponseDto> mergeNextStop(String albumId, String stopId) =>
+      checkNull(_api.mergeNextStop(albumId, stopId));
+
+  /// Moves a point added by hand right after `afterStopId`, or right after the start when null.
+  Future<TripResponseDto> movePoint(String albumId, String stopId, String? afterStopId) =>
+      checkNull(_api.movePoint(albumId, stopId, TripPointOrderDto(afterStopId: afterStopId)));
+
+  Future<TripResponseDto> setTransit(String albumId, List<String> stopIds, bool isTransit) =>
+      checkNull(_api.setTransit(albumId, TripTransitUpdateDto(stopIds: stopIds, isTransit: isTransit)));
+
+  Future<TripResponseDto> setFinishAtStart(String albumId) =>
+      checkNull(_api.setFinish(albumId, TripFinishUpdateDto(isFinishAtStart: const Optional.present(true))));
+
+  Future<TripResponseDto> removeStart(String albumId) => checkNull(_api.removeStart(albumId));
+
+  Future<TripResponseDto> removeFinish(String albumId) => checkNull(_api.removeFinish(albumId));
 }

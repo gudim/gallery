@@ -13,6 +13,7 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_map.widget.dart';
+import 'package:immich_mobile/trips/trip_stop_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:openapi/api.dart';
@@ -26,7 +27,10 @@ class TripPage extends ConsumerStatefulWidget {
   final String albumId;
   final String title;
 
-  const TripPage({super.key, required this.albumId, required this.title});
+  /// The album's owner or an editor (D7): the page offers edit mode.
+  final bool canEdit;
+
+  const TripPage({super.key, required this.albumId, required this.title, this.canEdit = false});
 
   @override
   ConsumerState<TripPage> createState() => _TripPageState();
@@ -36,6 +40,7 @@ class _TripPageState extends ConsumerState<TripPage> {
   static const _wideWidth = 600.0;
 
   String? _openId;
+  bool _isEditing = false;
 
   void _open(TripItem item) => setState(() => _openId = item.id);
 
@@ -55,7 +60,27 @@ class _TripPageState extends ConsumerState<TripPage> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(widget.title)),
+        appBar: AppBar(
+          title: Text(widget.title),
+          actions: [
+            if (widget.canEdit && data.valueOrNull != null)
+              _isEditing
+                  ? IconButton.filled(
+                      key: const ValueKey('trip-edit-toggle'),
+                      tooltip: context.t.done,
+                      // The app bar paints its icons in the primary colour, the button's own fill.
+                      icon: Icon(Icons.check, color: context.colorScheme.onPrimary),
+                      onPressed: () => setState(() => _isEditing = false),
+                    )
+                  : IconButton(
+                      key: const ValueKey('trip-edit-toggle'),
+                      tooltip: context.t.edit,
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => setState(() => _isEditing = true),
+                    ),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: data.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => _Message(
@@ -72,8 +97,14 @@ class _TripPageState extends ConsumerState<TripPage> {
     final view = data.view;
     final openItem = _openId == null ? null : _find(view, _openId!);
 
-    Widget panel(ScrollController? controller) =>
-        _TripPanel(data: data, openItem: openItem, controller: controller, onOpen: _open, onBack: _back);
+    Widget panel(ScrollController? controller) => _TripPanel(
+      data: data,
+      openItem: openItem,
+      isEditing: _isEditing,
+      controller: controller,
+      onOpen: _open,
+      onBack: _back,
+    );
 
     if (view.kind == TripKind.plain) {
       return panel(null);
@@ -93,7 +124,8 @@ class _TripPageState extends ConsumerState<TripPage> {
             ],
           );
         }
-        const initialSize = 0.45;
+        // In edit mode the stop's fields take two thirds of the screen, as on the web.
+        final initialSize = _isEditing ? 0.67 : 0.45;
         return Stack(
           children: [
             Positioned.fill(
@@ -105,11 +137,12 @@ class _TripPageState extends ConsumerState<TripPage> {
               ),
             ),
             DraggableScrollableSheet(
+              key: ValueKey(_isEditing),
               initialChildSize: initialSize,
               minChildSize: 0.15,
               maxChildSize: 0.95,
               snap: true,
-              snapSizes: const [initialSize],
+              snapSizes: [initialSize],
               builder: (context, controller) => Material(
                 color: context.colorScheme.surface,
                 elevation: 8,
@@ -168,6 +201,7 @@ class _Message extends StatelessWidget {
 class _TripPanel extends ConsumerWidget {
   final TripData data;
   final TripItem? openItem;
+  final bool isEditing;
   final ScrollController? controller;
   final void Function(TripItem item) onOpen;
   final VoidCallback onBack;
@@ -175,6 +209,7 @@ class _TripPanel extends ConsumerWidget {
   const _TripPanel({
     required this.data,
     required this.openItem,
+    required this.isEditing,
     required this.controller,
     required this.onOpen,
     required this.onBack,
@@ -214,7 +249,10 @@ class _TripPanel extends ConsumerWidget {
                       children: [
                         Text(tripItemTitle(t, item, view, lang), style: context.textTheme.titleLarge),
                         Text(tripItemMeta(t, item, view, lang).join(' · '), style: muted),
-                        if (item is TripViewStop && item.story.isNotEmpty) ...[
+                        if (isEditing && item is! TripUnplaced) ...[
+                          const SizedBox(height: 12),
+                          TripStopEdit(data: data, item: item, onGone: onBack),
+                        ] else if (item is TripViewStop && item.story.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(item.story, maxLines: 6, overflow: TextOverflow.ellipsis),
                         ],

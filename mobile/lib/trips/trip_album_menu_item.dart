@@ -42,7 +42,11 @@ class TripAlbumMenuItem extends ConsumerWidget {
     return const SizedBox.shrink();
   }
 
-  Future<void> _open(BuildContext context) => context.pushRoute(TripRoute(albumId: album.id, title: album.name));
+  /// The album's owner or an editor edits its trip (D7), as web `isAlbumEditor`.
+  bool get _canEdit => isOwner || album.currentUserRole == AlbumUserRole.editor;
+
+  Future<void> _open(BuildContext context) =>
+      context.pushRoute(TripRoute(albumId: album.id, title: album.name, canEdit: _canEdit));
 
   Future<void> _create(BuildContext context) async {
     // The menu closes and unmounts this item while the dialog is open, so take what is needed afterwards now.
@@ -53,6 +57,6 @@ class TripAlbumMenuItem extends ConsumerWidget {
     }
     container.invalidate(tripExistsProvider(album.id));
     container.invalidate(tripDataProvider(album.id));
-    await router.push(TripRoute(albumId: album.id, title: album.name));
+    await router.push(TripRoute(albumId: album.id, title: album.name, canEdit: true));
   }
 }
