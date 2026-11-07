@@ -208,6 +208,23 @@ void main() {
       expect(view.unplaced?.photos.map((photo) => photo.id).toList(), ['w1']);
       expect(view.order.last, isA<TripUnplaced>());
     });
+
+    test('lists places by frames with ties by id, or by name; edit mode lists empty places too', () {
+      final places = _trip()
+        ..kind = TripKind.places
+        ..legs = [];
+      places.stops = places.stops.where((stop) => stop.role == null && stop.isTransit != true).toList();
+      places.stops.firstWhere((stop) => stop.id == 'c').title = 'Anykščiai';
+      places.stops.firstWhere((stop) => stop.id == 'd').title = 'Zarasai';
+      final view = buildTripView(places, _assets);
+      List<String> ids(TripPlaceSort sort, {bool isEditing = false}) =>
+          tripPlaces(view, sort, isEditing: isEditing).map((stop) => stop.id).toList();
+
+      expect(ids(TripPlaceSort.frames), ['a', 'b', 'c']);
+      expect(ids(TripPlaceSort.frames, isEditing: true), ['a', 'b', 'c', 'd']);
+      expect(ids(TripPlaceSort.name), ['a', 'c', 'b']);
+      expect(ids(TripPlaceSort.name, isEditing: true), ['a', 'c', 'b', 'd']);
+    });
   });
 
   group('helpers', () {

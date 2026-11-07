@@ -199,7 +199,7 @@ class TripPanel extends ConsumerWidget {
             ),
           ),
           const SliverToBoxAdapter(child: Divider(height: 1)),
-          SliverList.list(children: _rows(context, lang)),
+          SliverList.list(children: _rows(context, lang, ref.watch(tripPlaceSortProvider(view.albumId)))),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ],
@@ -211,14 +211,18 @@ class TripPanel extends ConsumerWidget {
     return stop == null ? '' : tripRowTitle(t, stop);
   }
 
-  List<Widget> _rows(BuildContext context, String lang) {
+  List<Widget> _rows(BuildContext context, String lang, TripPlaceSort placeSort) {
     final t = context.t;
     final rows = <Widget>[];
     switch (view.kind) {
       case TripKind.places:
-        final places = view.stops.where((stop) => isEditing || stop.photos.isNotEmpty).toList()
-          ..sort((a, b) => b.photos.length.compareTo(a.photos.length));
-        rows.add(_Header(title: t.trips_places_title));
+        final places = tripPlaces(view, placeSort, isEditing: isEditing);
+        rows.add(
+          _Header(
+            title: t.trips_places_title,
+            sort: _PlaceSortToggle(albumId: view.albumId, sort: placeSort),
+          ),
+        );
         rows.addAll(places.map((stop) => _StopRow(stop: stop, isRoute: false, onOpen: onOpen)));
         final unplaced = view.unplaced;
         if (unplaced != null) {
@@ -306,13 +310,46 @@ class _Article extends StatelessWidget {
 class _Header extends StatelessWidget {
   final String title;
 
-  const _Header({required this.title});
+  /// Sits at the header's end
+  final Widget? sort;
+
+  const _Header({required this.title, this.sort});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(title, style: context.textTheme.titleSmall),
+      padding: EdgeInsets.fromLTRB(16, sort == null ? 12 : 4, 16, 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: context.textTheme.titleSmall)),
+          ?sort,
+        ],
+      ),
+    );
+  }
+}
+
+/// Lists places by frames or by name (web TripPanel's two sort buttons).
+class _PlaceSortToggle extends ConsumerWidget {
+  final String albumId;
+  final TripPlaceSort sort;
+
+  const _PlaceSortToggle({required this.albumId, required this.sort});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.t;
+    Widget choice(TripPlaceSort value, String label) => ChoiceChip(
+      key: ValueKey('trip-place-sort-${value.name}'),
+      label: Text(label),
+      selected: sort == value,
+      showCheckmark: false,
+      visualDensity: VisualDensity.compact,
+      onSelected: (_) => ref.read(tripPlaceSortProvider(albumId).notifier).state = value,
+    );
+    return Wrap(
+      spacing: 4,
+      children: [choice(TripPlaceSort.frames, t.trips_sort_frames), choice(TripPlaceSort.name, t.trips_sort_name)],
     );
   }
 }

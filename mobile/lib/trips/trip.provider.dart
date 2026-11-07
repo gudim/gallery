@@ -170,6 +170,11 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
   }
 }
 
+/// How the album's Places trip lists its places; kept while the trip is open, across edit mode and layouts.
+final tripPlaceSortProvider = StateProvider.autoDispose.family<TripPlaceSort, String>(
+  (ref, albumId) => TripPlaceSort.frames,
+);
+
 final tripDataProvider = AsyncNotifierProvider.autoDispose.family<TripDataNotifier, TripData?, String>(
   TripDataNotifier.new,
 );
