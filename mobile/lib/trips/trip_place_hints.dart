@@ -5,9 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
-import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:openapi/api.dart';
 
 // Places offered to the Unplaced assets of a Places trip by their likeness to assets with GPS (trips PLAN §2.9), after
@@ -71,19 +71,9 @@ class _TripPlaceHintsState extends ConsumerState<TripPlaceHints> {
     );
   }
 
-  Future<void> _run(Future<TripResponseDto> Function(TripsApiRepository repository, String albumId) edit) async {
-    final message = context.t.trips_edit_failed;
-    final repository = ref.read(tripsApiRepositoryProvider);
-    final isDone = await ref
-        .read(tripDataProvider(widget.data.view.albumId).notifier)
-        .run((albumId) => edit(repository, albumId));
-    if (!mounted) {
-      return;
-    }
-    if (isDone) {
+  Future<void> _run(TripEdit edit) async {
+    if (await runTripEdit(context, ref, widget.data.view.albumId, edit) && mounted) {
       widget.onMoved();
-    } else {
-      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
     }
   }
 

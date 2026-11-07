@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_point.page.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
@@ -45,7 +46,6 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
   final _title = TextEditingController();
   final _story = TextEditingController();
   late final TripDataNotifier _editor;
-  late final TripsApiRepository _repository;
   Timer? _timer;
   String _textStopId = '';
   ({String title, String story}) _saved = (title: '', story: '');
@@ -60,7 +60,6 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     super.initState();
     // Kept for the save that leaving the stop sends, when this widget's ref is gone.
     _editor = ref.read(tripDataProvider(_view.albumId).notifier);
-    _repository = ref.read(tripsApiRepositoryProvider);
     _loadTexts();
   }
 
@@ -116,7 +115,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     }
     // Leaving the stop calls this from dispose or didUpdateWidget, while the tree builds; the trip may change after it.
     await Future<void>.delayed(Duration.zero);
-    final isSaved = await _editor.run((albumId) => _repository.updateStop(albumId, id, change));
+    final isSaved = await _editor.run((repository, albumId) => repository.updateStop(albumId, id, change));
     // The owner may have left, or opened another stop meanwhile; its texts are not these.
     if (!mounted) {
       return;
@@ -137,19 +136,9 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
 
   void _toast(String message) => ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
 
-  /// Runs one edit and tells the user when it fails. Returns whether it went through.
-  Future<bool> _run(Future<TripResponseDto> Function(TripsApiRepository repository, String albumId) edit) async {
-    final message = context.t.trips_edit_failed;
-    final isDone = await _editor.run((albumId) => edit(_repository, albumId));
-    if (!isDone && mounted) {
-      _toast(message);
-    }
-    return isDone;
-  }
+  Future<bool> _run(TripEdit edit) => runTripEdit(context, ref, _view.albumId, edit);
 
-  Future<void> _runAndLeave(
-    Future<TripResponseDto> Function(TripsApiRepository repository, String albumId) edit,
-  ) async {
+  Future<void> _runAndLeave(TripEdit edit) async {
     if (await _run(edit)) {
       widget.onGone();
     }

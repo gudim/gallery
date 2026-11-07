@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_point.page.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
@@ -58,19 +59,9 @@ class TripAssetActions extends ConsumerWidget {
     });
   }
 
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    Future<TripResponseDto> Function(TripsApiRepository repository, String albumId) edit, {
-    String? stopId,
-  }) async {
-    final message = context.t.trips_edit_failed;
-    final repository = ref.read(tripsApiRepositoryProvider);
-    final isDone = await ref.read(tripDataProvider(_view.albumId).notifier).run((albumId) => edit(repository, albumId));
-    if (isDone) {
+  Future<void> _run(BuildContext context, WidgetRef ref, TripEdit edit, {String? stopId}) async {
+    if (await runTripEdit(context, ref, _view.albumId, edit)) {
       onDone(stopId);
-    } else if (context.mounted) {
-      ImmichToast.show(context: context, msg: message, toastType: ToastType.error);
     }
   }
 
