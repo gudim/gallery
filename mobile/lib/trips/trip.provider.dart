@@ -13,7 +13,10 @@ class TripData {
   final TripView view;
   final Map<String, RemoteAsset> assets;
 
-  const TripData({required this.trip, required this.view, required this.assets});
+  /// An edit is on its way to the server.
+  final bool isBusy;
+
+  const TripData({required this.trip, required this.view, required this.assets, this.isBusy = false});
 
   /// The viewer's assets for `photos`, in their order.
   List<RemoteAsset> assetsOf(List<TripPhoto> photos) => [for (final photo in photos) ?assets[photo.id]];
@@ -37,8 +40,9 @@ final tripExistsProvider = FutureProvider.autoDispose.family<bool, String>((ref,
 
 /// The album's trip, or null when it has none. Only a trip album pays for loading every asset (web trip-data.ts).
 ///
-/// While the server still names stops or routes legs, the trip is read again every few seconds and shown anew when
-/// its content changed (web trip-editor.svelte.ts); the assets are not read again.
+/// It is also the editor's state (web trip-editor.svelte.ts): every edit answers with the whole trip, which replaces
+/// the view. While the server still names stops or routes legs, the trip is read again every few seconds and shown anew
+/// when its content changed; the assets are not read again.
 class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String> {
   static const pollInterval = Duration(seconds: 4);
 
@@ -65,7 +69,34 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
     return _show(trip);
   }
 
-  TripData _show(TripResponseDto trip) => TripData(trip: trip, view: buildTripView(trip, _infos), assets: _assets);
+  TripData _show(TripResponseDto trip, {bool isBusy = false}) =>
+      TripData(trip: trip, view: buildTripView(trip, _infos), assets: _assets, isBusy: isBusy);
+
+  bool get _isBusy => state.valueOrNull?.isBusy ?? false;
+
+  /// Runs one edit; on success the trip it answers replaces the view. Returns whether the edit went through; the caller
+  /// tells the user when it did not.
+  Future<bool> run(Future<TripResponseDto> Function(String albumId) edit) async {
+    final shown = state.valueOrNull;
+    if (shown == null) {
+      return false;
+    }
+    state = AsyncData(TripData(trip: shown.trip, view: shown.view, assets: shown.assets, isBusy: true));
+    try {
+      final trip = await edit(arg);
+      if (!_isDisposed) {
+        state = AsyncData(_show(trip));
+        _schedule(trip);
+      }
+      return true;
+    } catch (_) {
+      if (!_isDisposed) {
+        final current = state.valueOrNull ?? shown;
+        state = AsyncData(_show(current.trip));
+      }
+      return false;
+    }
+  }
 
   void _schedule(TripResponseDto trip) {
     _timer?.cancel();
@@ -75,14 +106,17 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
     }
   }
 
-  Future<void> _poll(TripResponseDto shown) async {
-    var next = shown;
+  Future<void> _poll(TripResponseDto polled) async {
+    var next = polled;
     try {
       final trip = await ref.read(tripsApiRepositoryProvider).getTrip(arg);
       if (_isDisposed) {
         return;
       }
-      if (trip != null) {
+      // An edit that answered meanwhile is newer than this read, and one still running will answer newer.
+      final shown = state.valueOrNull?.trip ?? polled;
+      next = shown;
+      if (trip != null && !_isBusy) {
         if (trip.contentVersion != shown.contentVersion) {
           state = AsyncData(_show(trip));
         }
