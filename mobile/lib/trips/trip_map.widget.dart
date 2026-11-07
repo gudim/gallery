@@ -59,6 +59,9 @@ class TripMap extends StatefulWidget {
   /// The leg opened in edit mode: it glows, the other legs fade, and the map shows it whole.
   final String? openLegId;
 
+  /// A leg's badge was tapped; set in edit mode only, where a badge opens its leg (web TripRouteLayers `onOpenLeg`).
+  final void Function(String legId)? onOpenLeg;
+
   /// Space the bottom sheet covers, so fitting the route keeps it visible.
   final double bottomPadding;
 
@@ -74,6 +77,7 @@ class TripMap extends StatefulWidget {
     required this.onOpen,
     this.focused,
     this.openLegId,
+    this.onOpenLeg,
     this.bottomPadding = 0,
     this.pin,
     this.onPinMoved,
@@ -135,6 +139,10 @@ class _TripMapState extends State<TripMap> {
   }
 
   void _onFeatureTapped(math.Point<double> point, LatLng coordinates, String id, String layerId, Annotation? _) {
+    if (layerId == 'trip-badges') {
+      widget.onOpenLeg?.call(id);
+      return;
+    }
     if (layerId != 'trip-stops') {
       return;
     }
@@ -226,7 +234,7 @@ class _TripMapState extends State<TripMap> {
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
     );
-    await controller.addSymbolLayer('trip-badges', 'trip-badges', symbol, enableInteraction: false);
+    await controller.addSymbolLayer('trip-badges', 'trip-badges', symbol);
     await controller.addSymbolLayer('trip-stops', 'trip-stops', symbol);
     _isReady = true;
     await _updateSources();
@@ -346,6 +354,7 @@ class _TripMapState extends State<TripMap> {
       }
       features.add({
         'type': 'Feature',
+        'id': leg.leg.id,
         'geometry': {
           'type': 'Point',
           'coordinates': [at.$2, at.$1],
