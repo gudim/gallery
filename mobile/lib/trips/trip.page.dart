@@ -234,6 +234,7 @@ class _TripPageState extends ConsumerState<TripPage> {
       view: view,
       onOpen: _open,
       focused: openItem,
+      openLegId: _isEditing ? _openLegId : null,
       bottomPadding: moving == null ? bottomPadding : 0,
       pin: moving?.at,
       onPinMoved: (at) {

@@ -148,6 +148,23 @@
   const openLeg = (legId: string) => {
     back();
     openLegId = legId;
+    fitLeg(legId);
+  };
+
+  // The map shows the whole leg; one still being routed has no line yet.
+  const fitLeg = (legId: string) => {
+    const points = view?.legs.find(({ id }) => id === legId)?.points ?? [];
+    if (map && points.length > 1) {
+      const lats = points.map(([lat]) => lat);
+      const lngs = points.map(([, lng]) => lng);
+      map.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 60, maxZoom: 14 },
+      );
+    }
   };
 
   const toggleEditing = () => {
@@ -320,6 +337,7 @@
                     map={instance}
                     view={trip}
                     onOpenLeg={isEditing ? openLeg : undefined}
+                    openLegId={isEditing ? openLegId : undefined}
                     onReady={(ready) => {
                       map = ready;
                       flyTo(openId);

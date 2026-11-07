@@ -40,6 +40,9 @@ const _badgeModes = {
   TripLegMode.flight,
 };
 
+/// How much of its own opacity a leg keeps while another leg is open.
+const _faded = 0.35;
+
 const _trailColors = {'green': '#3ddc84', 'yellow': '#ffd400'};
 
 String _hex(int argb) => '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
@@ -52,6 +55,9 @@ class TripMap extends StatefulWidget {
 
   /// The item to bring into view, when it changes.
   final TripItem? focused;
+
+  /// The leg opened in edit mode: it glows, the other legs fade, and the map shows it whole.
+  final String? openLegId;
 
   /// Space the bottom sheet covers, so fitting the route keeps it visible.
   final double bottomPadding;
@@ -67,6 +73,7 @@ class TripMap extends StatefulWidget {
     required this.view,
     required this.onOpen,
     this.focused,
+    this.openLegId,
     this.bottomPadding = 0,
     this.pin,
     this.onPinMoved,
@@ -92,8 +99,11 @@ class _TripMapState extends State<TripMap> {
     if (!_isReady) {
       return;
     }
-    if (old.view != widget.view) {
+    if (old.view != widget.view || old.openLegId != widget.openLegId) {
       unawaited(_updateSources());
+    }
+    if (old.openLegId != widget.openLegId) {
+      unawaited(_fitLeg());
     }
     if (old.focused?.id != widget.focused?.id) {
       unawaited(_focus());
@@ -147,7 +157,7 @@ class _TripMapState extends State<TripMap> {
     _images.clear();
     await _addImages();
     const empty = {'type': 'FeatureCollection', 'features': <Object>[]};
-    for (final id in ['trip-trails', 'trip-legs', 'trip-ends', 'trip-badges', 'trip-stops']) {
+    for (final id in ['trip-trails', 'trip-leg-open', 'trip-legs', 'trip-ends', 'trip-badges', 'trip-stops']) {
       await controller.addGeoJsonSource(id, empty);
     }
     await controller.addLineLayer(
@@ -162,6 +172,19 @@ class _TripMapState extends State<TripMap> {
       ),
       enableInteraction: false,
     );
+    await controller.addLineLayer(
+      'trip-leg-open',
+      'trip-leg-open',
+      const LineLayerProperties(
+        lineColor: ['get', 'color'],
+        lineWidth: 12,
+        lineOpacity: 0.35,
+        lineBlur: 2,
+        lineCap: 'round',
+        lineJoin: 'round',
+      ),
+      enableInteraction: false,
+    );
     for (final MapEntry(key: mode, value: style) in _styles.entries) {
       await controller.addLineLayer(
         'trip-legs',
@@ -169,7 +192,11 @@ class _TripMapState extends State<TripMap> {
         LineLayerProperties(
           lineColor: ['get', 'color'],
           lineWidth: style.width,
-          lineOpacity: style.opacity,
+          lineOpacity: [
+            '*',
+            style.opacity,
+            ['get', 'fade'],
+          ],
           lineDasharray: style.dash,
           lineCap: 'round',
           lineJoin: 'round',
@@ -205,6 +232,7 @@ class _TripMapState extends State<TripMap> {
     await _updateSources();
     await _fit();
     await _focus();
+    await _fitLeg();
   }
 
   Future<void> _updateSources() async {
@@ -225,20 +253,30 @@ class _TripMapState extends State<TripMap> {
             },
       ],
     });
+    final openLegId = widget.openLegId;
+    Map<String, Object> legFeature(TripViewLeg leg) => {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'LineString',
+        'coordinates': [
+          for (final (lat, lng) in leg.points) [lng, lat],
+        ],
+      },
+      'properties': {
+        'mode': leg.leg.mode.toJson(),
+        'color': _hex(leg.color),
+        'fade': openLegId == null || leg.leg.id == openLegId ? 1 : _faded,
+      },
+    };
     await controller.setGeoJsonSource('trip-legs', {
+      'type': 'FeatureCollection',
+      'features': [for (final leg in _view.legs) legFeature(leg)],
+    });
+    await controller.setGeoJsonSource('trip-leg-open', {
       'type': 'FeatureCollection',
       'features': [
         for (final leg in _view.legs)
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'LineString',
-              'coordinates': [
-                for (final (lat, lng) in leg.points) [lng, lat],
-              ],
-            },
-            'properties': {'mode': leg.leg.mode.toJson(), 'color': _hex(leg.color)},
-          },
+          if (leg.leg.id == openLegId) legFeature(leg),
       ],
     });
     await controller.setGeoJsonSource('trip-ends', {
@@ -402,6 +440,28 @@ class _TripMapState extends State<TripMap> {
       await _controller?.moveCamera(CameraUpdate.zoomTo(15));
     }
     await _updateBadges();
+  }
+
+  /// The map shows the whole open leg; one still being routed has no line yet.
+  Future<void> _fitLeg() async {
+    final points = _view.legs.where((leg) => leg.leg.id == widget.openLegId).firstOrNull?.points ?? const [];
+    final controller = _controller;
+    if (controller == null || points.length < 2) {
+      return;
+    }
+    final latitudes = points.map((point) => point.$1);
+    final longitudes = points.map((point) => point.$2);
+    final bounds = LatLngBounds(
+      southwest: LatLng(latitudes.reduce(math.min), longitudes.reduce(math.min)),
+      northeast: LatLng(latitudes.reduce(math.max), longitudes.reduce(math.max)),
+    );
+    await controller.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, left: 60, top: 60, right: 60, bottom: 60 + widget.bottomPadding),
+    );
+    final zoom = controller.cameraPosition?.zoom;
+    if (zoom != null && zoom > 14) {
+      await controller.animateCamera(CameraUpdate.zoomTo(14));
+    }
   }
 
   Future<void> _focus() async {
