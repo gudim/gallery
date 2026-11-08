@@ -264,16 +264,20 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
             const SizedBox(height: 12),
           ],
           if (orderOptions.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              key: const ValueKey('trip-stop-order'),
-              isExpanded: true,
-              hint: Text(t.trips_point_after_hint),
-              decoration: InputDecoration(labelText: t.trips_point_after),
-              items: [
-                for (final candidate in orderOptions)
-                  DropdownMenuItem(value: candidate.id, child: Text(_orderLabel(t, candidate))),
-              ],
-              onChanged: isBusy ? null : (afterId) => unawaited(_order(stop, afterId)),
+            // The field keeps the stop picked; once the point follows it, that stop is no longer offered.
+            KeyedSubtree(
+              key: ValueKey((stop.id, _previousIdOf(stop))),
+              child: DropdownButtonFormField<String>(
+                key: const ValueKey('trip-stop-order'),
+                isExpanded: true,
+                hint: Text(t.trips_point_after_hint),
+                decoration: InputDecoration(labelText: t.trips_point_after),
+                items: [
+                  for (final candidate in orderOptions)
+                    DropdownMenuItem(value: candidate.id, child: Text(_orderLabel(t, candidate))),
+                ],
+                onChanged: isBusy ? null : (afterId) => unawaited(_order(stop, afterId)),
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -378,14 +382,17 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
 
   /// A point added by hand goes after any other stop of the route, listed in trip order.
   List<TripViewStop> _orderOptions(TripViewStop stop) {
-    final stops = _view.stops;
-    final index = stops.indexWhere((candidate) => candidate.id == stop.id);
     // Going after the stop it already follows changes nothing.
-    final previousId = index > 0 ? stops[index - 1].id : null;
+    final previousId = _previousIdOf(stop);
     return [
-      for (final candidate in stops)
+      for (final candidate in _view.stops)
         if (candidate.id != stop.id && candidate.id != previousId && candidate.role != TripStopRole.finish) candidate,
     ];
+  }
+
+  String? _previousIdOf(TripViewStop stop) {
+    final index = _view.stops.indexWhere((candidate) => candidate.id == stop.id);
+    return index > 0 ? _view.stops[index - 1].id : null;
   }
 
   // The start reads as the start even once named.
