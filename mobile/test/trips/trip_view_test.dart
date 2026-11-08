@@ -135,12 +135,12 @@ void main() {
         ['Riga'],
       ]);
       expect(view.stops.map((stop) => (stop.id, stop.number, stop.day, stop.startTime, stop.endTime)).toList(), [
-        ('start', null, 0, '—', '—'),
+        ('start', null, 0, null, null),
         ('a', 1, 0, '10:00', '11:00'),
         ('b', 2, 0, '14:00', '14:00'),
         ('c', 3, 1, '09:00', '09:00'),
         ('d', null, 1, '12:00', '12:00'),
-        ('finish', null, 1, '—', '—'),
+        ('finish', null, 1, null, null),
       ]);
       expect(view.order.map((item) => item.id).toList(), ['a', 'way', 'b', 'c']);
       expect(view.photos.map((photo) => photo.id).toList(), ['a1', 'a2', 'w1', 'b1', 'c1']);
