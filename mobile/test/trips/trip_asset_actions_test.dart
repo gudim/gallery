@@ -260,4 +260,23 @@ void main() {
     expect(done, isEmpty);
     await tester.pump(const Duration(seconds: 4));
   });
+
+  test('keeps a like through an edit that does not answer a newer trip', () async {
+    when(() => repository.getTrip('album')).thenAnswer((_) async => _route);
+    when(() => repository.getAlbumAssets('album')).thenAnswer((_) async => _assets);
+    when(
+      () => repository.like('album', 'a1'),
+    ).thenAnswer((_) async => TripLikeDto(assetId: 'a1', count: 1, isLiked: true));
+    final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+    addTearDown(container.dispose);
+    final subscription = container.listen(tripLikesProvider('album'), (_, _) {});
+    addTearDown(subscription.close);
+    await container.read(tripDataProvider('album').future);
+
+    await container.read(tripLikesProvider('album').notifier).toggle('a1');
+    await container.read(tripDataProvider('album').notifier).run((_, _) async => throw Exception('refused'));
+
+    final like = container.read(tripLikesProvider('album'))['a1'];
+    expect((like?.count, like?.isLiked), (1, true));
+  });
 }
