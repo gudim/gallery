@@ -79,9 +79,9 @@ class _TripPageState extends ConsumerState<TripPage> {
   });
 
   void _startMoving(TripViewStop stop) {
-    final (latitude, longitude) = (stop.latitude, stop.longitude);
-    if (latitude != null && longitude != null) {
-      setState(() => _moving = (stopId: stop.id, at: LatLng(latitude, longitude)));
+    final point = stop.point;
+    if (point != null) {
+      setState(() => _moving = (stopId: stop.id, at: point));
     }
   }
 
@@ -95,7 +95,7 @@ class _TripPageState extends ConsumerState<TripPage> {
       context,
       ref,
       widget.albumId,
-      (repository, albumId) => repository.moveStop(albumId, moving.stopId, moving.at.latitude, moving.at.longitude),
+      (repository, albumId) => repository.moveStop(albumId, moving.stopId, moving.at),
     );
     if (isSaved && mounted) {
       setState(() => _moving = null);

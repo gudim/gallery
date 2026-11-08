@@ -26,6 +26,8 @@ void main() {
   TripPoint? result;
   late bool isClosed;
 
+  setUpAll(() => registerFallbackValue(const LatLng(0, 0)));
+
   setUp(() {
     repository = _MockTripsApiRepository();
     result = null;
@@ -84,8 +86,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(isClosed, isTrue);
-    expect(result?.latitude, 56.2);
-    expect(result?.longitude, 24.75);
+    expect(result?.at.latitude, 56.2);
+    expect(result?.at.longitude, 24.75);
     expect(result?.title, 'Biržai');
   });
 
@@ -108,7 +110,7 @@ void main() {
 
   testWidgets('a point tapped on the map takes the name Nominatim gives it', (tester) async {
     when(
-      () => repository.reversePlace('album', 56.2, 24.75),
+      () => repository.reversePlace('album', const LatLng(56.2, 24.75)),
     ).thenAnswer((_) async => [_place('Astravas', 56.2, 24.75)]);
     await open(tester);
 
@@ -122,7 +124,7 @@ void main() {
   });
 
   testWidgets('a name typed by the owner is kept over the one Nominatim gives later', (tester) async {
-    when(() => repository.reversePlace(any(), any(), any())).thenAnswer((_) async {
+    when(() => repository.reversePlace(any(), any())).thenAnswer((_) async {
       await Future<void>.delayed(const Duration(seconds: 1));
       return [_place('Astravas', 56.2, 24.75)];
     });
@@ -147,8 +149,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('trip-point-save')));
     await tester.pumpAndSettle();
 
-    verifyNever(() => repository.reversePlace(any(), any(), any()));
-    expect(result?.latitude, 56.2);
+    verifyNever(() => repository.reversePlace(any(), any()));
+    expect(result?.at.latitude, 56.2);
     expect(result?.title, '');
   });
 }

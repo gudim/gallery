@@ -22,18 +22,12 @@ Future<TripPoint?> showTripPointPage(
   BuildContext context, {
   required String albumId,
   required String title,
-  double? latitude,
-  double? longitude,
+  LatLng? initial,
   bool isNamed = false,
 }) => Navigator.of(context).push<TripPoint>(
   MaterialPageRoute(
     fullscreenDialog: true,
-    builder: (_) => TripPointPage(
-      albumId: albumId,
-      title: title,
-      initial: latitude == null || longitude == null ? null : LatLng(latitude, longitude),
-      isNamed: isNamed,
-    ),
+    builder: (_) => TripPointPage(albumId: albumId, title: title, initial: initial, isNamed: isNamed),
   ),
 );
 
@@ -142,7 +136,7 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
     // A point tapped on the map takes the name Nominatim gives it, until the owner types one.
     final typed = _name.text;
     try {
-      final places = await _repository.reversePlace(widget.albumId, point.latitude, point.longitude);
+      final places = await _repository.reversePlace(widget.albumId, point);
       if (mounted && places.isNotEmpty && _name.text == typed && _point == point) {
         _name.text = places.first.label;
       }
@@ -182,9 +176,7 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
   void _save() {
     final point = _point;
     if (point != null) {
-      Navigator.of(
-        context,
-      ).pop(TripPoint(latitude: point.latitude, longitude: point.longitude, title: _name.text.trim()));
+      Navigator.of(context).pop(TripPoint(point, title: _name.text.trim()));
     }
   }
 

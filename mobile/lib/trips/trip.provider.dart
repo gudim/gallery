@@ -31,8 +31,7 @@ TripAssetInfo tripAssetInfo(AssetResponseDto asset) {
     id: asset.id,
     localDateTime: asset.localDateTime,
     isVideo: asset.type == AssetTypeEnum.VIDEO,
-    latitude: exif?.latitude.orElse(null),
-    longitude: exif?.longitude.orElse(null),
+    point: tripLatLng(exif?.latitude.orElse(null), exif?.longitude.orElse(null)),
   );
 }
 
