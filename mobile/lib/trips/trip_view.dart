@@ -342,11 +342,12 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
 
   // A Plain trip has no start or finish; a Places trip's start is its centre.
   final stops = kind == TripKind.plain ? trip.stops.where((stop) => stop.role == null).toList() : trip.stops;
-  final real = stops.where((stop) => stop.isTransit != true).toList();
+  // The stops the view lists; those on the way show on their leg instead.
+  final listed = stops.where((stop) => stop.isTransit != true).toList();
 
   final dates = kind == TripKind.places
       ? <String>[]
-      : (real
+      : (listed
             .where((stop) => stop.role == null && stop.localStart != null)
             .map((stop) => tripLocalDate(stop.localStart))
             .toSet()
@@ -354,7 +355,7 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
           ..sort());
   final dayIndex = {for (final (index, date) in dates.indexed) date: index};
 
-  final viewStops = real.map((stop) {
+  final viewStops = listed.map((stop) {
     final photos = photosByStop[stop.id] ?? <TripPhoto>[];
     final isEnd = stop.role != null;
     // The start and finish, and a stop without a time, take the first day (the finish the last).
@@ -437,7 +438,7 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
         ]
       : <TripViewLeg>[];
 
-  // Transit stops between the same two real stops make one item on the leg between them.
+  // Transit stops between the same two listed stops make one item on the leg between them.
   final transit = <TripTransit>[];
   if (kind == TripKind.route) {
     final byPair = <String, TripTransit>{};

@@ -65,7 +65,7 @@ void main() {
                   onOpenLeg: (_) {},
                   // Edit mode lists places without assets, which these are.
                   isEditing: true,
-                  picking: TripPicking(ids: const [], toggle: (_) {}, only: (_) {}, clear: () {}),
+                  picking: TripPicking(ids: const [], toggle: (_) {}, selectOnly: (_) {}, clear: () {}),
                   controller: null,
                   onOpen: (_) {},
                   onBack: () {},

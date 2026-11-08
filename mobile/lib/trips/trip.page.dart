@@ -202,7 +202,7 @@ class _TripPageState extends ConsumerState<TripPage> {
       picking: TripPicking(
         ids: picked,
         toggle: _togglePicked,
-        only: (ids) => setState(() => _picked = ids.toSet()),
+        selectOnly: (ids) => setState(() => _picked = ids.toSet()),
         clear: () => setState(() => _picked = const {}),
       ),
       controller: controller,

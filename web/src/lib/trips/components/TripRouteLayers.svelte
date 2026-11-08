@@ -55,7 +55,7 @@
     })),
   });
 
-  const openLeg = $derived({
+  const openLegLine = $derived({
     type: 'FeatureCollection' as const,
     features: legs.features.filter(({ properties }) => openLegId && properties?.id === openLegId),
   });
@@ -129,7 +129,7 @@
   />
 </GeoJSON>
 
-<GeoJSON id="trip-leg-open" data={openLeg}>
+<GeoJSON id="trip-leg-open" data={openLegLine}>
   <LineLayer
     id="trip-leg-open"
     layout={{ 'line-cap': 'round', 'line-join': 'round' }}

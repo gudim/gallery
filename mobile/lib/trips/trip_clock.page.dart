@@ -48,10 +48,8 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
   /// The camera whose shift is on its way
   _CameraId? _applying;
 
+  /// The camera, also in its widgets' keys
   static _CameraId _idOf(TripCameraDto camera) => (make: camera.make, model: camera.model, isVideo: camera.isVideo);
-
-  /// The camera in its widgets' keys
-  static String _tagOf(TripCameraDto camera) => '${camera.make}|${camera.model}|${camera.isVideo}';
 
   @override
   void initState() {
@@ -151,7 +149,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                 final others = camera.assetCount - camera.ownAssetIds.length;
                 final suggestion = camera.suggestion;
                 return Column(
-                  key: ValueKey('trip-camera-${_tagOf(camera)}'),
+                  key: ValueKey(('trip-camera', _idOf(camera))),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_nameOf(t, camera), style: context.textTheme.titleSmall),
@@ -184,7 +182,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                           SizedBox(
                             width: 160,
                             child: TextField(
-                              key: ValueKey('trip-camera-minutes-${_tagOf(camera)}'),
+                              key: ValueKey(('trip-camera-minutes', _idOf(camera))),
                               controller: _minutes[_idOf(camera)],
                               enabled: camera.ownAssetIds.isNotEmpty && _applying == null,
                               keyboardType: const TextInputType.numberWithOptions(signed: true),
@@ -195,7 +193,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
                           ),
                           const SizedBox(width: 12),
                           FilledButton(
-                            key: ValueKey('trip-camera-shift-${_tagOf(camera)}'),
+                            key: ValueKey(('trip-camera-shift', _idOf(camera))),
                             onPressed: _canShift(camera) ? () => unawaited(_shift(camera)) : null,
                             child: _applying == _idOf(camera)
                                 ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
