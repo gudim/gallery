@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:immich_mobile/extensions/string_extensions.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 // What the trip screen shows, derived from the trip read and the album's assets (trips PLAN §2.9). Ported from
@@ -24,15 +25,18 @@ const tripDayColors = [
 /// The one pin colour of a Places trip, which has no days.
 const tripPlacesColor = 0xFF2196F3;
 
+/// A point of the trip layer is a map `LatLng`, or null when either half is unknown.
+LatLng? tripLatLng(double? latitude, double? longitude) =>
+    latitude == null || longitude == null ? null : LatLng(latitude, longitude);
+
 /// What the trip needs of an album asset. `localDateTime` is the wall clock, carried as UTC as the server sends it.
 class TripAssetInfo {
   final String id;
   final DateTime? localDateTime;
   final bool isVideo;
-  final double? latitude;
-  final double? longitude;
+  final LatLng? point;
 
-  const TripAssetInfo({required this.id, this.localDateTime, this.isVideo = false, this.latitude, this.longitude});
+  const TripAssetInfo({required this.id, this.localDateTime, this.isVideo = false, this.point});
 }
 
 /// `YYYY-MM-DD` of a wall-clock time, or ''.
@@ -50,8 +54,7 @@ class TripPhoto {
 
   /// The point was inferred from neighbours in time
   final bool isInferred;
-  final double? latitude;
-  final double? longitude;
+  final LatLng? point;
   final int likes;
   final bool isLiked;
 
@@ -62,8 +65,7 @@ class TripPhoto {
     required this.date,
     required this.isVideo,
     required this.isInferred,
-    required this.latitude,
-    required this.longitude,
+    required this.point,
     required this.likes,
     required this.isLiked,
   });
@@ -89,8 +91,7 @@ sealed class TripItem {
   int videoCount = 0;
 
   /// Where the item sits on the map; null for Unplaced and for a stop without a position.
-  double? get latitude => null;
-  double? get longitude => null;
+  LatLng? get point => null;
 
   /// `HH:MM` of the first and last asset, or of the stop's window; '—' when there is none (web `t0`, `t1`)
   String startTime = '—';
@@ -116,9 +117,7 @@ class TripViewStop extends TripItem {
   final String region;
   final String country;
   @override
-  final double? latitude;
-  @override
-  final double? longitude;
+  final LatLng? point;
   final String date;
 
   /// 1-based among stops with assets; start, finish and empty stops have none
@@ -136,8 +135,7 @@ class TripViewStop extends TripItem {
     required this.story,
     required this.region,
     required this.country,
-    required this.latitude,
-    required this.longitude,
+    required this.point,
     required this.date,
     required this.isEnd,
     required this.article,
@@ -168,9 +166,7 @@ class TripTransit extends TripItem {
   final String toStopId;
   final List<String> stopIds = [];
   @override
-  final double? latitude;
-  @override
-  final double? longitude;
+  final LatLng? point;
 
   /// Where on the leg, as a share of its length (0.05–0.95)
   double fraction = 0.5;
@@ -180,8 +176,7 @@ class TripTransit extends TripItem {
     required this.day,
     required this.fromStopId,
     required this.toStopId,
-    required this.latitude,
-    required this.longitude,
+    required this.point,
   });
 }
 
@@ -202,8 +197,7 @@ class TripViewLeg {
   final int day;
   final int color;
 
-  /// [latitude, longitude] points
-  final List<(double, double)> points;
+  final List<LatLng> points;
 
   const TripViewLeg({required this.leg, required this.day, required this.color, required this.points});
 }
@@ -271,10 +265,10 @@ class TripView {
   }
 }
 
-/// Decodes an encoded polyline into [latitude, longitude] points. Trip legs use precision 6, as Valhalla does.
-List<(double, double)> decodePolyline(String encoded, {int precision = 6}) {
+/// Decodes an encoded polyline into points. Trip legs use precision 6, as Valhalla does.
+List<LatLng> decodePolyline(String encoded, {int precision = 6}) {
   final factor = math.pow(10, precision);
-  final points = <(double, double)>[];
+  final points = <LatLng>[];
   var index = 0;
   var lat = 0;
   var lng = 0;
@@ -295,7 +289,7 @@ List<(double, double)> decodePolyline(String encoded, {int precision = 6}) {
         lng += delta;
       }
     }
-    points.add((lat / factor, lng / factor));
+    points.add(LatLng(lat / factor, lng / factor));
   }
   return points;
 }
@@ -339,8 +333,7 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
             date: tripLocalDate(asset.localDateTime),
             isVideo: asset.isVideo,
             isInferred: filing.pointSource == TripPointSource.inferred,
-            latitude: filing.latitude ?? asset.latitude,
-            longitude: filing.longitude ?? asset.longitude,
+            point: tripLatLng(filing.latitude, filing.longitude) ?? asset.point,
             likes: like?.count ?? 0,
             isLiked: like?.isLiked ?? false,
           ),
@@ -379,8 +372,7 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
       story: stop.story ?? '',
       region: stop.region ?? '',
       country: stop.country ?? '',
-      latitude: stop.latitude,
-      longitude: stop.longitude,
+      point: tripLatLng(stop.latitude, stop.longitude),
       date: date,
       isEnd: isEnd,
       placeId: stop.placeId,
@@ -470,8 +462,7 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
             day: legDay(previous!.id, stop.id),
             fromStopId: previous.id,
             toStopId: stop.id,
-            latitude: way.latitude,
-            longitude: way.longitude,
+            point: tripLatLng(way.latitude, way.longitude),
           );
           transit.add(created);
           return created;
@@ -543,15 +534,14 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
   );
 }
 
-/// The point `fraction` of the way along a line of [latitude, longitude] points, and the line's length in metres
-/// (travel-album map.js lineMid).
-({(double, double) at, double meters}) alongLine(List<(double, double)> points, double fraction) {
+/// The point `fraction` of the way along a line, and the line's length in metres (travel-album map.js lineMid).
+({LatLng at, double meters}) alongLine(List<LatLng> points, double fraction) {
   const radians = math.pi / 180;
   final steps = [
     for (var index = 1; index < points.length; index++)
       () {
-        final (fromLat, fromLng) = points[index - 1];
-        final (lat, lng) = points[index];
+        final LatLng(latitude: fromLat, longitude: fromLng) = points[index - 1];
+        final LatLng(latitude: lat, longitude: lng) = points[index];
         final x = (lng - fromLng) * radians * math.cos((lat + fromLat) / 2 * radians);
         final y = (lat - fromLat) * radians;
         return math.sqrt(x * x + y * y) * 6371008.8;
@@ -561,10 +551,10 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
   var left = meters * fraction;
   for (final (index, step) in steps.indexed) {
     if (left <= step && step > 0) {
-      final (fromLat, fromLng) = points[index];
-      final (lat, lng) = points[index + 1];
+      final LatLng(latitude: fromLat, longitude: fromLng) = points[index];
+      final LatLng(latitude: lat, longitude: lng) = points[index + 1];
       final part = left / step;
-      return (at: (fromLat + (lat - fromLat) * part, fromLng + (lng - fromLng) * part), meters: meters);
+      return (at: LatLng(fromLat + (lat - fromLat) * part, fromLng + (lng - fromLng) * part), meters: meters);
     }
     left -= step;
   }

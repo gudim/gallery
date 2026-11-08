@@ -56,8 +56,7 @@ class TripAssetActions extends ConsumerWidget {
       context,
       albumId: _view.albumId,
       title: context.t.trips_asset_point,
-      latitude: photo?.latitude,
-      longitude: photo?.longitude,
+      initial: photo?.point,
     );
     if (point != null && context.mounted) {
       await _run(context, ref, (repository, albumId) => repository.setAssetPoint(albumId, assetId, point));

@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/providers/api.provider.dart';
 import 'package:immich_mobile/repositories/api.repository.dart';
 import 'package:immich_mobile/services/api.service.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 final tripsApiRepositoryProvider = Provider((ref) => TripsApiRepository(ref.watch(apiServiceProvider)));
@@ -84,11 +85,11 @@ class TripsApiRepository extends ApiRepository {
   Future<TripResponseDto> removeFinish(String albumId) => checkNull(_api.removeFinish(albumId));
 
   /// Moves a stop's pin; the stop keeps the point by hand until it is pinned back to its assets.
-  Future<TripResponseDto> moveStop(String albumId, String stopId, double latitude, double longitude) => checkNull(
+  Future<TripResponseDto> moveStop(String albumId, String stopId, LatLng at) => checkNull(
     _api.updateStop(
       albumId,
       stopId,
-      TripStopUpdateDto(latitude: Optional.present(latitude), longitude: Optional.present(longitude)),
+      TripStopUpdateDto(latitude: Optional.present(at.latitude), longitude: Optional.present(at.longitude)),
     ),
   );
 
@@ -96,7 +97,11 @@ class TripsApiRepository extends ApiRepository {
   Future<TripResponseDto> setStart(String albumId, TripPoint point) => checkNull(
     _api.setStart(
       albumId,
-      TripEndDto(latitude: point.latitude, longitude: point.longitude, title: Optional.present(point.titleOrNull)),
+      TripEndDto(
+        latitude: point.at.latitude,
+        longitude: point.at.longitude,
+        title: Optional.present(point.titleOrNull),
+      ),
     ),
   );
 
@@ -104,8 +109,8 @@ class TripsApiRepository extends ApiRepository {
     _api.setFinish(
       albumId,
       TripFinishUpdateDto(
-        latitude: Optional.present(point.latitude),
-        longitude: Optional.present(point.longitude),
+        latitude: Optional.present(point.at.latitude),
+        longitude: Optional.present(point.at.longitude),
         title: Optional.present(point.titleOrNull),
       ),
     ),
@@ -116,8 +121,8 @@ class TripsApiRepository extends ApiRepository {
     _api.addPoint(
       albumId,
       TripPointCreateDto(
-        latitude: point.latitude,
-        longitude: point.longitude,
+        latitude: point.at.latitude,
+        longitude: point.at.longitude,
         title: Optional.present(point.titleOrNull),
         afterStopId: Optional.present(afterStopId),
       ),
@@ -147,8 +152,8 @@ class TripsApiRepository extends ApiRepository {
             ? const Optional.absent()
             : Optional.present(
                 TripEndDto(
-                  latitude: center.latitude,
-                  longitude: center.longitude,
+                  latitude: center.at.latitude,
+                  longitude: center.at.longitude,
                   title: Optional.present(center.titleOrNull),
                 ),
               ),
@@ -158,7 +163,7 @@ class TripsApiRepository extends ApiRepository {
 
   /// Sets an asset's point by hand.
   Future<TripResponseDto> setAssetPoint(String albumId, String assetId, TripPoint point) => checkNull(
-    _api.setAssetPoint(assetId, albumId, TripAssetPointDto(latitude: point.latitude, longitude: point.longitude)),
+    _api.setAssetPoint(assetId, albumId, TripAssetPointDto(latitude: point.at.latitude, longitude: point.at.longitude)),
   );
 
   /// Gives an asset back the point of its own location.
@@ -218,17 +223,16 @@ class TripsApiRepository extends ApiRepository {
       (await checkNull(_api.searchTripPlaces(albumId, query))).places;
 
   /// The place at a point, in the trip's language.
-  Future<List<TripGeoPlaceDto>> reversePlace(String albumId, double latitude, double longitude) async =>
-      (await checkNull(_api.reverseTripPlace(albumId, latitude, longitude))).places;
+  Future<List<TripGeoPlaceDto>> reversePlace(String albumId, LatLng at) async =>
+      (await checkNull(_api.reverseTripPlace(albumId, at.latitude, at.longitude))).places;
 }
 
 /// A point picked for a trip: a stop's place, or an asset's point by hand (web TripPointModal `TripPoint`).
 class TripPoint {
-  final double latitude;
-  final double longitude;
+  final LatLng at;
   final String title;
 
-  const TripPoint({required this.latitude, required this.longitude, this.title = ''});
+  const TripPoint(this.at, {this.title = ''});
 
   String? get titleOrNull => title.isEmpty ? null : title;
 }

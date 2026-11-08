@@ -143,16 +143,14 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     }
   }
 
-  Future<void> _changeEnd(TripStopRole role) =>
-      pickTripEnd(context, ref, _view.albumId, role, latitude: widget.item.latitude, longitude: widget.item.longitude);
+  Future<void> _changeEnd(TripStopRole role) => pickTripEnd(context, ref, _view.albumId, role, near: widget.item.point);
 
   Future<void> _addPointAfter(TripStopRole? role) => pickTripPoint(
     context,
     ref,
     _view.albumId,
     role == TripStopRole.start ? null : widget.item.id,
-    latitude: widget.item.latitude,
-    longitude: widget.item.longitude,
+    near: widget.item.point,
   );
 
   Future<void> _delete() async {
@@ -311,7 +309,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
 
                 key: const ValueKey('trip-remove-end'),
               ),
-            if (stop != null && role == null && hasMap && stop.latitude != null && stop.longitude != null)
+            if (stop != null && role == null && hasMap && stop.point != null)
               action(
                 t.trips_move_pin,
                 Icons.open_with,

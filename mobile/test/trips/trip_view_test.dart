@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 // Ported from web/src/lib/trips/trip-view.spec.ts, so both clients derive the same screen from the same trip.
@@ -67,7 +68,7 @@ TripAssetDto _filing(String assetId, String? stopId, {double? latitude, double? 
     TripAssetDto(assetId: assetId, stopId: stopId, latitude: latitude, longitude: longitude, pointSource: source);
 
 TripAssetInfo _asset(String id, String localDateTime, {bool isVideo = false}) =>
-    TripAssetInfo(id: id, localDateTime: _at(localDateTime), isVideo: isVideo, latitude: 1, longitude: 2);
+    TripAssetInfo(id: id, localDateTime: _at(localDateTime), isVideo: isVideo, point: const LatLng(1, 2));
 
 // Start, day one: A, shot on the way, B; day two: C; finish. D has no assets.
 TripResponseDto _trip() => TripResponseDto(
@@ -167,8 +168,8 @@ void main() {
       expect(view.km, 6);
       expect(tripStats(view), (assets: 5, videos: 1, stops: 3, days: 2, km: 6));
       final [a1, a2, _, b1, _] = view.photos;
-      expect((a1.latitude, a1.longitude, a1.isInferred, a1.time, a1.likes), (1, 2, false, '10:05', 0));
-      expect((a2.latitude, a2.longitude, a2.isInferred, a2.isVideo), (5, 6, true, true));
+      expect((a1.point, a1.isInferred, a1.time, a1.likes), (const LatLng(1, 2), false, '10:05', 0));
+      expect((a2.point, a2.isInferred, a2.isVideo), (const LatLng(5, 6), true, true));
       expect((b1.likes, b1.isLiked), (3, true));
     });
 
@@ -231,21 +232,21 @@ void main() {
 
   group('helpers', () {
     test('decodes an encoded polyline', () {
-      expect(decodePolyline('_izlhA~rlgdF'), [(38.5, -120.2)]);
-      expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@', precision: 5), [
-        (38.5, -120.2),
-        (40.7, -120.95),
-        (43.252, -126.453),
+      expect(decodePolyline('_izlhA~rlgdF'), const [LatLng(38.5, -120.2)]);
+      expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@', precision: 5), const [
+        LatLng(38.5, -120.2),
+        LatLng(40.7, -120.95),
+        LatLng(43.252, -126.453),
       ]);
     });
 
     test('finds a point along a line and its length', () {
-      final (:at, :meters) = alongLine([(0, 0), (0, 1), (0, 3)], 0.5);
+      final (:at, :meters) = alongLine(const [LatLng(0, 0), LatLng(0, 1), LatLng(0, 3)], 0.5);
 
-      expect(at.$1, closeTo(0, 1e-9));
-      expect(at.$2, closeTo(1.5, 1e-9));
+      expect(at.latitude, closeTo(0, 1e-9));
+      expect(at.longitude, closeTo(1.5, 1e-9));
       expect(meters / 1000, closeTo(333.6, 0.5));
-      expect(alongLine([(1, 2)], 0.5), (at: (1.0, 2.0), meters: 0.0));
+      expect(alongLine(const [LatLng(1, 2)], 0.5), (at: const LatLng(1, 2), meters: 0.0));
     });
 
     test('places transit in the middle when times are missing', () {

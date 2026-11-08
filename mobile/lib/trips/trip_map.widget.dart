@@ -266,9 +266,7 @@ class _TripMapState extends State<TripMap> {
       'type': 'Feature',
       'geometry': {
         'type': 'LineString',
-        'coordinates': [
-          for (final (lat, lng) in leg.points) [lng, lat],
-        ],
+        'coordinates': [for (final point in leg.points) _lngLat(point)],
       },
       'properties': {
         'mode': leg.leg.mode.toJson(),
@@ -291,13 +289,10 @@ class _TripMapState extends State<TripMap> {
       'type': 'FeatureCollection',
       'features': [
         for (final stop in _view.stops)
-          if (stop.isEnd && stop.latitude != null && stop.longitude != null)
+          if (stop.point case final point? when stop.isEnd)
             {
               'type': 'Feature',
-              'geometry': {
-                'type': 'Point',
-                'coordinates': [stop.longitude, stop.latitude],
-              },
+              'geometry': {'type': 'Point', 'coordinates': _lngLat(point)},
               'properties': {'color': _hex(_colorOf(stop.day))},
             },
       ],
@@ -305,23 +300,23 @@ class _TripMapState extends State<TripMap> {
 
     final stops = <Map<String, Object?>>[];
     for (final item in _view.order) {
-      final (latitude, longitude) = (item.latitude, item.longitude);
-      if (latitude == null || longitude == null || item.photos.isEmpty) {
+      final point = item.point;
+      if (point == null || item.photos.isEmpty) {
         continue;
       }
       stops.add({
         'type': 'Feature',
         'id': item.id,
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [longitude, latitude],
-        },
+        'geometry': {'type': 'Point', 'coordinates': _lngLat(point)},
         'properties': {'image': _stopImage(item).name},
       });
     }
     await controller.setGeoJsonSource('trip-stops', {'type': 'FeatureCollection', 'features': stops});
     await _updateBadges();
   }
+
+  /// GeoJSON orders a point's halves longitude first.
+  static List<double> _lngLat(LatLng point) => [point.longitude, point.latitude];
 
   int _colorOf(int day) => _view.isPlaces || day >= _view.days.length ? tripPlacesColor : _view.days[day].color;
 
@@ -343,17 +338,14 @@ class _TripMapState extends State<TripMap> {
           .firstOrNull;
       final fraction = way != null && (way.fraction - 0.5).abs() < 0.15 ? (way.fraction < 0.5 ? 0.75 : 0.25) : 0.5;
       final (:at, :meters) = alongLine(leg.points, fraction);
-      final metersPerPixel = 40075016.686 * math.cos(at.$1 * math.pi / 180) / math.pow(2, zoom + 8);
+      final metersPerPixel = 40075016.686 * math.cos(at.latitude * math.pi / 180) / math.pow(2, zoom + 8);
       if (meters / metersPerPixel < 90) {
         continue;
       }
       features.add({
         'type': 'Feature',
         'id': leg.leg.id,
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [at.$2, at.$1],
-        },
+        'geometry': {'type': 'Point', 'coordinates': _lngLat(at)},
         'properties': {'image': _badgeImage(leg).name},
       });
     }
@@ -423,59 +415,66 @@ class _TripMapState extends State<TripMap> {
 
   /// The map fits the stops; the start, finish and legs may reach further.
   Future<void> _fit() async {
-    final points = [
-      for (final stop in _view.stops)
-        if (stop.latitude != null && stop.longitude != null) (stop.latitude!, stop.longitude!),
-    ];
+    final points = [for (final stop in _view.stops) ?stop.point];
     if (points.isEmpty) {
       return;
     }
-    final latitudes = points.map((point) => point.$1);
-    final longitudes = points.map((point) => point.$2);
-    final bounds = LatLngBounds(
-      southwest: LatLng(latitudes.reduce(math.min), longitudes.reduce(math.min)),
-      northeast: LatLng(latitudes.reduce(math.max), longitudes.reduce(math.max)),
-    );
-    await _controller?.moveCamera(
-      CameraUpdate.newLatLngBounds(bounds, left: 40, top: 40, right: 40, bottom: 40 + widget.bottomPadding),
-    );
-    final zoom = _controller?.cameraPosition?.zoom;
-    if (zoom != null && zoom > 15) {
-      await _controller?.moveCamera(CameraUpdate.zoomTo(15));
-    }
+    await _fitPoints(points, padding: 40, maxZoom: 15, isAnimated: false);
     await _updateBadges();
   }
 
   /// The map shows the whole open leg; one still being routed has no line yet.
   Future<void> _fitLeg() async {
     final points = _view.legs.where((leg) => leg.leg.id == widget.openLegId).firstOrNull?.points ?? const [];
+    if (points.length >= 2) {
+      await _fitPoints(points, padding: 60, maxZoom: 14, isAnimated: true);
+    }
+  }
+
+  /// Fits the points above the bottom sheet, no closer than `maxZoom`.
+  Future<void> _fitPoints(
+    List<LatLng> points, {
+    required double padding,
+    required double maxZoom,
+    required bool isAnimated,
+  }) async {
     final controller = _controller;
-    if (controller == null || points.length < 2) {
+    if (controller == null || points.isEmpty) {
       return;
     }
-    final latitudes = points.map((point) => point.$1);
-    final longitudes = points.map((point) => point.$2);
+    final latitudes = points.map((point) => point.latitude);
+    final longitudes = points.map((point) => point.longitude);
     final bounds = LatLngBounds(
       southwest: LatLng(latitudes.reduce(math.min), longitudes.reduce(math.min)),
       northeast: LatLng(latitudes.reduce(math.max), longitudes.reduce(math.max)),
     );
-    await controller.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, left: 60, top: 60, right: 60, bottom: 60 + widget.bottomPadding),
+    Future<void> move(CameraUpdate update) async {
+      await (isAnimated ? controller.animateCamera(update) : controller.moveCamera(update));
+    }
+
+    await move(
+      CameraUpdate.newLatLngBounds(
+        bounds,
+        left: padding,
+        top: padding,
+        right: padding,
+        bottom: padding + widget.bottomPadding,
+      ),
     );
     final zoom = controller.cameraPosition?.zoom;
-    if (zoom != null && zoom > 14) {
-      await controller.animateCamera(CameraUpdate.zoomTo(14));
+    if (zoom != null && zoom > maxZoom) {
+      await move(CameraUpdate.zoomTo(maxZoom));
     }
   }
 
   Future<void> _focus() async {
-    final (latitude, longitude) = (widget.focused?.latitude, widget.focused?.longitude);
+    final point = widget.focused?.point;
     final controller = _controller;
-    if (controller == null || latitude == null || longitude == null) {
+    if (controller == null || point == null) {
       return;
     }
     final zoom = math.max(controller.cameraPosition?.zoom ?? 12, 12).toDouble();
-    await controller.animateCamera(CameraUpdate.newLatLngZoom(LatLng(latitude, longitude), zoom));
+    await controller.animateCamera(CameraUpdate.newLatLngZoom(point, zoom));
   }
 
   @override

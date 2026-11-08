@@ -7,14 +7,15 @@ import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
+import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 // A leg in edit mode (trips PLAN §2.9), after web TripLegEdit.svelte: its mode, a train's stations near both ends, and
 // a retry when routing failed. A trail is drawn by an overlay, so it is never offered as a mode.
 
 /// Where a station stands
-typedef _StationPoint = ({double? latitude, double? longitude});
 
 class TripLegEdit extends ConsumerStatefulWidget {
   final TripData data;
@@ -99,7 +100,7 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
   }
 
   /// Where a station stands, which tells the leg's station apart among those listed
-  static _StationPoint _pointOf(TripStationDto station) => (latitude: station.latitude, longitude: station.longitude);
+  static LatLng _pointOf(TripStationDto station) => LatLng(station.latitude, station.longitude);
 
   @override
   Widget build(BuildContext context) {
@@ -201,14 +202,14 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
         label: t.trips_station_departure,
         list: stations.departure,
         name: leg.departureName,
-        point: (latitude: leg.departureLatitude, longitude: leg.departureLongitude),
+        point: tripLatLng(leg.departureLatitude, leg.departureLongitude),
       ),
       (
         side: TripStationSide.arrival,
         label: t.trips_station_arrival,
         list: stations.arrival,
         name: leg.arrivalName,
-        point: (latitude: leg.arrivalLatitude, longitude: leg.arrivalLongitude),
+        point: tripLatLng(leg.arrivalLatitude, leg.arrivalLongitude),
       ),
     ];
     return [
@@ -219,7 +220,7 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
             child: Text(t.trips_station_none, style: muted),
           )
         else
-          DropdownButtonFormField<_StationPoint>(
+          DropdownButtonFormField<LatLng>(
             key: ValueKey(('trip-leg-station', end.side, end.point, _failedEdits)),
             isExpanded: true,
             initialValue: end.list.any((station) => _pointOf(station) == end.point) ? end.point : null,

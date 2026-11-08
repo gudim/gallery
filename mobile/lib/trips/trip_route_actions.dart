@@ -7,6 +7,7 @@ import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
 
 // The trip's own actions in edit mode (trips PLAN §2.9), after web TripPanel.svelte: a route's missing start or
@@ -20,18 +21,15 @@ class TripRouteActions extends ConsumerWidget {
   TripView get _view => data.view;
 
   /// Where the point picker opens: the first stop with a position.
-  TripViewStop? get _firstPlaced =>
-      _view.stops.where((stop) => stop.latitude != null && stop.longitude != null).firstOrNull;
+  LatLng? get _firstPoint => _view.stops.map((stop) => stop.point).nonNulls.firstOrNull;
 
   Future<void> _setEnd(BuildContext context, WidgetRef ref, TripStopRole role) {
-    final first = _firstPlaced;
-    return pickTripEnd(context, ref, _view.albumId, role, latitude: first?.latitude, longitude: first?.longitude);
+    return pickTripEnd(context, ref, _view.albumId, role, near: _firstPoint);
   }
 
   /// A point from the overview goes right after the start; its own card moves it after any stop.
   Future<void> _addPoint(BuildContext context, WidgetRef ref) {
-    final first = _firstPlaced;
-    return pickTripPoint(context, ref, _view.albumId, null, latitude: first?.latitude, longitude: first?.longitude);
+    return pickTripPoint(context, ref, _view.albumId, null, near: _firstPoint);
   }
 
   @override

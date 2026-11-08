@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_asset_actions.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:mocktail/mocktail.dart';
 import 'package:openapi/api.dart';
 
@@ -95,7 +96,7 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(<String>[]);
-    registerFallbackValue(const TripPoint(latitude: 0, longitude: 0));
+    registerFallbackValue(const TripPoint(LatLng(0, 0)));
   });
 
   setUp(() {
