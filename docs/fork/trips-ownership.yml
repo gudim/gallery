@@ -18,10 +18,10 @@ version: 1
 # files changed since the tag as warnings, which is expected.
 metadata:
   upstream_remote: refs/tags
-  upstream_branch: v5.9.0
+  upstream_branch: v5.10.0
   fork_remote: refs/heads
   fork_branch: trips-all
-  last_verified_fork_head: 40c585e20109a9d9acbba10d2dbab3594c465cc1
+  last_verified_fork_head: 0c5bff615d45a040a4cb827212ed23cf76d265bc
 
 coverage_ignore:
   - specs/trips/**
@@ -33,8 +33,8 @@ fork_surface:
     web:
       - web/src/lib/trips/**
       - web/src/routes/(user)/trips/**
-      - web/src/routes/(user)/share/[key]/trip/**
-      - web/src/routes/(user)/s/[slug]/trip/**
+      - web/src/routes/(user)/share/\[key\]/trip/**
+      - web/src/routes/(user)/s/\[slug\]/trip/**
     database:
       - server/src/schema/migrations-trips/**
     mobile:
@@ -63,8 +63,8 @@ features:
       - mobile/android/app/trips.gradle
       - mobile/android/app/src/trips/**
       - web/src/routes/(user)/trips/**
-      - web/src/routes/(user)/share/[key]/trip/**
-      - web/src/routes/(user)/s/[slug]/trip/**
+      - web/src/routes/(user)/share/\[key\]/trip/**
+      - web/src/routes/(user)/s/\[slug\]/trip/**
     # Gallery files that carry one trips hook each; keep every hunk minimal.
     upstream_extension_paths:
       - server/src/schema/gallery-migration-ledger.ts
@@ -103,7 +103,7 @@ features:
       - server/src/controllers/index.spec.ts
       - server/test/medium/specs/services/database-migration.service.spec.ts
       # web: the album's map button opens the trip, and Gallery's map takes the trip's layers
-      - web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte
+      - web/src/routes/(user)/albums/\[albumId=id\]/\[\[photos=photos\]\]/\[\[assetId=id\]\]/+page.svelte
       - web/src/lib/components/album-page/AlbumViewer.svelte
       - web/src/lib/components/shared-components/map/Map.svelte
       # web: the LLM settings of trip texts are a section of Gallery's user settings (trips PLAN §2.6)

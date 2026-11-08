@@ -1,5 +1,14 @@
 # Trips: progress
 
+## Rebase onto Gallery `v5.10.0`: done 2026-11-08
+
+`trips-all` moved from `v5.9.0` to `v5.10.0` (19 Gallery commits, 152 trip commits replayed); the pre-rebase head is kept as the local branch `backup/trips-all-pre-v5.10.0` (`43723d5963c`).
+
+- Conflicts only in the queue and job lists, where Gallery added `QualityAnalysis`, `SpatialScene` and the Library Cleanup jobs next to `TripFile`, `TripRouteLegs` and `TripNetwork`: `server/src/enum.ts`, `server/src/dtos/queue-legacy.dto.ts`, `server/src/services/queue.service.spec.ts` (27 queues now), `web/src/lib/services/queue.service.ts`, `JobSettings.svelte`, and the generated OpenAPI spec and SDK. Both sides kept; the regenerated spec and SDK equal the merged ones.
+- Gallery's five new fork migrations (`1790900000000` to `1799700000000`) sort below every trip migration.
+- `ready` was BLOCKED on the album page hook: the tool escapes `(user)` but not `[...]`, so the manifest's bracketed route globs matched nothing. They are escaped now (`\[albumId=id\]`), and `ready` says READY.
+- Checks: server unit green (7351); `tsc`, `web:check` and `i18n merge --check` clean; web 7066 passed, the 7 failures of the loaded full run pass alone; medium 4077 passed, the 16 failures beyond the known environmental set (workflow plugin, exif, library, face-repair) were timeouts under load and pass one file at a time; mobile `test/trips` 80/80.
+
 ## Stage 2.9: mobile app (branch `trips-9`, from `trips-all`): closed 2026-11-08
 
 Delivered in five parts, each shown to the owner (DECISIONS-LOG 2026-11-07). Checked on the dev stack (`ghcr.io/gudim/gallery-server:v5.9.1` with `server/dist` built from `trips-9`, `vite dev` for the web) and on the Android 35 AVDs `trips_phone` and `trips_tablet` with debug builds of `trips-9`.
