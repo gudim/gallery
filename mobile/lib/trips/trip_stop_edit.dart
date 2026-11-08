@@ -6,9 +6,8 @@ import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
-import 'package:immich_mobile/trips/trip_point.page.dart';
+import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
-import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:immich_mobile/widgets/common/confirm_dialog.dart';
 import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:openapi/api.dart';
@@ -83,8 +82,8 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
   void _loadTexts() {
     final stop = _stop;
     _textStopId = stop?.id ?? '';
-    _title.text = stop?.stop.title ?? '';
-    _story.text = stop?.stop.story ?? '';
+    _title.text = stop?.title ?? '';
+    _story.text = stop?.story ?? '';
     _saved = (title: _title.text, story: _story.text);
     _saveState = _SaveState.idle;
   }
@@ -144,35 +143,17 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     }
   }
 
-  Future<TripPoint?> _pickPoint(String title) {
-    return showTripPointPage(
-      context,
-      albumId: _view.albumId,
-      title: title,
-      latitude: widget.item.latitude,
-      longitude: widget.item.longitude,
-      isNamed: true,
-    );
-  }
+  Future<void> _changeEnd(TripStopRole role) =>
+      pickTripEnd(context, ref, _view.albumId, role, latitude: widget.item.latitude, longitude: widget.item.longitude);
 
-  Future<void> _changeEnd(TripStopRole role) async {
-    final t = context.t;
-    final point = await _pickPoint(role == TripStopRole.start ? t.trips_start : t.trips_finish);
-    if (point != null && mounted) {
-      await _run(
-        (repository, albumId) =>
-            role == TripStopRole.start ? repository.setStart(albumId, point) : repository.setFinish(albumId, point),
-      );
-    }
-  }
-
-  Future<void> _addPointAfter(TripStopRole? role) async {
-    final point = await _pickPoint(context.t.trips_add_point);
-    if (point != null && mounted) {
-      final afterStopId = role == TripStopRole.start ? null : widget.item.id;
-      await _run((repository, albumId) => repository.addPoint(albumId, point, afterStopId));
-    }
-  }
+  Future<void> _addPointAfter(TripStopRole? role) => pickTripPoint(
+    context,
+    ref,
+    _view.albumId,
+    role == TripStopRole.start ? null : widget.item.id,
+    latitude: widget.item.latitude,
+    longitude: widget.item.longitude,
+  );
 
   Future<void> _delete() async {
     final t = context.t;
@@ -190,11 +171,11 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     final t = context.t;
     final item = widget.item;
     final stop = _stop;
-    final role = stop?.stop.role;
-    final isRoute = _view.kind == TripKind.route;
-    final hasMap = _view.kind != TripKind.plain;
+    final role = stop?.role;
+    final isRoute = _view.isRoute;
+    final hasMap = _view.hasMap;
     final hasAssets = item.photos.isNotEmpty;
-    final isHandPoint = stop != null && stop.stop.isAddedByHand && role == null;
+    final isHandPoint = stop != null && stop.isAddedByHand && role == null;
     final places = widget.data.trip.places;
     final isBusy = widget.data.isBusy;
     final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
@@ -311,7 +292,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
                 () => unawaited(_changeEnd(role)),
                 key: const ValueKey('trip-change-place'),
               ),
-            if (role == TripStopRole.finish && stop?.stop.isFinishAtStart != true)
+            if (role == TripStopRole.finish && stop?.isFinishAtStart != true)
               action(
                 t.trips_finish_at_start,
                 Icons.check,
@@ -337,7 +318,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
                 () => widget.onMovePin(stop),
                 key: const ValueKey('trip-move-pin'),
               ),
-            if (stop != null && role == null && hasMap && stop.stop.isPositionManual && hasAssets)
+            if (stop != null && role == null && hasMap && stop.isPositionManual && hasAssets)
               action(
                 t.trips_pin_to_assets,
                 Icons.photo_library_outlined,
@@ -405,30 +386,18 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     final previousId = index > 0 ? stops[index - 1].id : null;
     return [
       for (final candidate in stops)
-        if (candidate.id != stop.id && candidate.id != previousId && candidate.stop.role != TripStopRole.finish)
-          candidate,
+        if (candidate.id != stop.id && candidate.id != previousId && candidate.role != TripStopRole.finish) candidate,
     ];
   }
 
-  String _orderLabel(Translations t, TripViewStop candidate) {
-    if (candidate.stop.role == TripStopRole.start) {
-      return t.trips_start;
-    }
-    if (candidate.title.isNotEmpty) {
-      return candidate.title;
-    }
-    return candidate.region.isNotEmpty ? candidate.region : t.trips_untitled_stop;
-  }
+  // The start reads as the start even once named.
+  String _orderLabel(Translations t, TripViewStop candidate) =>
+      candidate.isStart ? t.trips_start : tripRowTitle(t, candidate);
 
   // Right after the start is null to the server.
   Future<void> _order(TripViewStop stop, String? afterId) {
-    TripViewStop? after;
-    for (final candidate in _view.stops) {
-      if (candidate.id == afterId) {
-        after = candidate;
-      }
-    }
-    final afterStopId = after == null || after.stop.role == TripStopRole.start ? null : after.id;
+    final after = afterId == null ? null : _view.stopById(afterId);
+    final afterStopId = after == null || after.isStart ? null : after.id;
     return _run((repository, albumId) => repository.movePoint(albumId, stop.id, afterStopId));
   }
 }

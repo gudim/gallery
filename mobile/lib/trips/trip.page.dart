@@ -12,7 +12,6 @@ import 'package:immich_mobile/trips/trip_map.widget.dart';
 import 'package:immich_mobile/trips/trip_panel.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
-import 'package:openapi/api.dart';
 
 // A trip on the phone (trips PLAN §2.9), after web/src/lib/trips/components/TripPage.svelte and TripPanel.svelte:
 // Gallery's map with the route, and the stops in a sheet over it (beside it on a tablet). A stop opens its assets,
@@ -158,7 +157,7 @@ class _TripPageState extends ConsumerState<TripPage> {
   }
 
   Widget _body(BuildContext context, TripData data) {
-    final openItem = _openId == null ? null : _find(data.view, _openId!);
+    final openItem = _openId == null ? null : data.view.itemById(_openId!);
     final picked = openItem == null || !_isEditing
         ? const <String>[]
         : [
@@ -248,7 +247,7 @@ class _TripPageState extends ConsumerState<TripPage> {
             ],
           );
 
-    if (view.kind == TripKind.plain) {
+    if (!view.hasMap) {
       return panel(null);
     }
 
@@ -291,20 +290,6 @@ class _TripPageState extends ConsumerState<TripPage> {
         );
       },
     );
-  }
-
-  static TripItem? _find(TripView view, String id) {
-    for (final item in view.order) {
-      if (item.id == id) {
-        return item;
-      }
-    }
-    for (final stop in view.stops) {
-      if (stop.id == id) {
-        return stop;
-      }
-    }
-    return null;
   }
 }
 

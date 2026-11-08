@@ -323,8 +323,7 @@ class _TripMapState extends State<TripMap> {
     await _updateBadges();
   }
 
-  int _colorOf(int day) =>
-      _view.kind == TripKind.places || day >= _view.days.length ? tripPlacesColor : _view.days[day].color;
+  int _colorOf(int day) => _view.isPlaces || day >= _view.days.length ? tripPlacesColor : _view.days[day].color;
 
   // A leg's badge sits at its middle, or a quarter along when assets shot on the way are near the middle; it shows
   // only while the leg is at least ~90 px long on screen (travel-album map.js layoutBadges).
