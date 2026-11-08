@@ -215,7 +215,10 @@ void main() {
         ..kind = TripKind.places
         ..legs = [];
       places.stops = places.stops.where((stop) => stop.role == null && stop.isTransit != true).toList();
-      places.stops.firstWhere((stop) => stop.id == 'c').title = 'Anykščiai';
+      // A place not named yet reads, and sorts, as its region.
+      places.stops.firstWhere((stop) => stop.id == 'c')
+        ..title = null
+        ..region = 'Anykščiai';
       places.stops.firstWhere((stop) => stop.id == 'd').title = 'Zarasai';
       // Sorted among the E's, as the web's localeCompare does, not after the Z.
       places.stops.firstWhere((stop) => stop.id == 'b').title = 'Ėriškiai';

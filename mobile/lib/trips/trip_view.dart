@@ -595,7 +595,7 @@ String tripTimeSpan(TripItem item) {
 enum TripPlaceSort { frames, name }
 
 // A letter with a diacritic sorts with its base letter, near the web's localeCompare: Ėriškiai among the E's.
-String _nameKey(String title) => title.toLowerCase().removeDiacritics();
+String _nameKey(String name) => name.toLowerCase().removeDiacritics();
 
 /// The places of a Places trip as its list shows them (web TripPanel `places`): most frames first, or by name, ties by
 /// id so the order holds between reads. Only edit mode lists a place without assets.
@@ -604,7 +604,7 @@ List<TripViewStop> tripPlaces(TripView view, TripPlaceSort sort, {required bool 
   return places..sort((a, b) {
     final order = switch (sort) {
       TripPlaceSort.frames => b.photos.length.compareTo(a.photos.length),
-      TripPlaceSort.name => _nameKey(a.title).compareTo(_nameKey(b.title)),
+      TripPlaceSort.name => _nameKey(a.name).compareTo(_nameKey(b.name)),
     };
     return order != 0 ? order : a.id.compareTo(b.id);
   });

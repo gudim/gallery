@@ -137,7 +137,7 @@
   const places = $derived.by(() => {
     const list = view.stops.filter(({ photos }) => isEditing || photos.length > 0);
     return placeSort === 'name'
-      ? list.sort((a, b) => a.title.localeCompare(b.title, lang))
+      ? list.sort((a, b) => (a.title || a.region).localeCompare(b.title || b.region, lang))
       : list.sort((a, b) => b.photos.length - a.photos.length || a.id.localeCompare(b.id));
   });
 
