@@ -35,9 +35,23 @@ TripAssetInfo tripAssetInfo(AssetResponseDto asset) {
   );
 }
 
+/// How long the album menu's answer is kept after the menu closes, so reopening it does not read the trip again.
+const tripExistsCacheTime = Duration(minutes: 5);
+
 /// Whether the album has a trip, for the album page's menu. Null while unknown or on failure: the item stays hidden.
+/// A failure is not kept, so the next menu asks again.
 final tripExistsProvider = FutureProvider.autoDispose.family<bool, String>((ref, albumId) async {
-  return await ref.watch(tripsApiRepositoryProvider).getTrip(albumId) != null;
+  final link = ref.keepAlive();
+  Timer? timer;
+  ref.onCancel(() => timer = Timer(tripExistsCacheTime, link.close));
+  ref.onResume(() => timer?.cancel());
+  ref.onDispose(() => timer?.cancel());
+  try {
+    return await ref.watch(tripsApiRepositoryProvider).getTrip(albumId) != null;
+  } catch (_) {
+    link.close();
+    rethrow;
+  }
 });
 
 /// The album's trip, or null when it has none. Only a trip album pays for loading every asset (web trip-data.ts).
