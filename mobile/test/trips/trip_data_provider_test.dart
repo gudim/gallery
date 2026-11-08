@@ -175,6 +175,36 @@ void main() {
       expect(data?.isBusy, isFalse);
     });
 
+    test('sends an edit only after the one before has answered, and shows the last one sent', () async {
+      when(() => repository.getTrip('album')).thenAnswer((_) async => _trip());
+      final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+      addTearDown(container.dispose);
+      final subscription = container.listen(tripDataProvider('album'), (_, _) {});
+      addTearDown(subscription.close);
+      await container.read(tripDataProvider('album').future);
+      final notifier = container.read(tripDataProvider('album').notifier);
+      final first = Completer<TripResponseDto>();
+      var isSecondSent = false;
+
+      final firstRun = notifier.run((_, _) => first.future);
+      final secondRun = notifier.run((_, _) async {
+        isSecondSent = true;
+        return _trip(kind: TripKind.plain, contentVersion: 3);
+      });
+      await pumpEventQueue();
+      expect(isSecondSent, isFalse);
+
+      first.complete(_trip(kind: TripKind.places, contentVersion: 2));
+      await firstRun;
+      expect(container.read(tripDataProvider('album')).valueOrNull?.isBusy, isTrue);
+      await secondRun;
+
+      final data = container.read(tripDataProvider('album')).valueOrNull;
+      expect(isSecondSent, isTrue);
+      expect(data?.view.kind, TripKind.plain);
+      expect(data?.isBusy, isFalse);
+    });
+
     test('keeps the trip when an edit is refused', () async {
       when(() => repository.getTrip('album')).thenAnswer((_) async => _trip());
       final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);

@@ -101,28 +101,45 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
 
   bool get _isBusy => state.valueOrNull?.isBusy ?? false;
 
-  /// Runs one edit; on success the trip it answers replaces the view. Returns whether the edit went through; the caller
-  /// tells the user when it did not.
+  /// Edits sent or waiting to be sent
+  int _running = 0;
+
+  /// Answers when the last edit queued has answered
+  Future<void> _lastEdit = Future.value();
+
+  /// Runs one edit; on success the trip it answers replaces the view. Edits go one at a time, each after the one before
+  /// has answered, so a slower answer built from an older trip never replaces a newer one, and the screen stays busy
+  /// until the last has answered. Returns whether the edit went through; the caller tells the user when it did not.
   Future<bool> run(TripEdit edit) async {
     final shown = state.valueOrNull;
     if (shown == null) {
       return false;
     }
     final epoch = _epoch;
-    state = AsyncData(TripData(trip: shown.trip, view: shown.view, assets: shown.assets, isBusy: true));
+    final previous = _lastEdit;
+    final answered = Completer<void>();
+    _lastEdit = answered.future;
+    _running++;
+    if (!shown.isBusy) {
+      state = AsyncData(TripData(trip: shown.trip, view: shown.view, assets: shown.assets, isBusy: true));
+    }
     try {
+      await previous;
       final trip = await edit(ref.read(tripsApiRepositoryProvider), arg);
       if (epoch == _epoch) {
-        state = AsyncData(_show(trip));
+        state = AsyncData(_show(trip, isBusy: _running > 1));
         _schedule(trip);
       }
       return true;
     } catch (_) {
       if (epoch == _epoch) {
         final current = state.valueOrNull ?? shown;
-        state = AsyncData(_show(current.trip));
+        state = AsyncData(_show(current.trip, isBusy: _running > 1));
       }
       return false;
+    } finally {
+      _running--;
+      answered.complete();
     }
   }
 
