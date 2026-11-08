@@ -239,24 +239,15 @@ class _TripPageState extends ConsumerState<TripPage> {
         }
       },
     );
-    Widget withPinBar(Widget map) => moving == null
-        ? map
-        : Stack(
-            children: [
-              Positioned.fill(child: map),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 24,
-                child: SafeArea(
-                  child: _PinBar(
-                    isBusy: data.isBusy,
-                    onCancel: () => setState(() => _moving = null),
-                    onSave: _saveMoving,
-                  ),
-                ),
-              ),
-            ],
+    final pinBar = moving == null
+        ? null
+        : Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: SafeArea(
+              child: _PinBar(isBusy: data.isBusy, onCancel: () => setState(() => _moving = null), onSave: _saveMoving),
+            ),
           );
 
     if (!view.hasMap) {
@@ -268,7 +259,15 @@ class _TripPageState extends ConsumerState<TripPage> {
         if (constraints.maxWidth >= _wideWidth) {
           return Row(
             children: [
-              Expanded(flex: 2, child: withPinBar(map())),
+              Expanded(
+                flex: 2,
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: map()),
+                    ?pinBar,
+                  ],
+                ),
+              ),
               const VerticalDivider(width: 1),
               Expanded(child: panel(null)),
             ],
@@ -276,28 +275,28 @@ class _TripPageState extends ConsumerState<TripPage> {
         }
         // In edit mode the stop's fields take two thirds of the screen, as on the web.
         final initialSize = _isEditing ? 0.67 : 0.45;
-        // While a pin moves, the map takes the whole screen.
-        if (moving != null) {
-          return withPinBar(map());
-        }
+        // The map stays the first child, so starting or ending a pin move does not rebuild its platform view.
         return Stack(
           children: [
             Positioned.fill(child: map(bottomPadding: constraints.maxHeight * initialSize)),
-            DraggableScrollableSheet(
-              key: ValueKey(_isEditing),
-              initialChildSize: initialSize,
-              minChildSize: 0.15,
-              maxChildSize: 0.95,
-              snap: true,
-              snapSizes: [initialSize],
-              builder: (context, controller) => Material(
-                color: context.colorScheme.surface,
-                elevation: 8,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                clipBehavior: Clip.antiAlias,
-                child: panel(controller),
+            // While a pin moves, the map takes the whole screen.
+            if (moving == null)
+              DraggableScrollableSheet(
+                key: ValueKey(_isEditing),
+                initialChildSize: initialSize,
+                minChildSize: 0.15,
+                maxChildSize: 0.95,
+                snap: true,
+                snapSizes: [initialSize],
+                builder: (context, controller) => Material(
+                  color: context.colorScheme.surface,
+                  elevation: 8,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  clipBehavior: Clip.antiAlias,
+                  child: panel(controller),
+                ),
               ),
-            ),
+            ?pinBar,
           ],
         );
       },
