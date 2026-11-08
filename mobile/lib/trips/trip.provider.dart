@@ -196,10 +196,18 @@ class TripLike {
 class TripLikesNotifier extends AutoDisposeFamilyNotifier<Map<String, TripLike>, String> {
   @override
   Map<String, TripLike> build(String albumId) {
-    final view = ref.watch(tripDataProvider(albumId)).valueOrNull?.view;
+    // Only a newer trip read rebuilds the likes: an edit's busy flip or refusal shows the same read again, which
+    // predates the likes given since.
+    ref.watch(tripDataProvider(albumId).select((data) => data.valueOrNull?.trip));
+    final view = ref.read(tripDataProvider(albumId)).valueOrNull?.view;
+    // A toggle still on its way keeps its guard, and its answer lands on the new map.
+    final pending = {
+      for (final MapEntry(key: id, value: like) in stateOrNull?.entries ?? const <MapEntry<String, TripLike>>[])
+        if (like.isBusy) id: like,
+    };
     return {
       for (final photo in view?.photos ?? const <TripPhoto>[])
-        photo.id: TripLike(count: photo.likes, isLiked: photo.isLiked),
+        photo.id: pending[photo.id] ?? TripLike(count: photo.likes, isLiked: photo.isLiked),
     };
   }
 
