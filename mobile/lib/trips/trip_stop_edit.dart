@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
@@ -178,19 +177,8 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     final isBusy = widget.data.isBusy;
     final muted = context.tripMuted;
 
-    Widget action(String label, IconData icon, VoidCallback onPressed, {Key? key, bool isDanger = false}) {
-      final color = isDanger ? context.colorScheme.error : null;
-      return OutlinedButton.icon(
-        key: key,
-        onPressed: isBusy ? null : onPressed,
-        icon: Icon(icon, size: 18, color: color),
-        label: Text(label, style: TextStyle(color: color)),
-        style: OutlinedButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          side: isDanger ? BorderSide(color: context.colorScheme.error) : null,
-        ),
-      );
-    }
+    Widget action(String label, IconData icon, VoidCallback onPressed, {Key? key, bool isDanger = false}) =>
+        TripActionButton(key: key, label: label, icon: icon, onPressed: isBusy ? null : onPressed, isDanger: isDanger);
 
     final orderOptions = isHandPoint && isRoute ? _orderOptions(stop) : const <TripViewStop>[];
 
