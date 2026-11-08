@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
@@ -107,7 +106,7 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
     final t = context.t;
     final leg = _leg;
     final isBusy = widget.data.isBusy;
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
 
     return Column(
       key: const ValueKey('trip-leg-edit'),

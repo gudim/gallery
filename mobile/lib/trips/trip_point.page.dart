@@ -4,9 +4,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/asyncvalue_extensions.dart';
-import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/extensions/maplibrecontroller_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
+import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:immich_mobile/widgets/map/map_theme_override.dart';
@@ -183,7 +183,7 @@ class _TripPointPageState extends ConsumerState<TripPointPage> {
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
 
     return Scaffold(
       appBar: AppBar(

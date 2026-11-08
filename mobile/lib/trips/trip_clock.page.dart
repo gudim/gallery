@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
+import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:immich_mobile/widgets/common/immich_toast.dart';
 import 'package:openapi/api.dart';
@@ -131,7 +132,7 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
   Widget build(BuildContext context) {
     final t = context.t;
     final cameras = _cameras;
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.trips_clock)),
