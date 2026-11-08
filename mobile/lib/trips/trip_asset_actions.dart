@@ -44,21 +44,6 @@ class TripAssetActions extends ConsumerWidget {
 
   String? get _single => ids.length == 1 ? ids.first : null;
 
-  /// Other stops of assets, the neighbours of this one first, as travel-album's move menu.
-  List<TripViewStop> get _targets {
-    final position = {for (final (index, stop) in _view.stops.indexed) stop.id: index};
-    final at = position[item.id];
-    final stops = _view.stops.where((stop) => stop.id != item.id && stop.stop.role == null).toList();
-    if (at == null) {
-      return stops;
-    }
-    int distance(TripViewStop stop) => (position[stop.id]! - at).abs();
-    return stops..sort((a, b) {
-      final byDistance = distance(a).compareTo(distance(b));
-      return byDistance != 0 ? byDistance : position[a.id]!.compareTo(position[b.id]!);
-    });
-  }
-
   Future<void> _run(BuildContext context, WidgetRef ref, TripEdit edit, {String? stopId}) async {
     if (await runTripEdit(context, ref, _view.albumId, edit)) {
       onDone(stopId);
@@ -81,7 +66,7 @@ class TripAssetActions extends ConsumerWidget {
 
   Future<void> _toCenter(BuildContext context, WidgetRef ref) async {
     TripPoint? center;
-    if (!_view.stops.any((stop) => stop.stop.isAtCenter)) {
+    if (!_view.stops.any((stop) => stop.isAtCenter)) {
       center = await showTripPointPage(context, albumId: _view.albumId, title: context.t.trips_center, isNamed: true);
       if (center == null || !context.mounted) {
         return;
@@ -120,11 +105,11 @@ class TripAssetActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.t;
     final single = _single;
-    final targets = _targets;
+    final targets = _view.moveTargets(item.id);
     final filing = single == null ? null : data.trip.assets.where((asset) => asset.assetId == single).firstOrNull;
     // The split begins with the picked asset; the first asset of a stop would leave nothing behind.
     final canSplit = item is TripViewStop && single != null && item.photos.firstOrNull?.id != single;
-    final hasMap = _view.kind != TripKind.plain;
+    final hasMap = _view.hasMap;
     final isBusy = data.isBusy;
 
     Widget button(String key, IconData icon, String tooltip, VoidCallback onPressed) =>
@@ -195,7 +180,7 @@ class TripAssetActions extends ConsumerWidget {
                               _run(context, ref, (repository, albumId) => repository.removeAssetPoint(albumId, single)),
                         ),
                     ],
-                    if (_view.kind == TripKind.places && item is TripUnplaced)
+                    if (_view.isPlaces && item is TripUnplaced)
                       button('trip-to-center', Icons.gps_fixed, t.trips_to_center, () => _toCenter(context, ref)),
                     button(
                       'trip-hide',

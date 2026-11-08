@@ -55,15 +55,16 @@ IconData tripModeIcon(TripLegMode mode) => switch (mode) {
   TripLegMode.boat => Icons.directions_boat,
 };
 
+/// "Start" or "Finish".
+String tripEndLabel(Translations t, TripStopRole role) => role == TripStopRole.start ? t.trips_start : t.trips_finish;
+
 /// A stop's name in lists; the start, the finish and a point not named yet still read as something.
 String tripRowTitle(Translations t, TripViewStop stop) {
-  if (stop.title.isNotEmpty || stop.region.isNotEmpty) {
-    return stop.title.isNotEmpty ? stop.title : stop.region;
+  final role = stop.role;
+  if (stop.name.isNotEmpty) {
+    return stop.name;
   }
-  if (stop.stop.role != null) {
-    return stop.stop.role == TripStopRole.start ? t.trips_start : t.trips_finish;
-  }
-  return t.trips_untitled_stop;
+  return role != null ? tripEndLabel(t, role) : t.trips_untitled_stop;
 }
 
 /// The title of an item in lists and on its own page.
@@ -77,17 +78,13 @@ String tripItemTitle(Translations t, TripItem item, TripView view, String lang) 
 };
 
 String _stopName(TripView view, String id) {
-  for (final stop in view.stops) {
-    if (stop.id == id) {
-      return stop.title.isNotEmpty ? stop.title : (stop.region.isNotEmpty ? stop.region : '…');
-    }
-  }
-  return '…';
+  final name = view.stopById(id)?.name ?? '';
+  return name.isNotEmpty ? name : '…';
 }
 
 /// The header line: the dates and days of a route, or places and years.
 String tripRangeLine(Translations t, TripView view, String lang) {
-  if (view.kind == TripKind.places) {
+  if (view.isPlaces) {
     final places = view.stops.where((stop) => stop.photos.isNotEmpty).length;
     final years = tripYearSpan(view.photos);
     return [t.trips_places_count(count: places), if (years.isNotEmpty) years].join(' · ');
@@ -108,11 +105,11 @@ String tripRangeLine(Translations t, TripView view, String lang) {
 /// The header numbers: assets, videos, stops or places, days, km.
 String tripStatsLine(Translations t, TripView view, String lang) {
   final stats = tripStats(view);
-  final isRoute = view.kind == TripKind.route;
+  final isRoute = view.isRoute;
   return [
     t.trips_assets_count(count: stats.assets),
     if (stats.videos > 0) t.trips_videos_count(count: stats.videos),
-    view.kind == TripKind.places ? t.trips_places_count(count: stats.stops) : t.trips_stops_count(count: stats.stops),
+    view.isPlaces ? t.trips_places_count(count: stats.stops) : t.trips_stops_count(count: stats.stops),
     if (isRoute) t.trips_days_count(count: stats.days),
     if (isRoute && stats.km != null && stats.km! > 0)
       t.trips_km(km: NumberFormat.decimalPattern(lang).format(stats.km)),
@@ -149,7 +146,7 @@ List<String> tripItemMeta(Translations t, TripItem item, TripView view, String l
     return [t.trips_assets_count(count: item.photos.length)];
   }
   final parts = <String>[];
-  if (view.kind == TripKind.route) {
+  if (view.isRoute) {
     parts.add(tripDayLabel(item.day < view.days.length ? view.days[item.day].date : '', lang));
     if (item is TripTransit) {
       parts.add(t.trips_on_the_way);
@@ -172,8 +169,8 @@ List<String> tripItemMeta(Translations t, TripItem item, TripView view, String l
 
 /// What an item with no assets says instead.
 String tripEmptyNote(Translations t, TripItem item, TripView view) {
-  if (item is TripViewStop && view.kind == TripKind.places) {
-    return item.stop.role != null ? t.trips_empty_center : t.trips_empty_place;
+  if (item is TripViewStop && view.isPlaces) {
+    return item.role != null ? t.trips_empty_center : t.trips_empty_place;
   }
   return t.trips_empty_stop;
 }

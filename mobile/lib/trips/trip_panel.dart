@@ -122,7 +122,7 @@ class TripPanel extends ConsumerWidget {
                   TextButton.icon(
                     onPressed: onBack,
                     icon: const Icon(Icons.arrow_back, size: 18),
-                    label: Text(view.kind == TripKind.places ? t.trips_back_places : t.trips_back_route),
+                    label: Text(view.isPlaces ? t.trips_back_places : t.trips_back_route),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
@@ -139,7 +139,7 @@ class TripPanel extends ConsumerWidget {
                           Text(item.story, maxLines: 6, overflow: TextOverflow.ellipsis),
                         ],
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
-                        if (item is TripUnplaced && isEditing && view.kind == TripKind.places)
+                        if (item is TripUnplaced && isEditing && view.isPlaces)
                           TripPlaceHints(data: data, onSelect: picking.only, onMoved: picking.clear),
                         if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),

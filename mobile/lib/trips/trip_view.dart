@@ -143,6 +143,17 @@ class TripViewStop extends TripItem {
     required this.article,
     required this.placeId,
   });
+
+  /// The title, else the region it lies in; '' when neither is known yet
+  String get name => title.isNotEmpty ? title : region;
+
+  /// Start or finish; null for the stops between them
+  TripStopRole? get role => stop.role;
+  bool get isStart => stop.role == TripStopRole.start;
+  bool get isAddedByHand => stop.isAddedByHand;
+  bool get isAtCenter => stop.isAtCenter;
+  bool get isPositionManual => stop.isPositionManual;
+  bool get isFinishAtStart => stop.isFinishAtStart;
 }
 
 /// Assets shot on the way between two stops, shown on the leg between them.
@@ -231,6 +242,33 @@ class TripView {
     required this.overlays,
     required this.isMultiCountry,
   });
+
+  bool get isRoute => kind == TripKind.route;
+  bool get isPlaces => kind == TripKind.places;
+
+  /// Every kind but Plain shows a map
+  bool get hasMap => kind != TripKind.plain;
+
+  TripViewStop? stopById(String id) => stops.where((stop) => stop.id == id).firstOrNull;
+
+  /// The item shown under `id`: a stop with assets, the way after one, Unplaced, or a stop without assets.
+  TripItem? itemById(String id) => order.where((item) => item.id == id).firstOrNull ?? stopById(id);
+
+  /// Stops an asset of the stop `fromId` can move to: the other stops between start and finish, the nearest in trip
+  /// order first, as travel-album's move menu.
+  List<TripViewStop> moveTargets(String fromId) {
+    final position = {for (final (index, stop) in stops.indexed) stop.id: index};
+    final at = position[fromId];
+    final targets = stops.where((stop) => stop.id != fromId && stop.role == null).toList();
+    if (at == null) {
+      return targets;
+    }
+    int distance(TripViewStop stop) => (position[stop.id]! - at).abs();
+    return targets..sort((a, b) {
+      final byDistance = distance(a).compareTo(distance(b));
+      return byDistance != 0 ? byDistance : position[a.id]!.compareTo(position[b.id]!);
+    });
+  }
 }
 
 /// Decodes an encoded polyline into [latitude, longitude] points. Trip legs use precision 6, as Valhalla does.

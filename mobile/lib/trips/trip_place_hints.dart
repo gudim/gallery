@@ -78,7 +78,7 @@ class _TripPlaceHintsState extends ConsumerState<TripPlaceHints> {
   }
 
   String _titleOf(String stopId) {
-    final stop = widget.data.view.stops.where((stop) => stop.id == stopId).firstOrNull;
+    final stop = widget.data.view.stopById(stopId);
     return stop == null ? context.t.trips_untitled_stop : tripRowTitle(context.t, stop);
   }
 

@@ -6,9 +6,7 @@ import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
-import 'package:immich_mobile/trips/trip_point.page.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
-import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:openapi/api.dart';
 
 // The trip's own actions in edit mode (trips PLAN §2.9), after web TripPanel.svelte: a route's missing start or
@@ -22,55 +20,25 @@ class TripRouteActions extends ConsumerWidget {
   TripView get _view => data.view;
 
   /// Where the point picker opens: the first stop with a position.
-  ({double? latitude, double? longitude}) get _firstPoint {
-    final stop = _view.stops.where((stop) => stop.latitude != null && stop.longitude != null).firstOrNull;
-    return (latitude: stop?.latitude, longitude: stop?.longitude);
-  }
+  TripViewStop? get _firstPlaced =>
+      _view.stops.where((stop) => stop.latitude != null && stop.longitude != null).firstOrNull;
 
-  Future<TripPoint?> _pickPoint(BuildContext context, String title) {
-    final first = _firstPoint;
-    return showTripPointPage(
-      context,
-      albumId: _view.albumId,
-      title: title,
-      latitude: first.latitude,
-      longitude: first.longitude,
-      isNamed: true,
-    );
-  }
-
-  Future<void> _setEnd(BuildContext context, WidgetRef ref, TripStopRole role) async {
-    final t = context.t;
-    final point = await _pickPoint(context, role == TripStopRole.start ? t.trips_start : t.trips_finish);
-    if (point != null && context.mounted) {
-      await runTripEdit(
-        context,
-        ref,
-        _view.albumId,
-        (repository, albumId) =>
-            role == TripStopRole.start ? repository.setStart(albumId, point) : repository.setFinish(albumId, point),
-      );
-    }
+  Future<void> _setEnd(BuildContext context, WidgetRef ref, TripStopRole role) {
+    final first = _firstPlaced;
+    return pickTripEnd(context, ref, _view.albumId, role, latitude: first?.latitude, longitude: first?.longitude);
   }
 
   /// A point from the overview goes right after the start; its own card moves it after any stop.
-  Future<void> _addPoint(BuildContext context, WidgetRef ref) async {
-    final point = await _pickPoint(context, context.t.trips_add_point);
-    if (point != null && context.mounted) {
-      await runTripEdit(
-        context,
-        ref,
-        _view.albumId,
-        (repository, albumId) => repository.addPoint(albumId, point, null),
-      );
-    }
+  Future<void> _addPoint(BuildContext context, WidgetRef ref) {
+    final first = _firstPlaced;
+    return pickTripPoint(context, ref, _view.albumId, null, latitude: first?.latitude, longitude: first?.longitude);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.t;
-    final isRoute = _view.kind == TripKind.route;
-    final roles = {for (final stop in _view.stops) stop.stop.role};
+    final isRoute = _view.isRoute;
+    final roles = {for (final stop in _view.stops) stop.role};
     final attentionCount = data.trip.legs.where((leg) => leg.status == TripLegStatus.attention).length;
 
     Widget action(String key, String label, IconData icon, VoidCallback? onPressed) => OutlinedButton.icon(
