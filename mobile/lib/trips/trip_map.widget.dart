@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:immich_mobile/extensions/asyncvalue_extensions.dart';
 import 'package:immich_mobile/trips/trip_text.dart';
@@ -40,6 +41,9 @@ const _badgeModes = {
   TripLegMode.flight,
 };
 
+/// A stop marker's width in logical pixels; a way's marker is smaller.
+const _markerSize = 24.0;
+
 /// How much of its own opacity a leg keeps while another leg is open.
 const _faded = 0.35;
 
@@ -52,6 +56,9 @@ class TripMap extends StatefulWidget {
 
   /// A stop or transit item was tapped on the map.
   final void Function(TripItem item) onOpen;
+
+  /// A tap found several items under the finger: their ids, listed instead of opening one (web TripPage `onSelect`)
+  final void Function(List<String> itemIds)? onSeveral;
 
   /// The item to bring into view, when it changes.
   final TripItem? focused;
@@ -75,6 +82,7 @@ class TripMap extends StatefulWidget {
     super.key,
     required this.view,
     required this.onOpen,
+    this.onSeveral,
     this.focused,
     this.openLegId,
     this.onOpenLeg,
@@ -143,14 +151,41 @@ class _TripMapState extends State<TripMap> {
       widget.onOpenLeg?.call(id);
       return;
     }
-    if (layerId != 'trip-stops') {
+    if (layerId == 'trip-stops') {
+      unawaited(_openAt(point, id));
+    }
+  }
+
+  // Stop markers overlap rather than cluster, so a finger may cover several: every marker within a marker's reach of
+  // the tap is listed, as the web lists the stops of a tapped cluster; one alone opens.
+  Future<void> _openAt(math.Point<double> point, String tappedId) async {
+    final controller = _controller;
+    final ids = {tappedId};
+    if (controller != null && widget.onSeveral != null) {
+      // The plugin reports a tap in physical pixels on Android and in logical ones on iOS.
+      final reach = _markerSize / 2 * (defaultTargetPlatform == TargetPlatform.android ? _ratio : 1);
+      try {
+        final features = await controller.queryRenderedFeaturesInRect(
+          Rect.fromCenter(center: Offset(point.x, point.y), width: 2 * reach, height: 2 * reach),
+          ['trip-stops'],
+          null,
+        );
+        ids.addAll([
+          for (final feature in features)
+            if (feature case {'id': final String id}) id,
+        ]);
+      } catch (_) {
+        // The tapped marker alone still opens.
+      }
+    }
+    if (!mounted) {
       return;
     }
-    for (final item in _view.order) {
-      if (item.id == id) {
-        widget.onOpen(item);
-        return;
-      }
+    final items = _view.itemsOf(ids);
+    if (items.length > 1) {
+      widget.onSeveral?.call([for (final item in items) item.id]);
+    } else if (items.isNotEmpty) {
+      widget.onOpen(items.first);
     }
   }
 
@@ -387,7 +422,7 @@ class _TripMapState extends State<TripMap> {
   /// the way), drawn at the screen's pixel ratio.
   Future<void> _image(String name, int color, {String text = '', IconData? icon, bool small = false}) async {
     final unit = _ratio;
-    final size = (small ? 16.0 : 24.0) * unit;
+    final size = (small ? 16.0 : _markerSize) * unit;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final center = Offset(size / 2, size / 2);

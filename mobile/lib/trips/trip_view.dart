@@ -255,6 +255,12 @@ class TripView {
 
   TripViewStop? stopById(String id) => stops.where((stop) => stop.id == id).firstOrNull;
 
+  /// The items among `ids` in trip order, as a list of several stops shows them.
+  List<TripItem> itemsOf(Iterable<String> ids) {
+    final wanted = ids.toSet();
+    return order.where((item) => wanted.contains(item.id)).toList();
+  }
+
   /// A leg the map draws; one still being routed has no line and is not among them.
   TripViewLeg? legById(String? id) => legs.where((leg) => leg.id == id).firstOrNull;
 
