@@ -156,6 +156,25 @@ void main() {
       expect(data?.isBusy, isFalse);
     });
 
+    test('shows the trip an edit answers after the trip was read again (Retry)', () async {
+      when(() => repository.getTrip('album')).thenAnswer((_) async => _trip());
+      final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
+      addTearDown(container.dispose);
+      final subscription = container.listen(tripDataProvider('album'), (_, _) {});
+      addTearDown(subscription.close);
+      await container.read(tripDataProvider('album').future);
+      container.invalidate(tripDataProvider('album'));
+      await container.read(tripDataProvider('album').future);
+
+      await container
+          .read(tripDataProvider('album').notifier)
+          .run((_, albumId) async => _trip(kind: TripKind.places, contentVersion: 2));
+
+      final data = container.read(tripDataProvider('album')).valueOrNull;
+      expect(data?.view.kind, TripKind.places);
+      expect(data?.isBusy, isFalse);
+    });
+
     test('keeps the trip when an edit is refused', () async {
       when(() => repository.getTrip('album')).thenAnswer((_) async => _trip());
       final container = ProviderContainer(overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)]);
