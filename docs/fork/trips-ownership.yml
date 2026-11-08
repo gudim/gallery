@@ -116,6 +116,8 @@ features:
       # the trips APK this server ships: "Android app" in the web's account menu, the app's update offer at launch
       - web/src/lib/components/shared-components/navigation-bar/AccountInfoPanel.svelte
       - mobile/lib/presentation/pages/common/gallery_tab_shell.page.dart
+      # the static file server sends the APK as an Android package (one setHeaders call)
+      - server/src/app.common.ts
       # mobile: ICU parameters the generator would type as numbers by their name, the trip range's year and the clock
       # suggestion's offset (two _kParamTypeOverrides lines)
       - mobile/bin/generate_keys.dart

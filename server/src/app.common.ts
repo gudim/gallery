@@ -12,6 +12,7 @@ import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { bootstrapTelemetry } from 'src/repositories/telemetry.repository.js';
 import { ApiService } from 'src/services/api.service.js';
+import { setTripsAppHeaders } from 'src/trips/utils/trips-app-headers.js';
 import { useSwagger } from 'src/utils/misc.js';
 
 export function configureTelemetry() {
@@ -80,6 +81,7 @@ export async function configureExpress(
           if (pathname.startsWith(`/_app/immutable`) && res.statusCode === 200) {
             res.setHeader('cache-control', 'public,max-age=31536000,immutable');
           }
+          setTripsAppHeaders(res, pathname);
         },
       }),
     );
