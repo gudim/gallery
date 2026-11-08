@@ -200,14 +200,6 @@ final tripDataProvider = AsyncNotifierProvider.autoDispose.family<TripDataNotifi
   TripDataNotifier.new,
 );
 
-class TripLike {
-  final int count;
-  final bool isLiked;
-  final bool isBusy;
-
-  const TripLike({this.count = 0, this.isLiked = false, this.isBusy = false});
-}
-
 /// Likes of a trip's assets (web trip-likes.svelte.ts): a toggle answers at once and takes the server's numbers when
 /// they come, or goes back when the request fails.
 class TripLikesNotifier extends AutoDisposeFamilyNotifier<Map<String, TripLike>, String> {
@@ -222,10 +214,7 @@ class TripLikesNotifier extends AutoDisposeFamilyNotifier<Map<String, TripLike>,
       for (final MapEntry(key: id, value: like) in stateOrNull?.entries ?? const <MapEntry<String, TripLike>>[])
         if (like.isBusy) id: like,
     };
-    return {
-      for (final photo in view?.photos ?? const <TripPhoto>[])
-        photo.id: pending[photo.id] ?? TripLike(count: photo.likes, isLiked: photo.isLiked),
-    };
+    return {for (final photo in view?.photos ?? const <TripPhoto>[]) photo.id: pending[photo.id] ?? photo.like};
   }
 
   Future<void> toggle(String assetId) async {

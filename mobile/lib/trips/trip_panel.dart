@@ -231,9 +231,7 @@ class TripPanel extends ConsumerWidget {
         }
       case TripKind.plain:
         rows.addAll(
-          view.stops
-              .where((stop) => isEditing || stop.photos.isNotEmpty)
-              .map((stop) => _StopRow(stop: stop, isRoute: false, onOpen: onOpen)),
+          view.stopsInList(isEditing: isEditing).map((stop) => _StopRow(stop: stop, isRoute: false, onOpen: onOpen)),
         );
       default:
         for (final (index, day) in view.days.indexed) {

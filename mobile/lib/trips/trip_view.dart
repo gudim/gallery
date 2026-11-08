@@ -45,30 +45,30 @@ String tripLocalDate(DateTime? time) => time == null ? '' : time.toUtc().toIso86
 /// `HH:MM` of a wall-clock time, or null.
 String? tripLocalTime(DateTime? time) => time?.toUtc().toIso8601String().substring(11, 16);
 
+/// An asset's likes as the caller sees them; `isBusy` while the caller's toggle is on its way.
+class TripLike {
+  final int count;
+  final bool isLiked;
+  final bool isBusy;
+
+  const TripLike({this.count = 0, this.isLiked = false, this.isBusy = false});
+}
+
+/// An asset as the trip files it: where the trip puts it, and its likes.
 class TripPhoto {
-  final String id;
   final TripAssetInfo asset;
-  final String? time;
-  final String date;
-  final bool isVideo;
 
   /// The point was inferred from neighbours in time
   final bool isInferred;
   final LatLng? point;
-  final int likes;
-  final bool isLiked;
+  final TripLike like;
 
-  const TripPhoto({
-    required this.id,
-    required this.asset,
-    required this.time,
-    required this.date,
-    required this.isVideo,
-    required this.isInferred,
-    required this.point,
-    required this.likes,
-    required this.isLiked,
-  });
+  const TripPhoto({required this.asset, required this.isInferred, required this.point, required this.like});
+
+  String get id => asset.id;
+  bool get isVideo => asset.isVideo;
+  String? get time => tripLocalTime(asset.localDateTime);
+  String get date => tripLocalDate(asset.localDateTime);
 }
 
 class TripDay {
@@ -122,7 +122,6 @@ class TripViewStop extends TripItem {
 
   /// 1-based among stops with assets; start, finish and empty stops have none
   int? number;
-  final bool isEnd;
   final String? article;
   final String? placeId;
 
@@ -137,7 +136,6 @@ class TripViewStop extends TripItem {
     required this.country,
     required this.point,
     required this.date,
-    required this.isEnd,
     required this.article,
     required this.placeId,
   });
@@ -148,6 +146,9 @@ class TripViewStop extends TripItem {
   /// Start or finish; null for the stops between them
   TripStopRole? get role => stop.role;
   bool get isStart => stop.role == TripStopRole.start;
+
+  /// The start or the finish
+  bool get isEnd => stop.role != null;
   bool get isAddedByHand => stop.isAddedByHand;
   bool get isAtCenter => stop.isAtCenter;
   bool get isPositionManual => stop.isPositionManual;
@@ -248,6 +249,10 @@ class TripView {
   /// Every kind but Plain shows a map
   bool get hasMap => kind != TripKind.plain;
 
+  /// The stops a list shows: those with assets; edit mode lists the others too.
+  Iterable<TripViewStop> stopsInList({required bool isEditing}) =>
+      stops.where((stop) => isEditing || stop.photos.isNotEmpty);
+
   TripViewStop? stopById(String id) => stops.where((stop) => stop.id == id).firstOrNull;
 
   /// A leg the map draws; one still being routed has no line and is not among them.
@@ -335,15 +340,10 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
         .putIfAbsent(filing.stopId, () => [])
         .add(
           TripPhoto(
-            id: asset.id,
             asset: asset,
-            time: tripLocalTime(asset.localDateTime),
-            date: tripLocalDate(asset.localDateTime),
-            isVideo: asset.isVideo,
             isInferred: filing.pointSource == TripPointSource.inferred,
             point: tripLatLng(filing.latitude, filing.longitude) ?? asset.point,
-            likes: like?.count ?? 0,
-            isLiked: like?.isLiked ?? false,
+            like: TripLike(count: like?.count ?? 0, isLiked: like?.isLiked ?? false),
           ),
         );
   }
@@ -383,7 +383,6 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
       country: stop.country ?? '',
       point: tripLatLng(stop.latitude, stop.longitude),
       date: date,
-      isEnd: isEnd,
       placeId: stop.placeId,
       article: stop.placeId == null ? null : articles[stop.placeId],
     ).._span();
@@ -608,7 +607,7 @@ String _nameKey(String name) => name.toLowerCase().removeDiacritics();
 /// The places of a Places trip as its list shows them (web TripPanel `places`): most frames first, or by name, ties by
 /// id so the order holds between reads. Only edit mode lists a place without assets.
 List<TripViewStop> tripPlaces(TripView view, TripPlaceSort sort, {required bool isEditing}) {
-  final places = view.stops.where((stop) => isEditing || stop.photos.isNotEmpty).toList();
+  final places = view.stopsInList(isEditing: isEditing).toList();
   return places..sort((a, b) {
     final order = switch (sort) {
       TripPlaceSort.frames => b.photos.length.compareTo(a.photos.length),
