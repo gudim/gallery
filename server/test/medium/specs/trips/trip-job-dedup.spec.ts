@@ -47,7 +47,7 @@ describe('trip job deduplication', () => {
       closers.push(worker);
       return worker;
     };
-    const add = (jobName: JobName, albumId: string) =>
+    const add = (jobName: Parameters<typeof tripJobOptions>[0], albumId: string) =>
       queue.add(jobName, { id: albumId }, tripJobOptions(jobName, albumId));
     const finished = (count: number) =>
       new Promise<void>((resolve) => {

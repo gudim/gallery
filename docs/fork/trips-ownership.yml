@@ -84,7 +84,8 @@ features:
       - server/src/dtos/queue-legacy.dto.ts
       - web/src/lib/services/queue.service.ts
       - web/src/routes/admin/system-settings/JobSettings.svelte
-      # a retried LLM text job waits before it runs again (trips PLAN §2.6): one getJobOptions case
+      # a retried LLM text job waits before it runs again (trips PLAN §2.6): one getJobOptions case;
+      # filing, naming and routing are deduplicated per trip (trips DECISIONS-LOG): one case and an import
       - server/src/repositories/job.repository.ts
       # the Favorites trip mirrors stars (trips PLAN D15): one event, emitted by Gallery's PUT /assets/favorites
       - server/src/repositories/event.repository.ts
