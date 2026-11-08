@@ -14,40 +14,48 @@ import '../widget_tester_extensions.dart';
 
 class _MockTripsApiRepository extends Mock implements TripsApiRepository {}
 
-TripStopDto _stop(String id, {TripStopRole? role, String? title, int sequence = 0, bool isAddedByHand = false}) =>
-    TripStopDto(
-      country: null,
-      id: id,
-      isAddedByHand: isAddedByHand,
-      isAtCenter: false,
-      isFinishAtStart: false,
-      isPositionManual: false,
-      isTransit: false,
-      latitude: 55,
-      localEnd: null,
-      localStart: null,
-      longitude: 25,
-      placeId: null,
-      region: null,
-      role: role,
-      sequence: sequence,
-      story: null,
-      storySource: null,
-      title: title,
-      titleSource: null,
-    );
-
-TripResponseDto _trip(List<TripStopDto> stops, {int contentVersion = 1}) => TripResponseDto(
-  albumId: 'album',
-  kind: TripKind.route,
-  isFavorites: false,
-  isShowcased: false,
-  isFeatured: false,
-  isNaming: false,
-  language: null,
-  contentVersion: contentVersion,
-  stops: stops,
+TripStopDto _stop(
+  String id, {
+  TripStopRole? role,
+  String? title,
+  int sequence = 0,
+  bool isAddedByHand = false,
+  String? placeId,
+}) => TripStopDto(
+  country: null,
+  id: id,
+  isAddedByHand: isAddedByHand,
+  isAtCenter: false,
+  isFinishAtStart: false,
+  isPositionManual: false,
+  isTransit: false,
+  latitude: 55,
+  localEnd: null,
+  localStart: null,
+  longitude: 25,
+  placeId: placeId,
+  region: null,
+  role: role,
+  sequence: sequence,
+  story: null,
+  storySource: null,
+  title: title,
+  titleSource: null,
 );
+
+TripResponseDto _trip(List<TripStopDto> stops, {int contentVersion = 1, List<TripPlaceDto> places = const []}) =>
+    TripResponseDto(
+      albumId: 'album',
+      kind: TripKind.route,
+      isFavorites: false,
+      isShowcased: false,
+      isFeatured: false,
+      isNaming: false,
+      language: null,
+      contentVersion: contentVersion,
+      stops: stops,
+      places: places,
+    );
 
 void main() {
   late _MockTripsApiRepository repository;
@@ -179,6 +187,72 @@ void main() {
     await tester.pumpAndSettle();
 
     verify(() => repository.movePoint('album', 'p', 'b')).called(1);
+  });
+
+  testWidgets('shows the place of the stop that is open, also after another stop opens', (tester) async {
+    final trip = _trip(
+      [_stop('a', placeId: 'x'), _stop('b', sequence: 1)],
+      places: [TripPlaceDto(article: null, articleSource: null, id: 'x', key: 'x', title: 'Biržai')],
+    );
+    when(() => repository.getTrip('album')).thenAnswer((_) async => trip);
+    final openId = ValueNotifier('a');
+    await tester.pumpConsumerWidget(
+      Consumer(
+        builder: (context, ref, _) => ValueListenableBuilder(
+          valueListenable: openId,
+          builder: (context, id, _) {
+            final data = ref.watch(tripDataProvider('album')).valueOrNull;
+            final item = data?.view.stopById(id);
+            if (data == null || item == null) {
+              return const SizedBox.shrink();
+            }
+            return SingleChildScrollView(
+              child: TripStopEdit(data: data, item: item, onGone: () {}, onMovePin: (_) {}),
+            );
+          },
+        ),
+      ),
+      overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)],
+    );
+    await tester.pumpAndSettle();
+    final place = find.byKey(const ValueKey('trip-stop-place'));
+    expect(find.descendant(of: place, matching: find.text('Biržai')), findsOneWidget);
+
+    openId.value = 'b';
+    await tester.pumpAndSettle();
+
+    expect(find.descendant(of: place, matching: find.text('Biržai')), findsNothing);
+  });
+
+  testWidgets('offers the next places for a point once it has moved', (tester) async {
+    final moved = [
+      _stop('a'),
+      _stop('b', sequence: 1, title: 'B'),
+      _stop('p', sequence: 2, isAddedByHand: true),
+      _stop('c', sequence: 3, title: 'C'),
+    ];
+    when(() => repository.movePoint('album', 'p', 'b')).thenAnswer((_) async => _trip(moved, contentVersion: 2));
+    await open(
+      tester,
+      _trip([
+        _stop('a'),
+        _stop('p', sequence: 1, isAddedByHand: true),
+        _stop('b', sequence: 2, title: 'B'),
+        _stop('c', sequence: 3, title: 'C'),
+      ]),
+      'p',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('trip-stop-order')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('B').last);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('trip-stop-order')));
+    await tester.pumpAndSettle();
+    expect(find.text('C'), findsWidgets);
+    expect(find.text('B'), findsNothing);
   });
 
   test('the view the tests build keeps empty stops on a route', () {
