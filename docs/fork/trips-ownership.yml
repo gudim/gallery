@@ -113,6 +113,9 @@ features:
       - mobile/lib/presentation/pages/remote_album.page.dart
       - mobile/lib/presentation/widgets/remote_album/album_option.widget.dart
       - mobile/android/app/build.gradle
+      # the trips APK this server ships: "Android app" in the web's account menu, the app's update offer at launch
+      - web/src/lib/components/shared-components/navigation-bar/AccountInfoPanel.svelte
+      - mobile/lib/presentation/pages/common/gallery_tab_shell.page.dart
       # mobile: ICU parameters the generator would type as numbers by their name, the trip range's year and the clock
       # suggestion's offset (two _kParamTypeOverrides lines)
       - mobile/bin/generate_keys.dart

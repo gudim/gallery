@@ -14,6 +14,13 @@ name: Release Trips Server
 # after the next rebase). The app itself is stamped with the three-part base:
 # the server parses its version with SemVer and would not boot on four parts.
 # The full tag still reaches the server as IMMICH_SOURCE_REF.
+#
+# The trips Android app (TRIPS_BUILD, arm64 only) is built and signed here too
+# and shipped inside the image as static web files under /trips-app/: the APK
+# and gallery-trips.json, which the web's account menu and the app's update
+# check read. Signing needs the repository secrets TRIPS_ANDROID_KEY_JKS (the
+# keystore, base64), TRIPS_ANDROID_KEY_ALIAS, TRIPS_ANDROID_KEY_PASSWORD and
+# TRIPS_ANDROID_STORE_PASSWORD.
 
 on:
   workflow_dispatch:
@@ -45,6 +52,7 @@ jobs:
       base: ${{ steps.version.outputs.base }}
       sha: ${{ steps.version.outputs.sha }}
       image: ${{ steps.version.outputs.image }}
+      apk_code: ${{ steps.version.outputs.apk_code }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -62,11 +70,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$INPUT_VERSION" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)\.[1-9][0-9]*$ ]]; then
-            echo "::error::Invalid version: '$INPUT_VERSION' (expected <Gallery tag>.<build>, e.g. v5.10.0.1)"
+          if [[ ! "$INPUT_VERSION" =~ ^(v([0-9]+)\.([0-9]+)\.([0-9]+))\.([1-9][0-9]?)$ ]]; then
+            echo "::error::Invalid version: '$INPUT_VERSION' (expected <Gallery tag>.<build>, build 1-99, e.g. v5.10.0.1)"
             exit 1
           fi
           base="${BASH_REMATCH[1]}"
+          # The APK's version code (trips DECISIONS-LOG 2026-11-08): v5.10.0.1 -> 5100001.
+          apk_code=$(( BASH_REMATCH[2] * 1000000 + BASH_REMATCH[3] * 10000 + BASH_REMATCH[4] * 100 + BASH_REMATCH[5] ))
 
           sha="$DEFAULT_SHA"
           if [[ -n "$INPUT_COMMIT" ]]; then
@@ -105,12 +115,113 @@ jobs:
             echo "base=$base"
             echo "sha=$sha"
             echo "image=$image"
+            echo "apk_code=$apk_code"
           } >> "$GITHUB_OUTPUT"
           echo "Building $image:$INPUT_VERSION from $sha (Gallery $base)"
 
+  build-apk:
+    name: Build trips APK
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Apply branding
+        uses: ./.github/actions/apply-branding
+        with:
+          version: ${{ needs.version.outputs.base }}
+          build_number: ${{ needs.version.outputs.apk_code }}
+
+      - name: Setup Mise
+        uses: immich-app/devtools/actions/use-mise@3bca63ca3c15020293b36b51737a3ee2c773340b # use-mise-action-v3.1.0
+        with:
+          github_token: ${{ github.token }}
+          working_directory: ./mobile
+
+      - name: Create the keystore
+        env:
+          KEY_JKS: ${{ secrets.TRIPS_ANDROID_KEY_JKS }}
+        working-directory: ./mobile
+        run: |
+          if [[ -z "$KEY_JKS" ]]; then
+            echo "::error::secret TRIPS_ANDROID_KEY_JKS is not set; an APK signed with a throwaway key would not install over the last one"
+            exit 1
+          fi
+          printf '%s' "$KEY_JKS" | base64 -d > android/key.jks
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: 'stable'
+          flutter-version-file: ./mobile/pubspec.yaml
+          cache: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: ''
+
+      - name: Get packages
+        run: mise //mobile:install:ci
+
+      - name: Perform codegen
+        run: mise //mobile:codegen
+
+      - name: Build signed APK
+        working-directory: ./mobile
+        env:
+          TRIPS_BUILD: '1'
+          ALIAS: ${{ secrets.TRIPS_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.TRIPS_ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.TRIPS_ANDROID_STORE_PASSWORD }}
+          BASE: ${{ needs.version.outputs.base }}
+          CODE: ${{ needs.version.outputs.apk_code }}
+        run: |
+          flutter build apk --release --target-platform android-arm64 \
+            --build-name="${BASE#v}" --build-number="$CODE"
+
+      - name: Lay out /trips-app
+        working-directory: ./mobile
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CODE: ${{ needs.version.outputs.apk_code }}
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if ! unzip -Z1 "$apk" | grep -qx 'lib/arm64-v8a/libsqlite3.so'; then
+            echo "::error::libsqlite3.so missing from the APK"
+            exit 1
+          fi
+          out="$RUNNER_TEMP/trips-app"
+          mkdir -p "$out"
+          file="gallery-trips-${VERSION}.apk"
+          cp "$apk" "$out/$file"
+          jq -n --arg version "$VERSION" --argjson versionCode "$CODE" --arg file "$file" \
+            --argjson size "$(stat -c %s "$out/$file")" \
+            '{version: $version, versionCode: $versionCode, file: $file, size: $size}' > "$out/gallery-trips.json"
+          cat "$out/gallery-trips.json"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: trips-app
+          path: ${{ runner.temp }}/trips-app/*
+          if-no-files-found: error
+
   build-server:
     name: Build Server (${{ matrix.platform }})
-    needs: version
+    needs: [version, build-apk]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -146,6 +257,14 @@ jobs:
         uses: ./.github/actions/apply-branding
         with:
           version: ${{ needs.version.outputs.base }}
+
+      # After branding, which rewrites text files in the tree. The web build
+      # copies web/static into /build/www, which the server serves as is.
+      - name: Download APK into the web's static files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: trips-app
+          path: web/static/trips-app
 
       - name: Prepare platform pair
         id: prepare

@@ -31,6 +31,8 @@ uploads
 coverage
 
 mobile/generated
+# The trips APK and its gallery-trips.json, laid into the web's static files by trips-release-server.yml.
+web/static/trips-app/
 # Built by i18n/gallery/merge.mjs: upstream locale files plus the Gallery overlay.
 i18n/gallery/merged/
 # The committed Dart client is retired: it is generated into mobile/generated/openapi at build

@@ -8,6 +8,7 @@ import 'package:immich_mobile/gallery/motion/transitions.dart';
 import 'package:immich_mobile/presentation/widgets/gallery_nav/gallery_bottom_nav.widget.dart';
 import 'package:immich_mobile/providers/gallery_nav/gallery_nav_destination.dart';
 import 'package:immich_mobile/providers/gallery_nav/gallery_tab_enum.dart';
+import 'package:immich_mobile/trips/trips_app_update.dart';
 
 @RoutePage()
 class GalleryTabShellPage extends ConsumerStatefulWidget {
@@ -89,6 +90,7 @@ class _GalleryTabShellPageState extends ConsumerState<GalleryTabShellPage> {
     super.didChangeDependencies();
     // App-wide motion (favourite bursts, photos thrown to the trash) draws in the root overlay.
     GalleryMotionHost.attach(Overlay.of(context, rootOverlay: true));
+    TripsAppUpdate.checkOnce(context);
   }
 
   @override

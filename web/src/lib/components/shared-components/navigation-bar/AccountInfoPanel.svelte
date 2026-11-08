@@ -6,6 +6,7 @@
   import HelpAndFeedbackModal from '$lib/modals/HelpAndFeedbackModal.svelte';
   import { Route } from '$lib/route';
   import { userInteraction } from '$lib/stores/user.svelte';
+  import TripsAppDownload from '$lib/trips/app/TripsAppDownload.svelte';
   import { getAboutInfo, type ServerAboutResponseDto } from '@immich/sdk';
   import { Button, Icon, IconButton, modalManager } from '@immich/ui';
   import { mdiCog, mdiLogout, mdiPencil, mdiWrench } from '@mdi/js';
@@ -92,6 +93,7 @@
           </div>
         </Button>
       {/if}
+      <TripsAppDownload {onClose} />
     </div>
   </div>
 
