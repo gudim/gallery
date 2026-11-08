@@ -168,9 +168,9 @@ void main() {
       expect(view.km, 6);
       expect(tripStats(view), (assets: 5, videos: 1, stops: 3, days: 2, km: 6));
       final [a1, a2, _, b1, _] = view.photos;
-      expect((a1.point, a1.isInferred, a1.time, a1.likes), (const LatLng(1, 2), false, '10:05', 0));
+      expect((a1.point, a1.isInferred, a1.time, a1.like.count), (const LatLng(1, 2), false, '10:05', 0));
       expect((a2.point, a2.isInferred, a2.isVideo), (const LatLng(5, 6), true, true));
-      expect((b1.likes, b1.isLiked), (3, true));
+      expect((b1.like.count, b1.like.isLiked), (3, true));
     });
 
     test('colours each leg of a one-day trip on its own, counting legs without a line', () {
