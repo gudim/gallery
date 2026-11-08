@@ -65,7 +65,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder shift(String model) => find.byKey(ValueKey('trip-camera-shift-Canon|$model|false'));
+  // The page keys a camera's widgets by its make, model and kind.
+  ({String? make, String? model, bool isVideo}) camera(String model) => (make: 'Canon', model: model, isVideo: false);
+  Finder shift(String model) => find.byKey(ValueKey(('trip-camera-shift', camera(model))));
 
   testWidgets('suggests a shift and sends it for the caller\'s own assets', (tester) async {
     when(() => repository.shiftDates(['a1', 'a2'], -39)).thenAnswer((_) async {});
@@ -90,7 +92,7 @@ void main() {
     expect(tester.widget<FilledButton>(shift('M50')).onPressed, isNull);
     expect(find.textContaining('3 of its photos belong to others'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('trip-camera-minutes-Canon|G7|false')), '15');
+    await tester.enterText(find.byKey(ValueKey(('trip-camera-minutes', camera('G7')))), '15');
     await tester.pump();
     expect(tester.widget<FilledButton>(shift('G7')).onPressed, isNotNull);
   });

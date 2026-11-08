@@ -29,10 +29,10 @@ class TripPicking {
   final void Function(String assetId) toggle;
 
   /// Picks just these assets, as a place hint's "Select" does
-  final void Function(List<String> assetIds) only;
+  final void Function(List<String> assetIds) selectOnly;
   final VoidCallback clear;
 
-  const TripPicking({required this.ids, required this.toggle, required this.only, required this.clear});
+  const TripPicking({required this.ids, required this.toggle, required this.selectOnly, required this.clear});
 }
 
 class TripPanel extends ConsumerWidget {
@@ -140,7 +140,7 @@ class TripPanel extends ConsumerWidget {
                         ],
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
                         if (item is TripUnplaced && isEditing && view.isPlaces)
-                          TripPlaceHints(data: data, onSelect: picking.only, onMoved: picking.clear),
+                          TripPlaceHints(data: data, onSelect: picking.selectOnly, onMoved: picking.clear),
                         if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),
                         if (isEditing && item.photos.isNotEmpty) ...[

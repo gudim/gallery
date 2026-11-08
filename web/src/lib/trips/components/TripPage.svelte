@@ -145,7 +145,7 @@
     writeStop(undefined);
   };
 
-  const openLeg = (legId: string) => {
+  const showLeg = (legId: string) => {
     back();
     openLegId = legId;
     fitLeg(legId);
@@ -336,7 +336,7 @@
                   <TripRouteLayers
                     map={instance}
                     view={trip}
-                    onOpenLeg={isEditing ? openLeg : undefined}
+                    onOpenLeg={isEditing ? showLeg : undefined}
                     openLegId={isEditing ? openLegId : undefined}
                     onReady={(ready) => {
                       map = ready;
@@ -378,7 +378,7 @@
             {openLegId}
             {pickedIds}
             onOpen={open}
-            onOpenLeg={openLeg}
+            onOpenLeg={showLeg}
             onBack={back}
             onClearPicked={() => (pickedIds = undefined)}
             onMovePin={startMoving}
