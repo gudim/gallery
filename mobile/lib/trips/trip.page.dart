@@ -46,12 +46,16 @@ class _TripPageState extends ConsumerState<TripPage> {
   /// Assets picked in the open stop's grid in edit mode (web assetMultiSelectManager)
   Set<String> _picked = const {};
 
+  /// Several stops a tap on the map found under the finger, listed in the panel (web TripPage `pickedIds`)
+  List<String>? _clusterIds;
+
   /// Shows an item, a leg, or the whole trip when both are null; a pin move and picked assets are left behind.
   void _show({String? itemId, String? legId}) => setState(() {
     _openId = itemId;
     _openLegId = legId;
     _moving = null;
     _picked = const {};
+    _clusterIds = null;
   });
 
   void _open(TripItem item) => _show(itemId: item.id);
@@ -59,6 +63,11 @@ class _TripPageState extends ConsumerState<TripPage> {
   void _openLeg(String legId) => _show(legId: legId);
 
   void _back() => _show();
+
+  void _showCluster(List<String> itemIds) {
+    _show();
+    setState(() => _clusterIds = itemIds);
+  }
 
   // The open item stays open; a leg is opened in edit mode only.
   void _toggleEditing() {
@@ -209,12 +218,15 @@ class _TripPageState extends ConsumerState<TripPage> {
       onOpen: _open,
       onBack: _back,
       onMovePin: _startMoving,
+      cluster: _clusterIds == null ? null : view.itemsOf(_clusterIds!),
+      onClearCluster: _back,
     );
 
     final moving = _moving;
     Widget map({double bottomPadding = 0}) => TripMap(
       view: view,
       onOpen: _open,
+      onSeveral: _showCluster,
       focused: openItem,
       openLegId: _isEditing ? _openLegId : null,
       onOpenLeg: _isEditing ? _openLeg : null,

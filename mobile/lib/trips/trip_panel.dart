@@ -50,6 +50,10 @@ class TripPanel extends ConsumerWidget {
   final VoidCallback onBack;
   final void Function(TripViewStop stop) onMovePin;
 
+  /// Several stops a tap on the map found under the finger, listed in place of the trip's own list (web `pickedIds`)
+  final List<TripItem>? cluster;
+  final VoidCallback? onClearCluster;
+
   const TripPanel({
     super.key,
     required this.data,
@@ -62,6 +66,8 @@ class TripPanel extends ConsumerWidget {
     required this.onOpen,
     required this.onBack,
     required this.onMovePin,
+    this.cluster,
+    this.onClearCluster,
   });
 
   TripView get view => data.view;
@@ -200,7 +206,11 @@ class TripPanel extends ConsumerWidget {
             ),
           ),
           const SliverToBoxAdapter(child: Divider(height: 1)),
-          SliverList.list(children: _rows(context, lang, ref.watch(tripPlaceSortProvider(view.albumId)))),
+          SliverList.list(
+            children: cluster == null
+                ? _rows(context, lang, ref.watch(tripPlaceSortProvider(view.albumId)))
+                : _clusterRows(context, lang, cluster!),
+          ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ],
@@ -210,6 +220,28 @@ class TripPanel extends ConsumerWidget {
   String _stopName(Translations t, String stopId) {
     final stop = view.stopById(stopId);
     return stop == null ? '…' : tripRowTitle(t, stop);
+  }
+
+  List<Widget> _clusterRows(BuildContext context, String lang, List<TripItem> items) {
+    final t = context.t;
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 4, 0),
+        child: Row(
+          children: [
+            Expanded(child: Text(t.trips_several_stops, style: context.textTheme.titleSmall)),
+            IconButton(
+              key: const ValueKey('trip-cluster-close'),
+              icon: const Icon(Icons.close),
+              tooltip: t.close,
+              onPressed: onClearCluster,
+            ),
+          ],
+        ),
+      ),
+      for (final item in items)
+        _ItemRow(title: tripItemTitle(t, item, view, lang), count: item.photos.length, onTap: () => onOpen(item)),
+    ];
   }
 
   List<Widget> _rows(BuildContext context, String lang, TripPlaceSort placeSort) {

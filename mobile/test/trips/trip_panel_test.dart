@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_panel.dart';
+import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:openapi/api.dart';
@@ -33,6 +34,31 @@ TripStopDto _stop(String id, String title, {String? placeId}) => TripStopDto(
   storySource: null,
   title: title,
   titleSource: null,
+);
+
+AssetResponseDto _asset(String id) => AssetResponseDto(
+  id: id,
+  ownerId: 'owner',
+  checksum: 'checksum-$id',
+  createdAt: DateTime.utc(2026, 5, 1),
+  fileCreatedAt: DateTime.utc(2026, 5, 1, 10),
+  fileModifiedAt: DateTime.utc(2026, 5, 1, 10),
+  localDateTime: DateTime.utc(2026, 5, 1, 10),
+  updatedAt: DateTime.utc(2026, 5, 1),
+  duration: null,
+  hasMetadata: true,
+  height: 1080,
+  width: 1920,
+  isArchived: false,
+  isEdited: false,
+  isFavorite: false,
+  isOffline: false,
+  isTrashed: false,
+  originalFileName: '$id.jpg',
+  originalPath: '/upload/$id.jpg',
+  thumbhash: null,
+  type: AssetTypeEnum.IMAGE,
+  visibility: AssetVisibility.timeline,
 );
 
 void main() {
@@ -94,10 +120,15 @@ void main() {
     TripResponseDto trip, {
     String? openId,
     TripLegDto? openLeg,
+    List<String>? clusterIds,
+    void Function(TripItem item)? onOpen,
+    VoidCallback? onClearCluster,
     required bool isEditing,
   }) async {
     final repository = _MockTripsApiRepository();
-    when(() => repository.getAlbumAssets('album')).thenAnswer((_) async => []);
+    when(
+      () => repository.getAlbumAssets('album'),
+    ).thenAnswer((_) async => [for (final filing in trip.assets) _asset(filing.assetId)]);
     when(() => repository.getTrip('album')).thenAnswer((_) async => trip);
     await tester.pumpConsumerWidget(
       Consumer(
@@ -113,9 +144,11 @@ void main() {
                   isEditing: isEditing,
                   picking: TripPicking(ids: const [], toggle: (_) {}, selectOnly: (_) {}, clear: () {}),
                   controller: null,
-                  onOpen: (_) {},
+                  onOpen: onOpen ?? (_) {},
                   onBack: () {},
                   onMovePin: (_) {},
+                  cluster: clusterIds == null ? null : data.view.itemsOf(clusterIds),
+                  onClearCluster: onClearCluster ?? () {},
                 );
         },
       ),
@@ -124,7 +157,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  TripResponseDto trip({List<TripStopDto>? stops, List<TripLegDto> legs = const []}) => TripResponseDto(
+  TripResponseDto trip({
+    List<TripStopDto>? stops,
+    List<TripLegDto> legs = const [],
+    List<TripAssetDto> assets = const [],
+  }) => TripResponseDto(
     albumId: 'album',
     kind: TripKind.places,
     isFavorites: false,
@@ -136,6 +173,7 @@ void main() {
     stops: stops ?? [_stop('a', 'Biržai', placeId: 'x')],
     places: [TripPlaceDto(article: 'A town in the north.', articleSource: null, id: 'x', key: 'x', title: 'Biržai')],
     legs: legs,
+    assets: assets,
   );
 
   testWidgets('tells about the place only outside edit mode, as the web', (tester) async {
@@ -166,5 +204,36 @@ void main() {
     );
     await pumpPanel(tester, trip(legs: [leg]), openLeg: leg, isEditing: true);
     expect(find.text('Biržai → …'), findsOneWidget);
+  });
+
+  testWidgets('lists the stops under a tap on several, as the web; one opens, the cross closes the list', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    var cleared = 0;
+    await pumpPanel(
+      tester,
+      trip(
+        stops: [_stop('a', 'Biržai'), _stop('b', 'Pasvalys'), _stop('c', 'Rokiškis')],
+        assets: [
+          for (final id in ['a', 'b', 'c'])
+            TripAssetDto(assetId: '$id-1', stopId: id, latitude: null, longitude: null, pointSource: null),
+        ],
+      ),
+      clusterIds: ['c', 'a'],
+      onOpen: (item) => opened.add(item.id),
+      onClearCluster: () => cleared++,
+      isEditing: true,
+    );
+
+    expect(find.text('Several stops here'), findsOneWidget);
+    expect(find.text('Pasvalys'), findsNothing);
+    // Listed in trip order, whatever order the map found them in.
+    expect(tester.getTopLeft(find.text('Biržai')).dy, lessThan(tester.getTopLeft(find.text('Rokiškis')).dy));
+
+    await tester.tap(find.text('Rokiškis'));
+    await tester.tap(find.byKey(const ValueKey('trip-cluster-close')));
+    expect(opened, ['c']);
+    expect(cleared, 1);
   });
 }
