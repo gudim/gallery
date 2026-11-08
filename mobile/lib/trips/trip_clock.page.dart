@@ -100,10 +100,13 @@ class _TripClockPageState extends ConsumerState<TripClockPage> {
       return;
     }
     final t = context.t;
+    // Read before the await: the page may be gone by the answer, and the trip under it must still follow the shift.
+    final repository = ref.read(tripsApiRepositoryProvider);
+    final trip = ref.read(tripDataProvider(widget.albumId).notifier);
     setState(() => _applying = _idOf(camera));
     try {
-      await ref.read(tripsApiRepositoryProvider).shiftDates(camera.ownAssetIds, offset);
-      ref.read(tripDataProvider(widget.albumId).notifier).follow();
+      await repository.shiftDates(camera.ownAssetIds, offset);
+      trip.follow();
       if (mounted) {
         ImmichToast.show(context: context, msg: t.trips_clock_applied, toastType: ToastType.success);
         Navigator.of(context).pop();

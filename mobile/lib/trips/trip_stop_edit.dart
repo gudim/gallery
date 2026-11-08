@@ -213,7 +213,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
       );
     }
 
-    final orderOptions = isHandPoint && isRoute ? _orderOptions(t, stop) : const <TripViewStop>[];
+    final orderOptions = isHandPoint && isRoute ? _orderOptions(stop) : const <TripViewStop>[];
 
     return Column(
       key: const ValueKey('trip-stop-edit'),
@@ -398,7 +398,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
   }
 
   /// A point added by hand goes after any other stop of the route, listed in trip order.
-  List<TripViewStop> _orderOptions(Translations t, TripViewStop stop) {
+  List<TripViewStop> _orderOptions(TripViewStop stop) {
     final stops = _view.stops;
     final index = stops.indexWhere((candidate) => candidate.id == stop.id);
     // Going after the stop it already follows changes nothing.

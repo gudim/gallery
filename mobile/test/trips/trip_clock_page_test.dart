@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trips_api.repository.dart';
 import 'package:mocktail/mocktail.dart';
@@ -89,5 +93,34 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('trip-camera-minutes-Canon|G7|false')), '15');
     await tester.pump();
     expect(tester.widget<FilledButton>(shift('G7')).onPressed, isNotNull);
+  });
+
+  testWidgets('reads the trip again after a shift even when the page was left before the answer', (tester) async {
+    final answer = Completer<void>();
+    when(() => repository.shiftDates(['a1', 'a2'], -39)).thenAnswer((_) => answer.future);
+    when(() => repository.getCameras('album')).thenAnswer((_) async => [_camera('G7', offset: -39)]);
+    // The trip screen under the page keeps the trip's data alive, as in the app.
+    await tester.pumpConsumerWidget(
+      Consumer(
+        builder: (context, ref, _) {
+          ref.watch(tripDataProvider('album'));
+          return TextButton(onPressed: () => showTripClockPage(context, 'album'), child: const Text('open'));
+        },
+      ),
+      overrides: [tripsApiRepositoryProvider.overrideWithValue(repository)],
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(shift('G7'));
+    await tester.pump();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    answer.complete();
+    await tester.pumpAndSettle();
+    await tester.pump(TripDataNotifier.pollInterval);
+
+    verify(() => repository.getTrip('album')).called(2);
   });
 }
