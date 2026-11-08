@@ -122,20 +122,22 @@ class _TripMapState extends State<TripMap> {
     }
     final pin = widget.pin;
     if (old.pin == null && pin != null) {
-      unawaited(_centreOn(pin));
+      unawaited(_startPinMove(pin));
     }
     if (old.pin != null && pin == null) {
-      unawaited(_endPin());
+      unawaited(_endPinMove());
     }
   }
 
-  /// The sheet is back: keep the open stop above it, as the fit's padding did before the move.
-  Future<void> _endPin() async {
+  /// Puts back the bottom padding the move cleared (the sheet's height on the phone, none on the wide layout), so the
+  /// open stop sits clear of the sheet again.
+  Future<void> _endPinMove() async {
     await _controller?.setPadding(bottom: widget.bottomPadding);
     await _focus();
   }
 
-  Future<void> _centreOn(LatLng pin) async {
+  /// Centres the camera on the pin, which is drawn at the map's centre.
+  Future<void> _startPinMove(LatLng pin) async {
     final controller = _controller;
     if (controller == null) {
       return;
@@ -507,6 +509,11 @@ class _TripMapState extends State<TripMap> {
       await (isAnimated ? controller.animateCamera(update) : controller.moveCamera(update));
     }
 
+    // The fit carries its own padding. On iOS the padding a pin move's end left on the camera would be added to it, so
+    // the sheet's height would count twice; on Android the fit's padding replaces it.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await controller.setPadding();
+    }
     await move(
       CameraUpdate.newLatLngBounds(
         bounds,
