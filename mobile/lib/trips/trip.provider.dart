@@ -56,14 +56,17 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
 
   /// The assets' dates moved since they were read, so the next changed trip reads them again.
   bool _isAssetsStale = false;
-  bool _isDisposed = false;
+
+  /// Grows on every dispose. Riverpod keeps this object when the provider is read again (Retry), so a call that began
+  /// before compares the epoch it saw instead of a flag that would stay set.
+  int _epoch = 0;
   List<TripAssetInfo> _infos = const [];
   Map<String, RemoteAsset> _assets = const {};
 
   @override
   Future<TripData?> build(String albumId) async {
     ref.onDispose(() {
-      _isDisposed = true;
+      _epoch++;
       _timer?.cancel();
     });
     final repository = ref.watch(tripsApiRepositoryProvider);
@@ -105,16 +108,17 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
     if (shown == null) {
       return false;
     }
+    final epoch = _epoch;
     state = AsyncData(TripData(trip: shown.trip, view: shown.view, assets: shown.assets, isBusy: true));
     try {
       final trip = await edit(ref.read(tripsApiRepositoryProvider), arg);
-      if (!_isDisposed) {
+      if (epoch == _epoch) {
         state = AsyncData(_show(trip));
         _schedule(trip);
       }
       return true;
     } catch (_) {
-      if (!_isDisposed) {
+      if (epoch == _epoch) {
         final current = state.valueOrNull ?? shown;
         state = AsyncData(_show(current.trip));
       }
@@ -131,12 +135,13 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
   }
 
   Future<void> _poll(TripResponseDto polled) async {
+    final epoch = _epoch;
     var next = polled;
     _followPolls = _followPolls > 0 ? _followPolls - 1 : 0;
     try {
       final repository = ref.read(tripsApiRepositoryProvider);
       final trip = await repository.getTrip(arg);
-      if (_isDisposed) {
+      if (epoch != _epoch) {
         return;
       }
       // An edit that answered meanwhile is newer than this read, and one still running will answer newer.
@@ -147,7 +152,7 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
           if (_isAssetsStale) {
             await _readAssets(repository);
             _isAssetsStale = false;
-            if (_isDisposed) {
+            if (epoch != _epoch) {
               return;
             }
             // An edit started meanwhile answers with a newer trip, shown with these assets.
@@ -163,7 +168,7 @@ class TripDataNotifier extends AutoDisposeFamilyAsyncNotifier<TripData?, String>
     } catch (_) {
       // A failed read waits for the next one.
     }
-    if (!_isDisposed) {
+    if (epoch == _epoch) {
       _schedule(next);
     }
   }
