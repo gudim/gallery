@@ -141,7 +141,8 @@ class TripPanel extends ConsumerWidget {
                         if (item is TripUnplaced) ...[const SizedBox(height: 8), Text(t.trips_unplaced_note)],
                         if (item is TripUnplaced && isEditing && view.isPlaces)
                           TripPlaceHints(data: data, onSelect: picking.selectOnly, onMoved: picking.clear),
-                        if (item is TripViewStop && item.article != null && item.article!.isNotEmpty)
+                        // As the web: edit mode gives the room to the stop's fields.
+                        if (!isEditing && item is TripViewStop && item.article != null && item.article!.isNotEmpty)
                           _Article(text: item.article!),
                         if (isEditing && item.photos.isNotEmpty) ...[
                           const SizedBox(height: 12),
@@ -207,8 +208,8 @@ class TripPanel extends ConsumerWidget {
   }
 
   String _stopName(Translations t, String stopId) {
-    final stop = view.stops.where((stop) => stop.id == stopId).firstOrNull;
-    return stop == null ? '' : tripRowTitle(t, stop);
+    final stop = view.stopById(stopId);
+    return stop == null ? '…' : tripRowTitle(t, stop);
   }
 
   List<Widget> _rows(BuildContext context, String lang, TripPlaceSort placeSort) {
