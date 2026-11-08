@@ -78,10 +78,11 @@ class TripAssetActions extends ConsumerWidget {
     final t = context.t;
     final isSure = await showDialog<bool>(
       context: context,
+      // The web's dialog: Immich's default title and button, with the album's own prompt.
       builder: (_) => ConfirmDialog(
-        title: t.trips_hide_from_trip,
+        title: t.confirm,
         content: t.remove_assets_album_confirmation(count: ids.length),
-        ok: t.remove,
+        ok: t.confirm,
       ),
     );
     if (isSure != true || !context.mounted) {

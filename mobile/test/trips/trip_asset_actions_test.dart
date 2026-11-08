@@ -214,6 +214,9 @@ void main() {
     await tester.tap(action('trip-hide'));
     await tester.pumpAndSettle();
     verifyNever(() => repository.hideAssets(any(), any()));
+    // The web's dialog: its default title and button, with the album's own prompt.
+    expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Confirm')), findsNWidgets(2));
+    expect(find.widgetWithText(TextButton, 'Confirm'), findsOneWidget);
 
     await tester.tap(find.byType(TextButton).last);
     await tester.pumpAndSettle();
