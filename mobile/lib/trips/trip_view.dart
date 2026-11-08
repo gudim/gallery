@@ -42,13 +42,13 @@ class TripAssetInfo {
 /// `YYYY-MM-DD` of a wall-clock time, or ''.
 String tripLocalDate(DateTime? time) => time == null ? '' : time.toUtc().toIso8601String().substring(0, 10);
 
-/// `HH:MM` of a wall-clock time, or ''.
-String tripLocalTime(DateTime? time) => time == null ? '' : time.toUtc().toIso8601String().substring(11, 16);
+/// `HH:MM` of a wall-clock time, or null.
+String? tripLocalTime(DateTime? time) => time?.toUtc().toIso8601String().substring(11, 16);
 
 class TripPhoto {
   final String id;
   final TripAssetInfo asset;
-  final String time;
+  final String? time;
   final String date;
   final bool isVideo;
 
@@ -93,14 +93,14 @@ sealed class TripItem {
   /// Where the item sits on the map; null for Unplaced and for a stop without a position.
   LatLng? get point => null;
 
-  /// `HH:MM` of the first and last asset, or of the stop's window; '—' when there is none (web `t0`, `t1`)
-  String startTime = '—';
-  String endTime = '—';
+  /// `HH:MM` of the first and last asset, or of the stop's window; null when there is none (web `t0`, `t1`)
+  String? startTime;
+  String? endTime;
 
   void _span() {
     videoCount = photos.where((photo) => photo.isVideo).length;
-    startTime = photos.isEmpty || photos.first.time.isEmpty ? '—' : photos.first.time;
-    endTime = photos.isEmpty || photos.last.time.isEmpty ? '—' : photos.last.time;
+    startTime = photos.firstOrNull?.time;
+    endTime = photos.lastOrNull?.time;
   }
 }
 
@@ -378,8 +378,8 @@ TripView buildTripView(TripResponseDto trip, List<TripAssetInfo> assets) {
       placeId: stop.placeId,
       article: stop.placeId == null ? null : articles[stop.placeId],
     ).._span();
-    item.startTime = isTimed ? tripLocalTime(stop.localStart) : '—';
-    item.endTime = isTimed ? tripLocalTime(stop.localEnd ?? stop.localStart) : '—';
+    item.startTime = isTimed ? tripLocalTime(stop.localStart) : null;
+    item.endTime = isTimed ? tripLocalTime(stop.localEnd ?? stop.localStart) : null;
     return item;
   }).toList();
 
@@ -581,9 +581,14 @@ bool isWhiteInkOn(int argb) {
   return 1.05 / (luminance + 0.05) >= 4.5;
 }
 
+/// How a missing time reads.
+const tripNoTime = '—';
+
 /// `start–end`, or one time when they are equal.
-String tripTimeSpan(TripItem item) =>
-    item.startTime == item.endTime ? item.startTime : '${item.startTime}–${item.endTime}';
+String tripTimeSpan(TripItem item) {
+  final (start, end) = (item.startTime ?? tripNoTime, item.endTime ?? tripNoTime);
+  return start == end ? start : '$start–$end';
+}
 
 /// How a Places trip lists its places (web TripPanel `placeSort`).
 enum TripPlaceSort { frames, name }

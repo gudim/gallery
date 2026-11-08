@@ -246,7 +246,7 @@ class TripPanel extends ConsumerWidget {
             for (final way in view.transit.where((way) => way.fromStopId == stop.id)) {
               rows.add(
                 _ItemRow(
-                  leading: way.startTime,
+                  leading: way.startTime ?? tripNoTime,
                   title: t.trips_on_the_way,
                   count: way.photos.length,
                   isMuted: true,
@@ -397,7 +397,7 @@ class _StopRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ItemRow(
       key: ValueKey('trip-stop-row-${stop.id}'),
-      leading: isRoute ? stop.startTime : null,
+      leading: isRoute ? stop.startTime ?? tripNoTime : null,
       title: tripRowTitle(context.t, stop),
       count: stop.photos.length,
       isMuted: stop.photos.length <= 3,
