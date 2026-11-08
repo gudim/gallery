@@ -14,8 +14,6 @@ import 'package:openapi/api.dart';
 // A leg in edit mode (trips PLAN §2.9), after web TripLegEdit.svelte: its mode, a train's stations near both ends, and
 // a retry when routing failed. A trail is drawn by an overlay, so it is never offered as a mode.
 
-/// Where a station stands
-
 class TripLegEdit extends ConsumerStatefulWidget {
   final TripData data;
   final TripLegDto leg;
