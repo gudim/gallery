@@ -1,6 +1,6 @@
 # Trips: progress
 
-## Stage 2.9: mobile app (branch `trips-9`, from `trips-all`): checks done 2026-11-08, waiting for the owner
+## Stage 2.9: mobile app (branch `trips-9`, from `trips-all`): closed 2026-11-08
 
 Delivered in five parts, each shown to the owner (DECISIONS-LOG 2026-11-07). Checked on the dev stack (`ghcr.io/gudim/gallery-server:v5.9.1` with `server/dist` built from `trips-9`, `vite dev` for the web) and on the Android 35 AVDs `trips_phone` and `trips_tablet` with debug builds of `trips-9`.
 
@@ -9,7 +9,7 @@ Delivered in five parts, each shown to the owner (DECISIONS-LOG 2026-11-07). Che
   - phone to web: a stop title, a stop story, a leg's mode (car to boat), a photo moved to the next stop (3 · 9 to 2 · 10); the web panel showed the same titles, counts, legs and the 117 km total;
   - web to phone: a stop title typed in the web editor, a leg's mode picked there (car to bus), a photo moved back from the web's selection bar; the phone showed each one.
 - [x] An editor edits a trip on the phone; a viewer cannot. Dev users `editor@` and `viewer@gallery.localhost` share "Проверка поездки" with those roles. The editor got the pencil and renamed a stop, which the server kept and the web showed; the viewer got no pencil, and an open stop showed its title and assets with no fields and no actions.
-- [ ] The owner has seen emulator screenshots, phone and tablet, in both themes, next to Gallery's own album and map screens. Phone shots from parts 1 to 5; tablet shots of 2026-11-08: Gallery's album and map pages, the trip screen and an open stop in edit mode, dark and light.
+- [x] The owner has seen emulator screenshots, phone and tablet, in both themes, next to Gallery's own album and map screens. Phone shots from parts 1 to 5; tablet shots of 2026-11-08: Gallery's album and map pages, the trip screen and an open stop in edit mode, dark and light. Approved by the owner on 2026-11-08, together with the web before/after shots.
 - [x] Codegen, `dart analyze` and `flutter test` are green: 4187 passed, 1 skipped (2026-11-08). Web unit suite green as well (417 files, 6699 tests).
 
 Web changes made on this branch (the open leg glows and the map fits it, `3c348722a85`; places sorted by the name their rows show, `fb3eaf70256`) have before and after screenshots at 1440 and 390 px in both themes. The places shot blanks one stop's title in the browser only, since the server names a blank stop again at once.
