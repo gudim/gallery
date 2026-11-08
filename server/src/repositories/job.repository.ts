@@ -11,6 +11,7 @@ import { ImmichWorker, JobName, JobStatus, MetadataKey, QueueCleanType, QueueJob
 import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { EventRepository } from 'src/repositories/event.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
+import { tripJobOptions } from 'src/trips/utils/job-options.js';
 import { ImmichStartupError, getKeyByValue, getMethodNames } from 'src/utils/misc.js';
 
 type JobMapItem = {
@@ -417,6 +418,11 @@ export class JobRepository {
       }
       case JobName.TripTexts: {
         return { delay: item.data.delay };
+      }
+      case JobName.TripFile:
+      case JobName.TripName:
+      case JobName.TripRouteLegs: {
+        return tripJobOptions(item.name, item.data.id);
       }
       case JobName.StorageTemplateMigrationSingle: {
         return { jobId: item.data.id };

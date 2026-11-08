@@ -6,7 +6,7 @@ import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { EventRepository } from 'src/repositories/event.repository.js';
 import { JobRepository, buildWorkerOptions } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
-import { JobCounts } from 'src/types.js';
+import { JobCounts, JobItem } from 'src/types.js';
 
 vi.mock('node:timers/promises', () => ({
   setTimeout: vi.fn().mockResolvedValue(void 0),
@@ -405,6 +405,31 @@ describe(JobRepository.name, () => {
       { jobId: 'shared-space-face-match-all/space-1', removeOnComplete: true, removeOnFail: true },
     );
   });
+
+  it.each([JobName.TripFile, JobName.TripName, JobName.TripRouteLegs])(
+    'deduplicates %s per trip, keeping one run after an active one, and drops it when it fails',
+    async (name) => {
+      const { sut, queue } = setup();
+      setHandlers(sut, [name]);
+
+      await sut.queueAll([
+        { name, data: { id: 'album-1' } },
+        { name, data: { id: 'album-1' } },
+      ] as JobItem[]);
+
+      expect(queue.addBulk).not.toHaveBeenCalled();
+      expect(queue.add).toHaveBeenCalledTimes(2);
+      expect(queue.add).toHaveBeenCalledWith(
+        name,
+        { id: 'album-1' },
+        {
+          deduplication: { id: `${name}/album-1`, keepLastIfActive: true },
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
+    },
+  );
 
   it('uses stable job ids for global face suggestion maintenance and queue-all fanout jobs', async () => {
     const { sut, queue } = setup();
