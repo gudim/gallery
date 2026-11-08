@@ -8,12 +8,18 @@ name: Release Trips Server
 # Derived from gallery-release-server-only.yml, which stays untouched. Only
 # the server build and manifest merge are kept: no ML images, no git tags,
 # no GitHub Release, no version endpoint publish.
+#
+# Versioning: the image tag is the Gallery release tag trips-all is rebased
+# onto plus a fourth number, our build (v5.10.0.1, v5.10.0.2, ... and v5.11.0.1
+# after the next rebase). The app itself is stamped with the three-part base:
+# the server parses its version with SemVer and would not boot on four parts.
+# The full tag still reaches the server as IMMICH_SOURCE_REF.
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to stamp and push (e.g. v4.56.6)'
+        description: 'Image tag: the Gallery base tag plus our build number (e.g. v5.10.0.1)'
         required: true
         type: string
       commit:
@@ -36,6 +42,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       major: ${{ steps.version.outputs.major }}
+      base: ${{ steps.version.outputs.base }}
       sha: ${{ steps.version.outputs.sha }}
       image: ${{ steps.version.outputs.image }}
     steps:
@@ -55,10 +62,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$INPUT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Invalid version: '$INPUT_VERSION' (expected v<major>.<minor>.<patch>, e.g. v4.56.6)"
+          if [[ ! "$INPUT_VERSION" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)\.[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid version: '$INPUT_VERSION' (expected <Gallery tag>.<build>, e.g. v5.10.0.1)"
             exit 1
           fi
+          base="${BASH_REMATCH[1]}"
 
           sha="$DEFAULT_SHA"
           if [[ -n "$INPUT_COMMIT" ]]; then
@@ -73,6 +81,20 @@ jobs:
             fi
           fi
 
+          # The base must be the Gallery release the build sits on: its tag is
+          # an ancestor of the commit, and no newer Gallery tag is.
+          git fetch --quiet --no-tags https://github.com/open-noodle/gallery.git '+refs/tags/v*:refs/gallery-tags/v*'
+          if ! git rev-parse --verify --quiet "refs/gallery-tags/${base}^{commit}" >/dev/null; then
+            echo "::error::Gallery has no tag ${base}"
+            exit 1
+          fi
+          newest=$(git for-each-ref --merged "$sha" --format='%(refname:lstrip=2)' 'refs/gallery-tags/v*' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [[ "$newest" != "$base" ]]; then
+            echo "::error::${sha} is built on Gallery '${newest}', not ${base}; use ${newest}.<build>"
+            exit 1
+          fi
+
           # GHCR image names must be lowercase.
           image="ghcr.io/${OWNER,,}/gallery-server"
 
@@ -80,10 +102,11 @@ jobs:
           {
             echo "version=$INPUT_VERSION"
             echo "major=v${major}"
+            echo "base=$base"
             echo "sha=$sha"
             echo "image=$image"
           } >> "$GITHUB_OUTPUT"
-          echo "Building $image:$INPUT_VERSION from $sha"
+          echo "Building $image:$INPUT_VERSION from $sha (Gallery $base)"
 
   build-server:
     name: Build Server (${{ matrix.platform }})
@@ -122,7 +145,7 @@ jobs:
       - name: Apply branding
         uses: ./.github/actions/apply-branding
         with:
-          version: ${{ needs.version.outputs.version }}
+          version: ${{ needs.version.outputs.base }}
 
       - name: Prepare platform pair
         id: prepare
