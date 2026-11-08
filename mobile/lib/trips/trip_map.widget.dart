@@ -122,9 +122,29 @@ class _TripMapState extends State<TripMap> {
     }
     final pin = widget.pin;
     if (old.pin == null && pin != null) {
-      final zoom = math.max(_controller?.cameraPosition?.zoom ?? 15, 15).toDouble();
-      unawaited(_controller?.animateCamera(CameraUpdate.newLatLngZoom(pin, zoom)));
+      unawaited(_centreOn(pin));
     }
+    if (old.pin != null && pin == null) {
+      unawaited(_endPin());
+    }
+  }
+
+  /// The sheet is back: keep the open stop above it, as the fit's padding did before the move.
+  Future<void> _endPin() async {
+    await _controller?.setPadding(bottom: widget.bottomPadding);
+    await _focus();
+  }
+
+  Future<void> _centreOn(LatLng pin) async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    // A fit leaves its padding on the camera (Android), and the camera's target would then sit above the pin drawn at
+    // the map's centre, so the pin would save a point it does not show.
+    await controller.setPadding();
+    final zoom = math.max(controller.cameraPosition?.zoom ?? 15, 15).toDouble();
+    await controller.animateCamera(CameraUpdate.newLatLngZoom(pin, zoom));
   }
 
   void _onCameraIdle() {
@@ -531,28 +551,27 @@ class _TripMapState extends State<TripMap> {
         ),
       ),
     );
-    if (widget.pin == null) {
-      return map;
-    }
     const pinSize = 48.0;
+    // One tree shape with the map first, pin or not: a new shape would rebuild the platform view, reloading the style.
     return Stack(
       children: [
         Positioned.fill(child: map),
         // The pin's tip sits on the map's centre; the map is panned under it.
-        IgnorePointer(
-          child: Center(
-            child: Transform.translate(
-              offset: const Offset(0, -pinSize / 2),
-              child: Icon(
-                Icons.location_on,
-                key: const ValueKey('trip-pin'),
-                size: pinSize,
-                color: Theme.of(context).colorScheme.primary,
-                shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
+        if (widget.pin != null)
+          IgnorePointer(
+            child: Center(
+              child: Transform.translate(
+                offset: const Offset(0, -pinSize / 2),
+                child: Icon(
+                  Icons.location_on,
+                  key: const ValueKey('trip-pin'),
+                  size: pinSize,
+                  color: Theme.of(context).colorScheme.primary,
+                  shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
