@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,11 @@ import 'package:openapi/api.dart';
 
 // Texts the trip screen derives from its model, ported from web/src/lib/trips/trip-text.ts and the panel's lines.
 // `lang` is the app's locale tag, for dates.
+
+extension TripTextStyle on BuildContext {
+  /// The small grey text of hints, counts and times on the trip screens
+  TextStyle? get tripMuted => textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
+}
 
 DateTime _utc(String date) => DateTime.parse('${date}T00:00:00Z');
 

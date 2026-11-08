@@ -71,7 +71,7 @@ class TripPanel extends ConsumerWidget {
     final t = context.t;
     final lang = context.locale.toLanguageTag();
     final item = openItem;
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
     final isSheet = controller != null;
     final leg = openLeg;
 
@@ -362,7 +362,7 @@ class _DayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
     return Padding(
       key: const ValueKey('trip-day'),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -427,10 +427,7 @@ class _ItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = context.textTheme.bodySmall?.copyWith(
-      color: context.colorScheme.onSurfaceVariant,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
+    final muted = context.tripMuted?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -467,7 +464,7 @@ class _LegRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
     final row = Padding(
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: onTap == null ? 2 : 8),
       child: Row(

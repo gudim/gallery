@@ -176,7 +176,7 @@ class _TripStopEditState extends ConsumerState<TripStopEdit> {
     final isHandPoint = stop != null && stop.isAddedByHand && role == null;
     final places = widget.data.trip.places;
     final isBusy = widget.data.isBusy;
-    final muted = context.textTheme.bodySmall?.copyWith(color: context.colorScheme.onSurfaceVariant);
+    final muted = context.tripMuted;
 
     Widget action(String label, IconData icon, VoidCallback onPressed, {Key? key, bool isDanger = false}) {
       final color = isDanger ? context.colorScheme.error : null;
