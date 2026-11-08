@@ -200,6 +200,11 @@ class TripViewLeg {
   final List<LatLng> points;
 
   const TripViewLeg({required this.leg, required this.day, required this.color, required this.points});
+
+  String get id => leg.id;
+  TripLegMode get mode => leg.mode;
+  String get fromStopId => leg.fromStopId;
+  String get toStopId => leg.toStopId;
 }
 
 class TripView {
@@ -244,6 +249,9 @@ class TripView {
   bool get hasMap => kind != TripKind.plain;
 
   TripViewStop? stopById(String id) => stops.where((stop) => stop.id == id).firstOrNull;
+
+  /// A leg the map draws; one still being routed has no line and is not among them.
+  TripViewLeg? legById(String? id) => legs.where((leg) => leg.id == id).firstOrNull;
 
   /// The item shown under `id`: a stop with assets, the way after one, Unplaced, or a stop without assets.
   TripItem? itemById(String id) => order.where((item) => item.id == id).firstOrNull ?? stopById(id);

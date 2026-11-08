@@ -163,14 +163,13 @@ class _TripLegEditState extends ConsumerState<TripLegEdit> {
             spacing: 8,
             children: [
               Text(t.trips_leg_attention),
-              OutlinedButton.icon(
+              TripActionButton(
                 key: const ValueKey('trip-leg-retry'),
+                label: t.trips_retry,
+                icon: Icons.refresh,
                 onPressed: isBusy
                     ? null
                     : () => unawaited(_run((repository, albumId) => repository.retryLeg(albumId, leg.id))),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(t.trips_retry),
-                style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
               ),
             ],
           ),

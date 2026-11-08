@@ -269,9 +269,9 @@ class _TripMapState extends State<TripMap> {
         'coordinates': [for (final point in leg.points) _lngLat(point)],
       },
       'properties': {
-        'mode': leg.leg.mode.toJson(),
+        'mode': leg.mode.toJson(),
         'color': _hex(leg.color),
-        'fade': openLegId == null || leg.leg.id == openLegId ? 1 : _faded,
+        'fade': openLegId == null || leg.id == openLegId ? 1 : _faded,
       },
     };
     await controller.setGeoJsonSource('trip-legs', {
@@ -282,7 +282,7 @@ class _TripMapState extends State<TripMap> {
       'type': 'FeatureCollection',
       'features': [
         for (final leg in _view.legs)
-          if (leg.leg.id == openLegId) legFeature(leg),
+          if (leg.id == openLegId) legFeature(leg),
       ],
     });
     await controller.setGeoJsonSource('trip-ends', {
@@ -330,11 +330,11 @@ class _TripMapState extends State<TripMap> {
     final zoom = controller.cameraPosition?.zoom ?? 0;
     final features = <Map<String, Object?>>[];
     for (final leg in _view.legs) {
-      if (!_badgeModes.contains(leg.leg.mode)) {
+      if (!_badgeModes.contains(leg.mode)) {
         continue;
       }
       final way = _view.transit
-          .where((item) => item.fromStopId == leg.leg.fromStopId && item.toStopId == leg.leg.toStopId)
+          .where((item) => item.fromStopId == leg.fromStopId && item.toStopId == leg.toStopId)
           .firstOrNull;
       final fraction = way != null && (way.fraction - 0.5).abs() < 0.15 ? (way.fraction < 0.5 ? 0.75 : 0.25) : 0.5;
       final (:at, :meters) = alongLine(leg.points, fraction);
@@ -344,7 +344,7 @@ class _TripMapState extends State<TripMap> {
       }
       features.add({
         'type': 'Feature',
-        'id': leg.leg.id,
+        'id': leg.id,
         'geometry': {'type': 'Point', 'coordinates': _lngLat(at)},
         'properties': {'image': _badgeImage(leg).name},
       });
@@ -359,10 +359,10 @@ class _TripMapState extends State<TripMap> {
   }
 
   ({String name, int color, String text, IconData? icon, bool small}) _badgeImage(TripViewLeg leg) => (
-    name: 'trip-badge-${leg.color}-${leg.leg.mode.toJson()}',
+    name: 'trip-badge-${leg.color}-${leg.mode.toJson()}',
     color: leg.color,
     text: '',
-    icon: tripModeIcon(leg.leg.mode),
+    icon: tripModeIcon(leg.mode),
     small: false,
   );
 
@@ -372,7 +372,7 @@ class _TripMapState extends State<TripMap> {
       for (final item in _view.order)
         if (item is! TripUnplaced) _stopImage(item),
       for (final leg in _view.legs)
-        if (_badgeModes.contains(leg.leg.mode)) _badgeImage(leg),
+        if (_badgeModes.contains(leg.mode)) _badgeImage(leg),
     ];
     await Future.wait([
       for (final image in images)
@@ -425,7 +425,7 @@ class _TripMapState extends State<TripMap> {
 
   /// The map shows the whole open leg; one still being routed has no line yet.
   Future<void> _fitLeg() async {
-    final points = _view.legs.where((leg) => leg.leg.id == widget.openLegId).firstOrNull?.points ?? const [];
+    final points = _view.legById(widget.openLegId)?.points ?? const [];
     if (points.length >= 2) {
       await _fitPoints(points, padding: 60, maxZoom: 14, isAnimated: true);
     }

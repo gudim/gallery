@@ -6,6 +6,7 @@ import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/trips/trip.provider.dart';
 import 'package:immich_mobile/trips/trip_clock.page.dart';
 import 'package:immich_mobile/trips/trip_edit.dart';
+import 'package:immich_mobile/trips/trip_text.dart';
 import 'package:immich_mobile/trips/trip_view.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' show LatLng;
 import 'package:openapi/api.dart';
@@ -39,13 +40,8 @@ class TripRouteActions extends ConsumerWidget {
     final roles = {for (final stop in _view.stops) stop.role};
     final attentionCount = data.trip.legs.where((leg) => leg.status == TripLegStatus.attention).length;
 
-    Widget action(String key, String label, IconData icon, VoidCallback? onPressed) => OutlinedButton.icon(
-      key: ValueKey(key),
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-    );
+    Widget action(String key, String label, IconData icon, VoidCallback? onPressed) =>
+        TripActionButton(key: ValueKey(key), label: label, icon: icon, onPressed: onPressed);
     VoidCallback? edit(Future<void> Function() run) => data.isBusy ? null : () => unawaited(run());
 
     return Wrap(

@@ -13,6 +13,36 @@ extension TripTextStyle on BuildContext {
   TextStyle? get tripMuted => textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
 }
 
+/// A trip action: a compact outlined button with an icon; a dangerous one is red, and `onPressed` null disables it.
+class TripActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool isDanger;
+
+  const TripActionButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.isDanger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDanger ? context.colorScheme.error : null;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18, color: color),
+      label: Text(label, style: TextStyle(color: color)),
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        side: isDanger ? BorderSide(color: context.colorScheme.error) : null,
+      ),
+    );
+  }
+}
+
 DateTime _utc(String date) => DateTime.parse('${date}T00:00:00Z');
 
 /// "8 августа", "August 8"
