@@ -3,17 +3,16 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { JobName, QueueName } from 'src/enum.js';
+import { QueueName } from 'src/enum.js';
 import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { EventRepository } from 'src/repositories/event.repository.js';
 import { JobRepository } from 'src/repositories/job.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
+import { tripDedupJobs } from 'src/trips/utils/job-options.js';
 import { JobItem } from 'src/types.js';
 
-const tripJobs = [JobName.TripFile, JobName.TripName, JobName.TripRouteLegs] as const;
-
-describe('trip job options', () => {
-  it.each(tripJobs)('reach BullMQ for %s through JobRepository', async (name) => {
+describe('trip job deduplication', () => {
+  it.each(tripDedupJobs)('reach BullMQ for %s through JobRepository', async (name) => {
     const queue = { add: vi.fn().mockResolvedValue({}), addBulk: vi.fn().mockResolvedValue([]) };
     const moduleRef = { get: vi.fn().mockReturnValue(queue) } as unknown as ModuleRef;
     const sut = new JobRepository(

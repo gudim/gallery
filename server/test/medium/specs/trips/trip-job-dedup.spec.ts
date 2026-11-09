@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { GenericContainer, StartedTestContainer } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { JobName } from 'src/enum.js';
-import { tripJobOptions } from 'src/trips/utils/job-options.js';
+import { TripDedupJobName, tripJobOptions } from 'src/trips/utils/job-options.js';
 
 const gate = () => {
   let open!: () => void;
@@ -47,7 +47,7 @@ describe('trip job deduplication', () => {
       closers.push(worker);
       return worker;
     };
-    const add = (jobName: Parameters<typeof tripJobOptions>[0], albumId: string) =>
+    const add = (jobName: TripDedupJobName, albumId: string) =>
       queue.add(jobName, { id: albumId }, tripJobOptions(jobName, albumId));
     const finished = (count: number) =>
       new Promise<void>((resolve) => {
